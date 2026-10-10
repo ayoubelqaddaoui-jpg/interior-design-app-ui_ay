@@ -1,0 +1,40 @@
+{
+  "expo": {
+    "name": "Dwira",
+    "slug": "dwira",
+    "scheme": "dwira",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "app.dwira.mobile",
+      "infoPlist": {
+        "NSCameraUsageDescription": "Dwira needs the camera to photograph your room.",
+        "NSPhotoLibraryUsageDescription": "Dwira needs your photos to redesign your room."
+      }
+    },
+    "android": {
+      "package": "app.dwira.mobile",
+      "adaptiveIcon": {
+        "backgroundColor": "#FBDD2D",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false
+    },
+    "web": { "bundler": "metro", "output": "single", "favicon": "./assets/favicon.png" },
+    "plugins": [
+      "expo-router",
+      "expo-font",
+      "expo-localization",
+      ["expo-image-picker", { "cameraPermission": "Dwira needs the camera to photograph your room.", "photosPermission": "Dwira needs your photos to redesign your room." }],
+      "expo-video",
+      ["expo-splash-screen", { "backgroundColor": "#FBDD2D", "image": "./assets/icon.png", "imageWidth": 140 }]
+    ],
+    "experiments": { "typedRoutes": false }
+  }
+}
