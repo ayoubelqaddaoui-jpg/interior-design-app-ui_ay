@@ -1,0 +1,68 @@
+import React, { useEffect, useMemo, useState } from 'react';
+import { Image, Pressable, ScrollView, View } from 'react-native';
+import { router } from 'expo-router';
+import { useStore, sorted } from '@/store/useStore';
+import { useWizard } from '@/store/useWizard';
+import { useL, useT } from '@/i18n';
+import { useBp } from '@/hooks/useBp';
+import { CreditsBadge, EmptyState, Screen, Txt } from '@/components/ui';
+import { ToolCard } from '@/components/ToolCard';
+
+export default function Home() {
+  const { t } = useT();
+  const L = useL();
+  const { desktop, pick } = useBp();
+  const tabs = useStore((s) => s.tabs);
+  const tools = useStore((s) => s.tools);
+  const branding = useStore((s) => s.doc.branding);
+  const visibleTabs = useMemo(() => sorted(tabs).filter((x) => x.visible), [tabs]);
+  const [tabId, setTabId] = useState<string>('');
+
+  useEffect(() => {
+    if (!visibleTabs.find((x) => x.id === tabId)) setTabId(visibleTabs[0]?.id ?? '');
+  }, [visibleTabs, tabId]);
+
+  const list = sorted(tools).filter((x) => x.visible && x.tabId === tabId);
+  const cols = pick(1, 2, 3);
+
+  const open = (id: string) => { useWizard.getState().start(id); router.push({ pathname: '/tool/[id]', params: { id } }); };
+
+  const header = (
+    <View>
+      {!desktop ? (
+        <View className="flex-row items-center justify-between h-14">
+          {branding.logoUri ? <Image source={{ uri: branding.logoUri }} style={{ height: 30, width: 110, resizeMode: 'contain', alignSelf: 'flex-start' }} /> : <Txt className="text-[26px] font-black tracking-tight">{branding.appName}</Txt>}
+          <CreditsBadge />
+        </View>
+      ) : null}
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingVertical: 8 }}>
+        {visibleTabs.map((x) => {
+          const on = x.id === tabId;
+          return (
+            <Pressable key={x.id} testID={`hometab-${x.id}`} onPress={() => setTabId(x.id)} className={`px-4 h-9 rounded-full items-center justify-center border ${on ? 'border-ink bg-surface' : 'border-line bg-surface2'}`}>
+              <Txt className={`text-[14px] ${on ? 'font-extrabold' : 'text-muted font-semibold'}`}>{L(x.title)}</Txt>
+            </Pressable>
+          );
+        })}
+      </ScrollView>
+    </View>
+  );
+
+  return (
+    <Screen header={header} bottomInset={16}>
+      <View className="pt-3">
+        {list.length === 0 ? (
+          <EmptyState icon="tools" title={t('home.empty')} />
+        ) : (
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginHorizontal: -8 }}>
+            {list.map((tool, i) => (
+              <View key={tool.id} style={{ width: `${100 / cols}%`, padding: 8 }}>
+                <ToolCard tool={tool} index={i} height={cols === 1 ? 200 : 230} onPress={() => open(tool.id)} />
+              </View>
+            ))}
+          </View>
+        )}
+      </View>
+    </Screen>
+  );
+}
