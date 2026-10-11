@@ -25,7 +25,7 @@ const common = (c: Ctx): FieldDef[] => [{ kind: 'bool', key: 'visible', label: c
 const titleCol = (c: Ctx): Col<any> => ({ label: c.t('admin.f.title'), flex: 2, render: (r) => <Txt className="font-bold" numberOfLines={1}>{c.L(r.title)}</Txt> });
 const thumb = (label: string, get: (r: any) => string | undefined, round = false): Col<any> => ({ label, flex: 0.7, render: (r) => <MediaView uri={get(r)} className={round ? 'rounded-full' : 'rounded-lg'} style={{ width: 44, height: 44 }} /> });
 const txt = (label: string, get: (r: any) => string, flex = 1): Col<any> => ({ label, flex, render: (r) => <Txt className="text-muted text-[13px]" numberOfLines={1}>{get(r)}</Txt> });
-const stepOpts = (c: Ctx): Opt[] => (['room', 'style', 'mode', 'model'] as const).map((k) => ({ value: k, label: c.t(`admin.enums.${k}`) }));
+const stepOpts = (c: Ctx): Opt[] => (['room', 'style', 'mode'] as const).map((k) => ({ value: k, label: c.t(`admin.enums.${k}`) }));
 
 const tabs: EntityConfig<'tabs'> = {
   name: 'tabs', navKey: 'tabs', icon: 'tab', ordered: true,

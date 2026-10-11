@@ -1,12 +1,11 @@
 import React, { useState } from 'react';
-import { Pressable, Switch, View } from 'react-native';
-import { Button, Icon, Input, Sheet, Txt } from '@/components/ui';
+import { Pressable, View } from 'react-native';
+import { Button, Icon, Input, Sheet, Toggle, Txt } from '@/components/ui';
 import { ICON_CHOICES } from '@/components/ui/Icon';
 import { ColorPicker } from './ColorPicker';
 import { ImageField } from './ImageField';
 import { useStore } from '@/store/useStore';
 import { useL, useT } from '@/i18n';
-import { useTheme } from '@/theme/ThemeProvider';
 import type { LText } from '@/data/types';
 
 export type Opt = { value: string; label: string };
@@ -44,7 +43,6 @@ function Chips({ options, value, onChange, multi }: { options: Opt[]; value: any
 
 export function Field({ f, value, onChange, ctx, error }: { f: FieldDef; value: any; onChange: (v: any) => void; ctx: Ctx; error?: string }) {
   const { t } = ctx;
-  const { colors } = useTheme();
   const label = <Txt className="text-[13px] font-semibold text-muted mb-1.5">{f.label}</Txt>;
   switch (f.kind) {
     case 'text': case 'secret': case 'number':
@@ -67,7 +65,7 @@ export function Field({ f, value, onChange, ctx, error }: { f: FieldDef; value: 
       return (
         <View className="flex-row items-center justify-between mb-4 bg-surface2 rounded-xl px-4 h-12">
           <Txt className="font-semibold text-[14px] flex-1">{f.label}</Txt>
-          <Switch testID={`sw-${f.key}`} value={!!value} onValueChange={onChange} trackColor={{ true: colors.primary, false: colors.line }} thumbColor="#fff" />
+          <Toggle testID={`sw-${f.key}`} label={f.label} value={!!value} onValueChange={onChange} />
         </View>
       );
     case 'select':
@@ -118,6 +116,7 @@ export function Field({ f, value, onChange, ctx, error }: { f: FieldDef; value: 
 
 export function validate(fields: FieldDef[], v: any, t: Ctx['t']) {
   const err: Record<string, string> = {};
+  v = v ?? {};
   for (const f of fields) {
     if (f.show && !f.show(v)) continue;
     if (f.kind === 'ltext') { const x = v[f.key] as LText; if (!x || !(x.dar || x.ar || x.fr)) err[f.key] = t('admin.crud.required'); }
@@ -139,10 +138,10 @@ export function FormModal({ visible, title, fields, initial, onClose, onSubmit }
   const { t } = useT();
   const L = useL();
   const s = useStore();
-  const [v, setV] = useState<any>(initial);
+  const [v, setV] = useState<any>(initial ?? {});
   const [err, setErr] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
-  React.useEffect(() => { if (visible) { setV(initial); setErr({}); } }, [visible, initial]);
+  React.useEffect(() => { if (visible) { setV(initial ?? {}); setErr({}); } }, [visible, initial]);
   const ctx: Ctx = { s, L, t };
   const submit = async () => {
     const e = validate(fields, v, t);
@@ -154,7 +153,8 @@ export function FormModal({ visible, title, fields, initial, onClose, onSubmit }
   };
   return (
     <Sheet visible={visible} onClose={onClose} title={title} wide>
-      {fields.filter((f) => !f.show || f.show(v)).map((f) => <Field key={f.key} f={f} ctx={ctx} value={v?.[f.key]} error={err[f.key]} onChange={(x) => setV((p: any) => ({ ...p, [f.key]: x }))} />)}
+      {/* `v` is never null: palettes / room types use show(v) callbacks that read v.isSurprise / v.displayMode */}
+      {(visible ? fields : []).filter((f) => !f.show || f.show(v ?? {})).map((f) => <Field key={f.key} f={f} ctx={ctx} value={v?.[f.key]} error={err[f.key]} onChange={(x) => setV((p: any) => ({ ...p, [f.key]: x }))} />)}
       <View className="flex-row gap-3 mt-2">
         <Button title={t('common.cancel')} variant="soft" onPress={onClose} className="flex-1" />
         <Button testID="form-save" title={t('common.save')} onPress={submit} loading={busy} className="flex-1" />

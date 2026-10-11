@@ -8,7 +8,7 @@ import type { Group } from '@/data/types';
 
 /** Room type grid: icon OR image, per the admin's `displayMode`. Supports the NEW ribbon. */
 export function StepRoom({ group, value, onChange }: { group: Group; value?: string; onChange: (id: string) => void }) {
-  const { t } = useT();
+  const { t, rtl } = useT();
   const L = useL();
   const rooms = useStore((s) => s.roomTypes);
   const list = sorted(rooms).filter((r) => r.visible && r.group === group);
@@ -32,8 +32,8 @@ export function StepRoom({ group, value, onChange }: { group: Group; value?: str
               </View>
             )}
             {r.isNew ? (
-              <View pointerEvents="none" className="absolute -top-0 -right-0 w-12 h-12 overflow-hidden">
-                <View className="absolute bg-danger items-center" style={{ top: 7, right: -17, width: 62, transform: [{ rotate: '45deg' }] }}>
+              <View pointerEvents="none" className="absolute top-0 end-0 w-12 h-12 overflow-hidden">
+                <View className="absolute bg-danger items-center" style={{ top: 7, ...(rtl ? { left: -17 } : { right: -17 }), width: 62, transform: [{ rotate: rtl ? '-45deg' : '45deg' }] }}>
                   <Txt className="text-white text-[8px] font-black py-[1px]">{t('common.new')}</Txt>
                 </View>
               </View>

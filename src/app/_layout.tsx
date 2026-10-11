@@ -1,4 +1,5 @@
 import '../global.css';
+import '@/lib/interop';
 import React, { useEffect } from 'react';
 import { View, ActivityIndicator } from 'react-native';
 import { Stack } from 'expo-router';

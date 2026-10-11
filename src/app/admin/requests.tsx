@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { Linking, Pressable, Switch, View } from 'react-native';
-import { Button, Card, EmptyState, Icon, MediaView, Sheet, Txt } from '@/components/ui';
+import { Linking, Pressable, View } from 'react-native';
+import { Button, Card, EmptyState, Icon, MediaView, Sheet, Toggle, Txt } from '@/components/ui';
 import { AdminPage } from '@/components/admin/AdminShell';
 import { ImageField } from '@/components/admin/ImageField';
 import { useBp } from '@/hooks/useBp';
@@ -8,7 +8,6 @@ import { useL, useT } from '@/i18n';
 import { useStore } from '@/store/useStore';
 import { toast } from '@/store/useToast';
 import { waLink } from '@/lib/share';
-import { useTheme } from '@/theme/ThemeProvider';
 import type { RenderRequest, RequestStatus } from '@/data/types';
 
 const STATUSES: RequestStatus[] = ['pending', 'processing', 'delivered'];
@@ -73,7 +72,6 @@ function Detail({ id, onClose }: { id: string | null; onClose: () => void }) {
 export default function Requests() {
   const { t } = useT();
   const { desktop } = useBp();
-  const { colors } = useTheme();
   const s = useStore();
   const [open, setOpen] = useState<string | null>(null);
   const [filter, setFilter] = useState<RequestStatus | 'all'>('all');
@@ -83,7 +81,7 @@ export default function Requests() {
     <AdminPage title={t('admin.req.title')}>
       <Card className="p-4 mb-4 flex-row items-center gap-3">
         <View className="flex-1"><Txt className="font-bold text-[14px]">{t('admin.req.autoSend')}</Txt><Txt className="text-muted text-[12px]">{t('admin.req.autoSendNote')}</Txt></View>
-        <Switch testID="req-auto" value={auto} onValueChange={(v) => s.patchDoc('settings', { autoSendWhatsApp: v })} trackColor={{ true: colors.primary, false: colors.line }} thumbColor="#fff" />
+        <Toggle testID="req-auto" label={t('admin.req.autoSend')} value={auto} onValueChange={(v) => s.patchDoc('settings', { autoSendWhatsApp: v })} />
       </Card>
       <View className="flex-row flex-wrap gap-2 mb-4">
         {(['all', ...STATUSES] as const).map((k) => (

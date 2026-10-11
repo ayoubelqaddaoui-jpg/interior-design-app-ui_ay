@@ -25,13 +25,13 @@ export function StepPhoto({ photo, onChange }: { photo: string; onChange: (uri: 
       {photo ? (
         <Animated.View entering={ZoomIn.duration(250)} className="rounded-2xl overflow-hidden bg-surface2" style={{ aspectRatio: 1.25 }}>
           <Image source={{ uri: photo }} style={{ width: '100%', height: '100%' }} contentFit="cover" transition={Platform.OS === 'web' ? 0 : 200} />
-          <Pressable testID="remove-photo" accessibilityLabel={t('wizard.removePhoto')} onPress={() => onChange('')} className="absolute top-3 right-3 w-8 h-8 rounded-full bg-danger items-center justify-center active:opacity-80">
+          <Pressable testID="remove-photo" accessibilityLabel={t('wizard.removePhoto')} onPress={() => onChange('')} className="absolute top-3 end-3 w-8 h-8 rounded-full bg-danger items-center justify-center active:opacity-80">
             <Icon name="minus" size={20} color="#fff" />
           </Pressable>
         </Animated.View>
       ) : (
         <View className="rounded-2xl border border-dashed border-line bg-surface2/50 items-center justify-center" style={{ aspectRatio: 1.05 }}>
-          <Pressable onPress={() => setTips(true)} className="absolute top-3 right-3 flex-row items-center gap-1 active:opacity-60">
+          <Pressable onPress={() => setTips(true)} className="absolute top-3 end-3 flex-row items-center gap-1 active:opacity-60">
             <Txt className="text-muted text-[12px]">{t('wizard.tipsTitle')}</Txt>
             <Icon name="information-outline" size={16} tone="muted" />
           </Pressable>

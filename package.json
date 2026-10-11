@@ -53,7 +53,13 @@
     "ios": "expo start --ios",
     "web": "expo start --web",
     "typecheck": "tsc --noEmit",
-    "build:web": "expo export -p web"
+    "build:web": "expo export -p web && node scripts/postexport.js",
+    "vercel-build": "npm run build:web",
+    "serve:web": "node scripts/serve-dist.js",
+    "check:themes": "sucrase-node scripts/check-themes.ts"
   },
-  "private": true
+  "private": true,
+  "engines": {
+    "node": ">=20"
+  }
 }

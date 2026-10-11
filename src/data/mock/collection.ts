@@ -43,9 +43,13 @@ export function createMockCollection<T extends { id: string }>(name: string, see
   };
 }
 
+/** Stored documents are merged over the seed so settings added in later versions get their defaults. */
+const withDefaults = <T,>(seed: T, stored: T | undefined): T =>
+  stored && seed && typeof seed === 'object' && !Array.isArray(seed) ? { ...seed, ...stored } : stored ?? seed;
+
 export function createMockDoc<T>(name: string, seed: () => T): DocRepo<T> {
   let cache: T | null = null;
-  const load = async () => (cache ??= (await storage.read<T>('doc:' + name)) ?? seed());
+  const load = async () => (cache ??= withDefaults(seed(), await storage.read<T>('doc:' + name)));
   return {
     get: load,
     async set(v) {
