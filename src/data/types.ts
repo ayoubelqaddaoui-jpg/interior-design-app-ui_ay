@@ -4,7 +4,8 @@ export type LText = Record<Lang, string>;
 export type Id = string;
 
 export type Media = { type: 'image' | 'video'; uri: string; poster?: string };
-export type StepKey = 'room' | 'style' | 'mode' | 'model';
+/** Optional wizard steps. The AI model is NEVER a user step: it is resolved from the admin config. */
+export type StepKey = 'room' | 'style' | 'mode';
 export type Group = 'interior' | 'exterior';
 export type RenderMode = 'restyle' | 'renovation';
 
@@ -124,7 +125,8 @@ export interface Conversation { id: Id; userId: Id; title: string; messages: Cha
 
 /* ---- single documents ---- */
 export interface Branding { appName: string; logoUri: string }
-export type ThemeId = 'light' | 'dark' | 'royal' | 'custom';
+/** 'custom' or any preset id (see theme/presets.ts). */
+export type ThemeId = string;
 export interface ThemeConfig { active: ThemeId; custom: Record<string, string> }
 export interface AssistantConfig {
   type: 'ai' | 'whatsapp';
@@ -133,7 +135,16 @@ export interface AssistantConfig {
   whatsappNumber: string;
   welcome: LText;
 }
-export interface AppSettings { defaultFreeCredits: number; autoSendWhatsApp: boolean }
+export type UserNavStyle = 'classic' | 'floating' | 'minimal';
+export type AdminNavMode = 'rail' | 'drawer' | 'top';
+export interface AppSettings {
+  defaultFreeCredits: number;
+  autoSendWhatsApp: boolean;
+  /** true: Home shows every tool by default (tabs only filter when the user picks one). */
+  homeShowAll: boolean;
+  userNavStyle: UserNavStyle;
+  adminNavMode: AdminNavMode;
+}
 
 export interface CollMap {
   tabs: HomeTab;

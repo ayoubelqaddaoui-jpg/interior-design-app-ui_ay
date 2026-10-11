@@ -1,13 +1,12 @@
 import React, { useState } from 'react';
-import { Pressable, Switch, View } from 'react-native';
+import { Pressable, View } from 'react-native';
 import { router } from 'expo-router';
 import Constants from 'expo-constants';
 import { useLang, LANGS } from '@/i18n';
 import { useLocal } from '@/store/useLocal';
 import { useMe, useStore } from '@/store/useStore';
 import { useT } from '@/i18n';
-import { Card, Icon, PageHeader, Screen, Sheet, Txt } from '@/components/ui';
-import { useTheme } from '@/theme/ThemeProvider';
+import { Card, Icon, PageHeader, Screen, Sheet, Toggle, Txt } from '@/components/ui';
 import { toast } from '@/store/useToast';
 
 function Row({ icon, title, sub, right, onPress, testID }: { icon: string; title: string; sub?: string; right?: React.ReactNode; onPress?: () => void; testID?: string }) {
@@ -22,7 +21,6 @@ function Row({ icon, title, sub, right, onPress, testID }: { icon: string; title
 
 export default function Settings() {
   const { t } = useT();
-  const { colors } = useTheme();
   const lang = useLang((s) => s.lang);
   const setLang = useLang((s) => s.set);
   const { notifications, set } = useLocal();
@@ -47,7 +45,7 @@ export default function Settings() {
           right={<View className="bg-primary rounded-lg px-3 py-1"><Txt className="text-onprimary font-extrabold text-[12px]">{t('settings.pro')}</Txt></View>} />
         <View className="h-px bg-line mx-4" />
         <Row icon="bell-outline" title={t('settings.notifications')} sub={t('settings.notificationsDesc')}
-          right={<Switch testID="switch-notif" value={notifications} onValueChange={(v) => { set({ notifications: v, bannerDismissed: true }); toast(t(v ? 'notif.enabled' : 'notif.disabled')); }} trackColor={{ true: colors.primary, false: colors.line }} thumbColor="#fff" />} />
+          right={<Toggle testID="switch-notif" label={t('settings.notifications')} value={notifications} onValueChange={(v) => { set({ notifications: v, bannerDismissed: true }); toast(t(v ? 'notif.enabled' : 'notif.disabled')); }} />} />
       </Card>
 
       <Card className="overflow-hidden mb-5">

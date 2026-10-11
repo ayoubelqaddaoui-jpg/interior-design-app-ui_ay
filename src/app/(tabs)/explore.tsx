@@ -31,7 +31,7 @@ export default function Explore() {
             <View className="flex-row items-center justify-between mb-3">
               <View className="flex-row items-center gap-2 flex-1">
                 <Icon name={sec.icon} size={22} />
-                <Txt className="text-[18px] font-extrabold" numberOfLines={1}>{L(sec.title)}</Txt>
+                <Txt className="text-[18px] font-extrabold flex-1" numberOfLines={1}>{L(sec.title)}</Txt>
               </View>
               <Pressable testID={`seeall-${sec.id}`} onPress={() => router.push({ pathname: '/explore/section/[id]', params: { id: sec.id } })} className="flex-row items-center gap-0.5 active:opacity-60">
                 <Txt className="text-muted text-[13px]">{t('common.seeAll')}</Txt>
@@ -44,9 +44,9 @@ export default function Explore() {
                 return (
                   <PressableScale key={c.id} testID={`cat-${c.id}`} onPress={() => router.push({ pathname: '/explore/category/[id]', params: { id: c.id } })}>
                     <MediaView uri={c.cover} className="rounded-2xl" style={{ width: desktop ? 220 : 148, height: desktop ? 280 : 196 }}>
-                      <View className="absolute inset-0 bg-black/35 items-center justify-center">
-                        <Txt className="text-white text-[28px] font-black">+{n}</Txt>
-                        <Txt className="text-white text-[13px] font-bold mt-1 px-2 text-center" numberOfLines={1}>{L(c.title)}</Txt>
+                      <View className="absolute inset-0 bg-black/40 items-center justify-center px-2">
+                        <Txt className="text-white text-[28px] leading-[34px] font-black">+{n}</Txt>
+                        <Txt className="text-white text-[13px] leading-[17px] font-bold mt-1 text-center" numberOfLines={2}>{L(c.title)}</Txt>
                       </View>
                     </MediaView>
                   </PressableScale>

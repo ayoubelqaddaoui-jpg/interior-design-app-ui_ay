@@ -22,7 +22,7 @@ export const seedTabs = (): T.HomeTab[] =>
 
 export const seedTools = (): T.Tool[] =>
   ord<Omit<T.Tool, 'order' | 'visible'>>([
-    { id: 'tool_interior', tabId: 'tab_interior', roomGroup: 'interior', steps: ['room', 'style', 'mode', 'model'], modelIds: ['mdl_gemini', 'mdl_gpt', 'mdl_flux'],
+    { id: 'tool_interior', tabId: 'tab_interior', roomGroup: 'interior', steps: ['room', 'style', 'mode'], modelIds: ['mdl_gemini', 'mdl_gpt', 'mdl_flux'],
       title: L('تصميم داخلي', 'التصميم الداخلي', "Design d'intérieur"), subtitle: L('بدّل ستايل الدار ديالك', 'أعد تصميم مساحتك الداخلية', 'Redécorez votre espace'),
       media: { type: 'image', uri: img('living', 0, 900) } },
     { id: 'tool_furnish', tabId: 'tab_interior', roomGroup: 'interior', steps: ['room', 'style'], modelIds: ['mdl_gemini'],
@@ -31,7 +31,7 @@ export const seedTools = (): T.Tool[] =>
     { id: 'tool_floorplan', tabId: 'tab_interior', roomGroup: 'interior', steps: ['style'], modelIds: ['mdl_gpt'],
       title: L('مخطط الطابق', 'مخطط الطابق', 'Plan d’étage'), subtitle: L('حوّل المخطط لتصميم واقعي', 'حوّل المخطط إلى تصميم واقعي', 'Transformez un plan en rendu réaliste'),
       media: { type: 'image', uri: img('dining', 1, 900) } },
-    { id: 'tool_exterior', tabId: 'tab_exterior', roomGroup: 'exterior', steps: ['room', 'style', 'model'], modelIds: ['mdl_gemini', 'mdl_flux'],
+    { id: 'tool_exterior', tabId: 'tab_exterior', roomGroup: 'exterior', steps: ['room', 'style'], modelIds: ['mdl_gemini', 'mdl_flux'],
       title: L('تصميم الواجهة', 'التصميم الخارجي', "Design d'extérieur"), subtitle: L('جدّد الواجهة ديال الدار', 'جدّد واجهة منزلك', 'Rénovez la façade de votre maison'),
       media: { type: 'image', uri: img('exterior', 0, 900) } },
     { id: 'tool_garden', tabId: 'tab_exterior', roomGroup: 'exterior', steps: ['style'], modelIds: ['mdl_flux'],
@@ -43,7 +43,7 @@ export const seedTools = (): T.Tool[] =>
     { id: 'tool_decor', tabId: 'tab_decor', roomGroup: 'interior', steps: ['room', 'style'], modelIds: ['mdl_gemini'],
       title: L('أفكار الديكور', 'أفكار الديكور', 'Idées déco'), subtitle: L('زليج، زرابي وإكسسوارات', 'زليج وسجاد وإكسسوارات', 'Zellige, tapis et accessoires'),
       media: { type: 'image', uri: img('living', 11, 900) } },
-    { id: 'tool_paint', tabId: 'tab_decor', roomGroup: 'interior', steps: ['mode', 'model'], modelIds: ['mdl_gpt', 'mdl_gemini'],
+    { id: 'tool_paint', tabId: 'tab_decor', roomGroup: 'interior', steps: ['mode'], modelIds: ['mdl_gpt', 'mdl_gemini'],
       title: L('تبديل الصباغة', 'تغيير ألوان الجدران', 'Peinture & couleurs'), subtitle: L('جرّب ألوان جدد فالجدران', 'جرّب ألوانًا جديدة للجدران', 'Testez de nouvelles couleurs de murs'),
       media: { type: 'video', uri: VIDEO_B, poster: img('bedroom', 1, 900) } },
   ]);
@@ -147,17 +147,38 @@ export const seedUsers = (defaultCredits: number): T.AppUser[] => {
     { id: 'usr_admin', name: 'Admin', whatsapp: '', credits: 99, leadDone: true, role: 'admin', createdAt: now - 86400000 * 30 },
     { id: 'usr_1', name: 'Salma El Idrissi', whatsapp: '+212661234567', credits: 0, leadDone: true, role: 'user', createdAt: now - 86400000 * 6 },
     { id: 'usr_2', name: 'Youssef Benali', whatsapp: '+212670987654', credits: 3, leadDone: true, role: 'user', createdAt: now - 86400000 * 3 },
+    ...['Amina Tazi', 'Omar Alaoui', 'Khadija Berrada', 'Hamza Chraibi', 'Imane Fassi', 'Rachid Lahlou', 'Nadia Saidi', 'Karim Bennani'].map((name, i): T.AppUser => ({
+      id: `usr_d${i}`, name, whatsapp: `+2126${String(20000000 + i * 911).slice(0, 8)}`, credits: i % 4, leadDone: true, role: 'user', createdAt: now - 86400000 * (1 + i * 3.5),
+    })),
   ];
 };
 
 export const seedRequests = (): T.RenderRequest[] => {
   const now = Date.now();
-  return [
+  const H = 3600000;
+  const D = 24 * H;
+  const first: T.RenderRequest[] = [
     { id: 'req_1', userId: 'usr_1', name: 'Salma El Idrissi', whatsapp: '+212661234567', photoUri: img('living', 6, 600), aiResult: img('living', 8, 900),
-      draft: { toolId: 'tool_interior', roomTypeId: 'rt_living', styleId: 'st_moroccan', mode: 'restyle', modelId: 'mdl_gemini' }, status: 'pending', createdAt: now - 3600000 * 5 },
+      draft: { toolId: 'tool_interior', roomTypeId: 'rt_living', styleId: 'st_moroccan', mode: 'restyle', modelId: 'mdl_gemini' }, status: 'pending', createdAt: now - H * 5 },
     { id: 'req_2', userId: 'usr_2', name: 'Youssef Benali', whatsapp: '+212670987654', photoUri: img('bedroom', 1, 600), aiResult: img('bedroom', 2, 900),
-      draft: { toolId: 'tool_interior', roomTypeId: 'rt_bedroom', styleId: 'st_scandi', mode: 'renovation', modelId: 'mdl_gpt' }, status: 'delivered', finalResult: img('bedroom', 3, 900), createdAt: now - 86400000 * 2 },
+      draft: { toolId: 'tool_interior', roomTypeId: 'rt_bedroom', styleId: 'st_scandi', mode: 'renovation', modelId: 'mdl_gpt' }, status: 'delivered', finalResult: img('bedroom', 3, 900), createdAt: now - D * 2 },
   ];
+  // Demo activity so the admin dashboard has something to show out of the box.
+  const names = ['Amina Tazi', 'Omar Alaoui', 'Khadija Berrada', 'Hamza Chraibi', 'Imane Fassi', 'Rachid Lahlou', 'Nadia Saidi', 'Karim Bennani'];
+  const tools = ['tool_interior', 'tool_interior', 'tool_interior', 'tool_furnish', 'tool_exterior', 'tool_staging', 'tool_decor', 'tool_garden'];
+  const rooms = ['rt_living', 'rt_living', 'rt_bedroom', 'rt_kitchen', 'rt_bathroom', 'rt_dining', 'rt_house'];
+  const styles = ['st_moroccan', 'st_modern', 'st_moroccan', 'st_scandi', 'st_boho', 'st_luxury', 'st_minimal', 'st_cozy'];
+  const models = ['mdl_gemini', 'mdl_gemini', 'mdl_gpt', 'mdl_flux'];
+  const rows = Array.from({ length: 22 }, (_, i): T.RenderRequest => {
+    const age = Math.round((i * i * 0.07 + i * 1.1 + 0.5) * D) + (i % 5) * H;
+    return {
+      id: `req_demo_${i + 1}`, userId: `usr_d${i % names.length}`, name: names[i % names.length], whatsapp: `+2126${String(10000000 + i * 137).slice(0, 8)}`,
+      photoUri: img('living', i % 20, 600), aiResult: img('living', (i + 3) % 20, 900),
+      draft: { toolId: tools[i % tools.length], roomTypeId: rooms[(i * 3) % rooms.length], styleId: styles[(i * 5) % styles.length], mode: i % 3 ? 'restyle' : 'renovation', modelId: models[i % models.length] },
+      status: i < 2 ? 'pending' : i === 2 ? 'processing' : 'delivered', finalResult: i > 2 ? img('living', (i + 6) % 20, 900) : undefined, createdAt: now - age,
+    };
+  });
+  return [...first, ...rows];
 };
 
 export const defaultBranding = (): T.Branding => ({ appName: 'Dwira', logoUri: '' });
@@ -168,4 +189,4 @@ export const defaultAssistant = (): T.AssistantConfig => ({
   whatsappNumber: '+212600000000',
   welcome: L('مرحبا! أنا مساعد ديال التصميم الداخلي، كيفاش نقدر نعاونك؟', 'مرحبًا! كيف يمكنني مساعدتك في تصميم منزلك؟', 'Bonjour ! Comment puis-je vous aider pour votre déco ?'),
 });
-export const defaultSettings = (): T.AppSettings => ({ defaultFreeCredits: 1, autoSendWhatsApp: false });
+export const defaultSettings = (): T.AppSettings => ({ defaultFreeCredits: 1, autoSendWhatsApp: false, homeShowAll: true, userNavStyle: 'floating', adminNavMode: 'drawer' });

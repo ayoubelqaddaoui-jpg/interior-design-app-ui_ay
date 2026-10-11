@@ -4,6 +4,7 @@ import { Button, ConfirmSheet } from '@/components/ui';
 import { CrudTable } from './CrudTable';
 import { FormModal } from './FormModal';
 import { AdminPage } from './AdminShell';
+import { HomeTabsOption } from './HomeTabsOption';
 import { ENTITIES } from '@/admin/entities';
 import { sorted, useStore } from '@/store/useStore';
 import { useL, useT } from '@/i18n';
@@ -43,6 +44,7 @@ export function CrudScreen({ entity }: { entity: string }) {
 
   return (
     <AdminPage title={t(`admin.nav.${cfg.navKey}`)} right={<Button testID="crud-add" icon="plus" size="sm" title={t('admin.crud.addNew')} onPress={() => open()} />}>
+      {entity === 'tabs' ? <HomeTabsOption /> : null}
       <CrudTable rows={rows} cols={cfg.cols(ctx)} rowTestID="row"
         onEdit={open} onDelete={setDel}
         onMove={cfg.ordered ? (r, d) => s.move(cfg.name, r.id, d) : undefined}

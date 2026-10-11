@@ -73,7 +73,7 @@ export function ChatView({ conversationId, onCreated, header }: { conversationId
         contentContainerStyle={{ padding: 16, flexGrow: 1 }}
         ListEmptyComponent={
           <Animated.View entering={FadeInDown.duration(400)} className="flex-1 items-center justify-center py-12">
-            <Icon name="star-four-points" size={34} tone="primary" color="#FBDD2D" />
+            <Icon name="star-four-points" size={34} tone="primary" />
             <Txt className="text-[22px] font-extrabold text-center mt-3">{t('assistant.hello')}</Txt>
             {L(config.welcome) ? <Txt className="text-muted text-center mt-2 px-6">{L(config.welcome)}</Txt> : null}
           </Animated.View>
@@ -89,7 +89,7 @@ export function ChatView({ conversationId, onCreated, header }: { conversationId
         ListFooterComponent={busy ? <View className="self-start bg-surface2 rounded-2xl px-4 py-3.5 flex-row gap-1.5 items-center"><Dot d={0} /><Dot d={150} /><Dot d={300} /></View> : null}
       />
       {image ? (
-        <View className="px-4 pb-2 flex-row"><View><Image source={{ uri: image }} style={{ width: 64, height: 64, borderRadius: 12 }} /><Pressable onPress={() => setImage('')} className="absolute -top-2 -right-2 w-6 h-6 rounded-full bg-danger items-center justify-center"><Icon name="close" size={14} color="#fff" /></Pressable></View></View>
+        <View className="px-4 pb-2 flex-row"><View><Image source={{ uri: image }} style={{ width: 64, height: 64, borderRadius: 12 }} /><Pressable onPress={() => setImage('')} className="absolute -top-2 -end-2 w-6 h-6 rounded-full bg-danger items-center justify-center"><Icon name="close" size={14} color="#fff" /></Pressable></View></View>
       ) : null}
       <View className="flex-row items-end gap-2 px-3 py-2.5">
         <View className="flex-1 flex-row items-end bg-surface2 rounded-3xl px-3 min-h-[48px]">

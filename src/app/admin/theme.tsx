@@ -1,26 +1,29 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Pressable, View } from 'react-native';
 import { Button, Card, Icon, Txt } from '@/components/ui';
 import { AdminPage } from '@/components/admin/AdminShell';
 import { ColorPicker } from '@/components/admin/ColorPicker';
 import { useBp } from '@/hooks/useBp';
-import { useT } from '@/i18n';
+import { useL, useT } from '@/i18n';
 import { useStore } from '@/store/useStore';
 import { ThemeScope } from '@/theme/ThemeProvider';
-import { CUSTOM_KEYS, THEMES } from '@/theme/tokens';
+import { CUSTOM_KEYS, PRESETS, PRESET_BY_ID, PRESET_CATEGORIES, type PresetCategory } from '@/theme/tokens';
 import { toast } from '@/store/useToast';
-import type { ThemeConfig, ThemeId } from '@/data/types';
+import type { ThemeConfig } from '@/data/types';
 
-const IDS: ThemeId[] = ['light', 'dark', 'royal', 'custom'];
 const CKEY: Record<string, string> = { primary: 'colorPrimary', bg: 'colorBg', surface: 'colorSurface', fg: 'colorFg', ink: 'colorInk' };
 
 function Preview() {
   const { t } = useT();
   return (
-    <View className="flex-1 p-4 gap-3 rounded-2xl" style={{ minHeight: 300 }}>
+    <View className="flex-1 p-4 gap-3 rounded-2xl" style={{ minHeight: 360 }}>
       <View className="flex-row items-center justify-between">
         <Txt className="font-extrabold text-[18px]">Dwira</Txt>
         <View className="bg-primary rounded-full px-3 h-8 flex-row items-center gap-1.5"><Icon name="star-four-points" size={14} tone="onprimary" /><Txt className="text-onprimary font-bold text-[13px]">1</Txt></View>
+      </View>
+      <View className="flex-row gap-2">
+        <View className="bg-ink rounded-full px-3 h-8 items-center justify-center"><Txt className="text-onink font-bold text-[12px]">{t('common.all')}</Txt></View>
+        <View className="bg-surface2 border border-line rounded-full px-3 h-8 items-center justify-center"><Txt className="text-muted font-semibold text-[12px]">{t('tabs.explore')}</Txt></View>
       </View>
       <View className="bg-surface border border-line rounded-2xl p-3">
         <View className="h-20 rounded-xl bg-surface2 mb-2" />
@@ -31,8 +34,39 @@ function Preview() {
       <View className="flex-row gap-2">
         <View className="bg-primary rounded-full px-4 h-9 items-center justify-center"><Txt className="text-onprimary font-bold text-[13px]">{t('common.save')}</Txt></View>
         <View className="bg-soft rounded-full px-4 h-9 items-center justify-center"><Txt className="font-bold text-[13px]">{t('common.new')}</Txt></View>
+        <View className="bg-danger rounded-full px-3 h-9 items-center justify-center"><Txt className="text-white font-bold text-[13px]">!</Txt></View>
+      </View>
+      <View className="bg-surface border border-line rounded-full p-1 flex-row justify-around">
+        <View className="bg-ink rounded-full h-9 px-4 flex-row items-center gap-1.5"><Icon name="home-variant" size={17} tone="onink" /><Txt className="text-onink text-[12px] font-bold">{t('tabs.home')}</Txt></View>
+        <View className="h-9 w-9 items-center justify-center"><Icon name="compass-outline" size={19} tone="muted" /></View>
+        <View className="h-9 w-9 items-center justify-center"><Icon name="clock-outline" size={19} tone="muted" /></View>
       </View>
     </View>
+  );
+}
+
+function Swatch({ id, active, onPress }: { id: string; active: boolean; onPress: () => void }) {
+  const L = useL();
+  const p = PRESET_BY_ID[id];
+  const c = p.tokens;
+  return (
+    <Pressable testID={`theme-${id}`} accessibilityRole="radio" accessibilityState={{ selected: active }} onPress={onPress}
+      className={`rounded-2xl border-2 p-2 ${active ? 'border-primary' : 'border-line'} bg-surface`} style={{ width: 150 }}>
+      <View className="rounded-xl overflow-hidden p-2 gap-1.5" style={{ backgroundColor: c.bg, borderWidth: 1, borderColor: c.line, height: 84 }}>
+        <View className="flex-row items-center justify-between"><View style={{ width: 34, height: 6, borderRadius: 3, backgroundColor: c.fg }} /><View style={{ width: 14, height: 14, borderRadius: 7, backgroundColor: c.primary }} /></View>
+        <View style={{ flex: 1, borderRadius: 8, backgroundColor: c.surface, borderWidth: 1, borderColor: c.line, padding: 5, gap: 3 }}>
+          <View style={{ width: '60%', height: 4, borderRadius: 2, backgroundColor: c.muted }} />
+          <View style={{ flexDirection: 'row', gap: 4, marginTop: 'auto' }}>
+            <View style={{ flex: 1, height: 10, borderRadius: 5, backgroundColor: c.ink }} />
+            <View style={{ flex: 1, height: 10, borderRadius: 5, backgroundColor: c.primary }} />
+          </View>
+        </View>
+      </View>
+      <View className="flex-row items-center gap-1 mt-2 px-0.5">
+        <Txt numberOfLines={1} className="font-bold text-[13px] flex-1">{L(p.name)}</Txt>
+        {active ? <Icon name="check-circle" size={16} tone="primary" /> : null}
+      </View>
+    </Pressable>
   );
 }
 
@@ -40,29 +74,54 @@ export default function ThemeAdmin() {
   const { t } = useT();
   const { desktop } = useBp();
   const saved = useStore((s) => s.doc.theme);
-  const [cfg, setCfg] = useState<ThemeConfig>({ active: saved.active, custom: { primary: THEMES.light.primary, bg: THEMES.light.bg, surface: THEMES.light.surface, fg: THEMES.light.fg, ink: THEMES.light.ink, ...saved.custom } });
+  const base = PRESET_BY_ID.light.tokens;
+  const [cfg, setCfg] = useState<ThemeConfig>({ active: saved.active, custom: { primary: base.primary, bg: base.bg, surface: base.surface, fg: base.fg, ink: base.ink, ...saved.custom } });
+  const [cat, setCat] = useState<PresetCategory | 'all'>('all');
+  const dirty = cfg.active !== saved.active || JSON.stringify(cfg.custom) !== JSON.stringify({ primary: base.primary, bg: base.bg, surface: base.surface, fg: base.fg, ink: base.ink, ...saved.custom });
+  const groups = useMemo(() => PRESET_CATEGORIES.filter((c) => cat === 'all' || c === cat).map((c) => ({ c, items: PRESETS.filter((p) => p.category === c) })), [cat]);
   const save = async () => { await useStore.getState().patchDoc('theme', cfg); toast(t('admin.crud.saved')); };
+  const pill = (on: boolean) => `px-3.5 h-9 rounded-full items-center justify-center ${on ? 'bg-ink' : 'bg-surface2'}`;
+
   return (
-    <AdminPage title={t('admin.theme.title')}>
+    <AdminPage title={t('admin.theme.title')} right={<Button testID="theme-save" size="sm" icon="check" title={t('common.save')} disabled={!dirty} onPress={save} />}>
       <View className={desktop ? 'flex-row gap-6 items-start' : 'gap-5'}>
-        <Card className="p-5 flex-1">
-          <View className="flex-row flex-wrap gap-2 mb-5">
-            {IDS.map((id) => (
-              <Pressable key={id} testID={`theme-${id}`} onPress={() => setCfg((c) => ({ ...c, active: id }))}
-                className={`px-4 h-10 rounded-full flex-row items-center gap-2 ${cfg.active === id ? 'bg-primary' : 'bg-surface2'}`}>
-                {id !== 'custom' ? <View style={{ width: 14, height: 14, borderRadius: 7, backgroundColor: THEMES[id].bg, borderWidth: 1, borderColor: '#9993' }} /> : <Icon name="palette-outline" size={16} tone={cfg.active === id ? 'onprimary' : 'fg'} />}
-                <Txt className={`font-bold text-[14px] ${cfg.active === id ? 'text-onprimary' : ''}`}>{t(`admin.theme.${id}`)}</Txt>
-              </Pressable>
+        <View className="flex-1" style={{ minWidth: 0 }}>
+          <Card className="p-4 mb-4">
+            <View className="flex-row items-center justify-between mb-3">
+              <Txt className="font-extrabold text-[16px]">{t('admin.theme.presets')}</Txt>
+              <Txt className="text-muted text-[12px]">{t('admin.theme.count', { count: PRESETS.length })}</Txt>
+            </View>
+            <View className="flex-row flex-wrap gap-2 mb-4">
+              {(['all', ...PRESET_CATEGORIES] as const).map((c) => (
+                <Pressable key={c} testID={`themecat-${c}`} onPress={() => setCat(c)} className={pill(cat === c)}>
+                  <Txt className={`text-[13px] font-semibold ${cat === c ? 'text-onink' : ''}`}>{c === 'all' ? t('admin.theme.all') : t(`admin.theme.cat.${c}`)}</Txt>
+                </Pressable>
+              ))}
+            </View>
+            {groups.map(({ c, items }) => (
+              <View key={c} className="mb-4">
+                <Txt className="text-muted text-[12px] font-bold uppercase tracking-wide mb-2">{t(`admin.theme.cat.${c}`)}</Txt>
+                <View className="flex-row flex-wrap gap-3">
+                  {items.map((p) => <Swatch key={p.id} id={p.id} active={cfg.active === p.id} onPress={() => setCfg((x) => ({ ...x, active: p.id }))} />)}
+                </View>
+              </View>
             ))}
-          </View>
-          {cfg.active === 'custom' ? CUSTOM_KEYS.map((k) => (
-            <ColorPicker key={k} label={t(`admin.theme.${CKEY[k]}`)} value={cfg.custom[k]} onChange={(v) => setCfg((c) => ({ ...c, custom: { ...c.custom, [k]: v } }))} />
-          )) : null}
-          <Button testID="theme-save" title={t('common.save')} onPress={save} className="mt-2" />
-        </Card>
-        <View style={{ width: desktop ? 340 : '100%' }}>
+          </Card>
+          <Card className="p-4">
+            <Pressable testID="theme-custom" onPress={() => setCfg((x) => ({ ...x, active: 'custom' }))} className="flex-row items-center gap-2 mb-1">
+              <Icon name={cfg.active === 'custom' ? 'radiobox-marked' : 'radiobox-blank'} size={20} tone={cfg.active === 'custom' ? 'primary' : 'muted'} />
+              <Txt className="font-extrabold text-[16px]">{t('admin.theme.custom')}</Txt>
+            </Pressable>
+            <Txt className="text-muted text-[12px] mb-3">{t('admin.theme.customDesc')}</Txt>
+            {cfg.active === 'custom' ? CUSTOM_KEYS.map((k) => (
+              <ColorPicker key={k} label={t(`admin.theme.${CKEY[k]}`)} value={cfg.custom[k]} onChange={(v) => setCfg((x) => ({ ...x, custom: { ...x.custom, [k]: v } }))} />
+            )) : null}
+          </Card>
+        </View>
+        <View style={[{ width: desktop ? 340 : '100%' }, desktop ? ({ position: 'sticky', top: 16 } as any) : null]}>
           <Txt className="text-muted text-[13px] font-semibold mb-2">{t('admin.theme.preview')}</Txt>
           <View className="rounded-2xl overflow-hidden border border-line" testID="theme-preview"><ThemeScope config={cfg} className="flex-none"><Preview /></ThemeScope></View>
+          <View className="flex-row items-center gap-1.5 mt-2"><Icon name="shield-check-outline" size={15} tone="success" /><Txt className="text-muted text-[12px]">{t('admin.theme.readable')}</Txt></View>
         </View>
       </View>
     </AdminPage>

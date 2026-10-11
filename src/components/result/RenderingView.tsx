@@ -7,11 +7,11 @@ import { Icon, Txt } from '@/components/ui';
 import { tArr, useT } from '@/i18n';
 import { useTheme } from '@/theme/ThemeProvider';
 
-function Ring({ delay }: { delay: number }) {
+function Ring({ delay, color }: { delay: number; color: string }) {
   const v = useSharedValue(0);
   useEffect(() => { v.value = withDelay(delay, withRepeat(withTiming(1, { duration: 2400, easing: Easing.out(Easing.quad) }), -1)); }, [delay, v]);
   const s = useAnimatedStyle(() => ({ opacity: 0.55 * (1 - v.value), transform: [{ scale: 0.7 + v.value * 1.1 }] }));
-  return <Animated.View style={[{ position: 'absolute', width: 96, height: 96, borderRadius: 48, borderWidth: 2, borderColor: '#FBDD2D' }, s]} />;
+  return <Animated.View style={[{ position: 'absolute', width: 96, height: 96, borderRadius: 48, borderWidth: 2, borderColor: color }, s]} />;
 }
 
 /** Rendering page: blurred photo + scanning beam + pulsing orb + staged status text + progress bar. */
@@ -37,16 +37,16 @@ export function RenderingView({ photo, progress, stage }: { photo: string; progr
         <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0,0,0,0.35)' }]} />
         <Animated.View style={[{ position: 'absolute', left: 0, right: 0, top: 0, height: 90 }, beam]} pointerEvents="none">
           <LinearGradient colors={['rgba(251,221,45,0)', 'rgba(251,221,45,0.55)', 'rgba(251,221,45,0)']} style={{ flex: 1 }} />
-          <View style={{ position: 'absolute', left: 0, right: 0, top: 44, height: 2, backgroundColor: '#FBDD2D' }} />
+          <View style={{ position: 'absolute', left: 0, right: 0, top: 44, height: 2, backgroundColor: colors.primary }} />
         </Animated.View>
         <View className="absolute inset-0 items-center justify-center" pointerEvents="none">
-          <Ring delay={0} /><Ring delay={800} /><Ring delay={1600} />
-          <View className="w-24 h-24 rounded-full bg-primary items-center justify-center" style={{ shadowColor: '#FBDD2D', shadowOpacity: 0.8, shadowRadius: 24, elevation: 10 }}>
-            <Icon name="creation" size={40} color="#111" />
+          <Ring delay={0} color={colors.primary} /><Ring delay={800} color={colors.primary} /><Ring delay={1600} color={colors.primary} />
+          <View className="w-24 h-24 rounded-full bg-primary items-center justify-center" style={{ shadowColor: colors.primary, shadowOpacity: 0.8, shadowRadius: 24, elevation: 10 }}>
+            <Icon name="creation" size={40} tone="onprimary" />
           </View>
           <Animated.View style={[{ position: 'absolute', width: 150, height: 150 }, orbit]}>
             <View style={{ position: 'absolute', top: 0, left: 71, width: 10, height: 10, borderRadius: 5, backgroundColor: '#fff' }} />
-            <View style={{ position: 'absolute', bottom: 14, right: 14, width: 6, height: 6, borderRadius: 3, backgroundColor: '#FBDD2D' }} />
+            <View style={{ position: 'absolute', bottom: 14, right: 14, width: 6, height: 6, borderRadius: 3, backgroundColor: colors.primary }} />
           </Animated.View>
         </View>
       </View>
