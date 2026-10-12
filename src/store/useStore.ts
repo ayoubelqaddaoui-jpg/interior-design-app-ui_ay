@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import type { CollMap, CollName, DocMap, DocName, AppUser } from '@/data/types';
 import { repos, docs, ME } from '@/data/repositories';
+import { moveSelection } from '@/lib/reorder';
 import { uid } from '@/lib/uid';
 
 type Colls = { [K in CollName]: CollMap[K][] };
@@ -17,6 +18,7 @@ interface State extends Colls {
   patchDoc<K extends DocName>(name: K, patch: Partial<DocMap[K]>): Promise<void>;
   /** Reorder helper for any collection with `order`. */
   move(name: CollName, id: string, dir: -1 | 1): Promise<void>;
+  moveMany(name: CollName, ids: string[], dir: -1 | 1): Promise<void>;
 }
 
 const empty: Colls = {
@@ -64,12 +66,14 @@ export const useStore = create<State>((set, get) => ({
     set({ doc: { ...get().doc, [name]: v } });
   },
   async move(name, id, dir) {
-    const list = [...(get()[name] as any[])].sort((a, b) => a.order - b.order);
-    const i = list.findIndex((x) => x.id === id);
-    const j = i + dir;
-    if (i < 0 || j < 0 || j >= list.length) return;
-    const a = list[i], b = list[j];
-    await Promise.all([get().update(name, a.id, { order: b.order } as any), get().update(name, b.id, { order: a.order } as any)]);
+    await get().moveMany(name, [id], dir);
+  },
+  async moveMany(name, ids, dir) {
+    const list = sorted(get()[name] as any[]);
+    const reordered = moveSelection(list, ids, dir);
+    for (let i = 0; i < reordered.length; i++) {
+      if (reordered[i].order !== i) await get().update(name, reordered[i].id, { order: i } as any);
+    }
   },
 }));
 

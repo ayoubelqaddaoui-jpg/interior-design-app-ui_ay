@@ -6,6 +6,7 @@ import { ColorPicker } from './ColorPicker';
 import { ImageField } from './ImageField';
 import { useStore } from '@/store/useStore';
 import { useL, useT } from '@/i18n';
+import { toast } from '@/store/useToast';
 import type { LText } from '@/data/types';
 
 export type Opt = { value: string; label: string };
@@ -55,7 +56,7 @@ export function Field({ f, value, onChange, ctx, error }: { f: FieldDef; value: 
         <View className="mb-1">
           {label}
           {LANG_LABELS.map(({ k, key }) => (
-            <Input key={k} testID={`lt-${f.key}-${k}`} placeholder={t(`admin.f.${key}`)} value={(value as LText)?.[k] ?? ''} error={k === 'dar' ? error : undefined}
+            <Input key={k} language={k} testID={`lt-${f.key}-${k}`} placeholder={t(`admin.f.${key}`)} value={(value as LText)?.[k] ?? ''} error={k === 'dar' ? error : undefined}
               multiline={f.multiline} style={{ textAlign: k === 'fr' ? 'left' : 'right', writingDirection: k === 'fr' ? 'ltr' : 'rtl' } as any}
               onChangeText={(v) => onChange({ ...(value ?? { dar: '', ar: '', fr: '' }), [k]: v })} />
           ))}
@@ -119,7 +120,7 @@ export function validate(fields: FieldDef[], v: any, t: Ctx['t']) {
   v = v ?? {};
   for (const f of fields) {
     if (f.show && !f.show(v)) continue;
-    if (f.kind === 'ltext') { const x = v[f.key] as LText; if (!x || !(x.dar || x.ar || x.fr)) err[f.key] = t('admin.crud.required'); }
+    if (f.kind === 'ltext') { const x = v[f.key] as LText; if (!x || ![x.dar, x.ar, x.fr].some((value) => value?.trim())) err[f.key] = t('admin.crud.required'); }
     else if ((f.kind === 'text' || f.kind === 'select') && 'required' in f && f.required && !String(v[f.key] ?? '').trim()) err[f.key] = t('admin.crud.required');
   }
   return err;
@@ -128,37 +129,87 @@ export function validate(fields: FieldDef[], v: any, t: Ctx['t']) {
 export function normalize(fields: FieldDef[], v: any) {
   const out = { ...v };
   for (const f of fields) if (f.kind === 'ltext') {
-    const x = out[f.key] as LText; const first = x.dar || x.ar || x.fr;
+    const x = (out[f.key] ?? { dar: '', ar: '', fr: '' }) as LText; const first = x.dar || x.ar || x.fr;
     out[f.key] = { dar: x.dar || first, ar: x.ar || first, fr: x.fr || first };
   }
   return out;
 }
 
-export function FormModal({ visible, title, fields, initial, onClose, onSubmit }: { visible: boolean; title: string; fields: FieldDef[]; initial: any; onClose: () => void; onSubmit: (v: any) => Promise<void> | void }) {
+function FormDialog({ visible, title, fields, initial, onClose, onSubmit }: { visible: boolean; title: string; fields: FieldDef[]; initial: any; onClose: () => void; onSubmit: (v: any) => Promise<void> | void }) {
   const { t } = useT();
   const L = useL();
   const s = useStore();
   const [v, setV] = useState<any>(initial ?? {});
   const [err, setErr] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
-  React.useEffect(() => { if (visible) { setV(initial ?? {}); setErr({}); } }, [visible, initial]);
   const ctx: Ctx = { s, L, t };
   const submit = async () => {
     const e = validate(fields, v, t);
     setErr(e);
     if (Object.keys(e).length) return;
     setBusy(true);
-    await onSubmit(normalize(fields, v));
-    setBusy(false);
+    try { await onSubmit(normalize(fields, v)); } catch { toast(t('improve.saveError')); } finally { setBusy(false); }
   };
   return (
-    <Sheet visible={visible} onClose={onClose} title={title} wide>
-      {/* `v` is never null: palettes / room types use show(v) callbacks that read v.isSurprise / v.displayMode */}
-      {(visible ? fields : []).filter((f) => !f.show || f.show(v ?? {})).map((f) => <Field key={f.key} f={f} ctx={ctx} value={v?.[f.key]} error={err[f.key]} onChange={(x) => setV((p: any) => ({ ...p, [f.key]: x }))} />)}
-      <View className="flex-row gap-3 mt-2">
-        <Button title={t('common.cancel')} variant="soft" onPress={onClose} className="flex-1" />
-        <Button testID="form-save" title={t('common.save')} onPress={submit} loading={busy} className="flex-1" />
-      </View>
+    <Sheet visible={visible} onClose={() => { if (!busy) onClose(); }} title={title} wide footer={<View className="flex-row gap-3">
+      <Button title={t('common.cancel')} variant="soft" onPress={onClose} disabled={busy} className="flex-1" />
+      <Button testID="form-save" title={t('common.save')} onPress={submit} loading={busy} className="flex-1" />
+    </View>}>
+      <FormFields fields={visible ? fields : []} value={v} errors={err} ctx={ctx} onChange={(key, value) => setV((old: any) => ({ ...old, [key]: value }))} />
     </Sheet>
   );
+}
+
+
+/** Layout is based on the actual dialog width, not the viewport behind it. */
+export function FormFields({ fields, value, errors, ctx, onChange }: { fields: FieldDef[]; value: any; errors: Record<string, string>; ctx: Ctx; onChange: (key: string, value: any) => void }) {
+  const [width, setWidth] = useState(0);
+  return <View onLayout={(e) => setWidth(e.nativeEvent.layout.width)} style={{ flexDirection: 'row', flexWrap: 'wrap', marginHorizontal: -6 }}>
+    {fields.filter((f) => !f.show || f.show(value ?? {})).map((f) => <View key={f.key} style={{ width: width >= 680 && !['media', 'colors', 'icon'].includes(f.kind) ? '50%' : '100%', padding: 6, minWidth: 0 }}>
+      <View className="bg-surface rounded-2xl border border-line p-4" style={{ minWidth: 0 }}><Field f={f} ctx={ctx} value={value?.[f.key]} error={errors[f.key]} onChange={(v) => onChange(f.key, v)} /></View>
+    </View>)}
+  </View>;
+}
+
+function BatchFormDialog({ mode, title, fields, initial, blank, onClose, onSubmit }: { mode: 'add' | 'edit' | null; title: string; fields: FieldDef[]; initial: any; blank: () => any; onClose: () => void; onSubmit: (values: any[], keys: string[]) => Promise<void> }) {
+  const { t } = useT(); const L = useL(); const s = useStore(); const ctx = { s, L, t };
+  const [drafts, setDrafts] = useState<any[]>(() => mode === 'add' ? [blank(), blank()] : mode === 'edit' ? [{ ...initial }] : []);
+  const [keys, setKeys] = useState<string[]>([]);
+  const [errors, setErrors] = useState<Record<string, string>[]>([]);
+  const [busy, setBusy] = useState(false);
+  const submit = async () => {
+    const active = mode === 'edit' ? fields.filter((f) => keys.includes(f.key)) : fields;
+    const nextErrors = drafts.map((v) => validate(active, v, t));
+    setErrors(nextErrors);
+    if (nextErrors.some((e) => Object.keys(e).length)) return;
+    setBusy(true);
+    try {
+      const normalized = drafts.map((v) => normalize(active, v));
+      await onSubmit(normalized, keys);
+    } catch { toast(t('improve.saveError')); } finally { setBusy(false); }
+  };
+  return <Sheet visible={!!mode} title={title} wide onClose={() => { if (!busy) onClose(); }} footer={<View className="flex-row gap-3"><Button title={t('common.cancel')} variant="soft" onPress={onClose} disabled={busy} className="flex-1" /><Button testID="batch-save" title={t('common.save')} onPress={submit} loading={busy} disabled={mode === 'edit' && !keys.length} className="flex-1" /></View>}>
+    {mode === 'edit' ? <>
+      <Txt className="text-muted mb-3">{t('improve.batchHelp')}</Txt>
+      {fields.filter((f) => !f.show || f.show(drafts[0] ?? {})).map((f) => <View key={f.key} className="rounded-2xl border border-line p-4 mb-3 bg-surface">
+        <View className="flex-row items-center justify-between gap-3 mb-2"><Txt className="flex-1 font-bold">{f.label}</Txt><Toggle label={f.label} testID={`batch-field-${f.key}`} value={keys.includes(f.key)} onValueChange={(on) => setKeys((old) => on ? [...old, f.key] : old.filter((key) => key !== f.key))} /></View>
+        {keys.includes(f.key) ? <Field f={f} value={drafts[0]?.[f.key]} error={errors[0]?.[f.key]} ctx={ctx} onChange={(v) => setDrafts(([old]) => [{ ...old, [f.key]: v }])} /> : null}
+      </View>)}
+    </> : <>
+      {drafts.map((v, i) => <View key={v.id} className="mb-5">
+        <View className="flex-row items-center justify-between mb-2"><Txt className="font-bold text-[17px]">{t('admin.crud.addNew')} · {i + 1}</Txt>{drafts.length > 1 ? <Button size="sm" variant="soft" title={t('improve.removeDraft')} disabled={busy} onPress={() => setDrafts((old) => old.filter((_, index) => i !== index))} /> : null}</View>
+        <FormFields fields={fields} value={v} errors={errors[i] ?? {}} ctx={ctx} onChange={(key, value) => setDrafts((old) => old.map((item, index) => index === i ? { ...item, [key]: value } : item))} />
+      </View>)}
+      <Button testID="batch-add-another" variant="soft" icon="plus" title={t('improve.addAnother')} disabled={busy || drafts.length >= 50} onPress={() => setDrafts((old) => [...old, blank()])} />
+    </>}
+  </Sheet>;
+}
+
+
+/** Opening a different record starts a fresh draft; store updates never overwrite typing. */
+export function FormModal(props: React.ComponentProps<typeof FormDialog>) {
+  return <FormDialog key={props.visible ? props.initial?.id ?? 'new' : 'closed'} {...props} />;
+}
+export function BatchFormModal(props: React.ComponentProps<typeof BatchFormDialog>) {
+  return <BatchFormDialog key={props.mode ?? 'closed'} {...props} />;
 }

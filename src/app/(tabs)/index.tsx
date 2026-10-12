@@ -1,11 +1,12 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { Image, Pressable, ScrollView, View } from 'react-native';
+import React, { useMemo, useState } from 'react';
+import { Pressable, ScrollView, View } from 'react-native';
 import { router } from 'expo-router';
 import { useStore, sorted } from '@/store/useStore';
 import { useWizard } from '@/store/useWizard';
 import { useL, useT } from '@/i18n';
 import { useBp } from '@/hooks/useBp';
 import { CreditsBadge, EmptyState, Screen, Txt } from '@/components/ui';
+import { BrandHeader } from '@/components/BrandHeader';
 import { ToolCard } from '@/components/ToolCard';
 
 const ALL = '__all__';
@@ -19,13 +20,9 @@ export default function Home() {
   const branding = useStore((s) => s.doc.branding);
   const visibleTabs = useMemo(() => sorted(tabs).filter((x) => x.visible), [tabs]);
   const showAll = useStore((s) => s.doc.settings.homeShowAll) !== false;
-  const [tabId, setTabId] = useState<string>(showAll ? ALL : '');
+  const [selectedTab, setTabId] = useState<string>(showAll ? ALL : '');
 
-  useEffect(() => {
-    const exists = visibleTabs.some((x) => x.id === tabId);
-    if (showAll) { if (tabId !== ALL && !exists) setTabId(ALL); }
-    else if (!exists) setTabId(visibleTabs[0]?.id ?? '');
-  }, [visibleTabs, tabId, showAll]);
+  const tabId = selectedTab === ALL && showAll ? ALL : visibleTabs.some((x) => x.id === selectedTab) ? selectedTab : showAll ? ALL : visibleTabs[0]?.id ?? '';
 
   const visibleTabIds = useMemo(() => new Set(visibleTabs.map((x) => x.id)), [visibleTabs]);
   const list = sorted(tools).filter((x) => x.visible && visibleTabIds.has(x.tabId) && (tabId === ALL || x.tabId === tabId));
@@ -37,10 +34,7 @@ export default function Home() {
   const header = (
     <View>
       {!desktop ? (
-        <View className="flex-row items-center justify-between h-14">
-          {branding.logoUri ? <Image source={{ uri: branding.logoUri }} style={{ height: 30, width: 110, resizeMode: 'contain', alignSelf: 'flex-start' }} /> : <Txt className="text-[26px] font-black tracking-tight">{branding.appName}</Txt>}
-          <CreditsBadge />
-        </View>
+        <BrandHeader branding={branding} actions={<CreditsBadge />} />
       ) : null}
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingVertical: 8 }}>
         {pills.map((x) => {

@@ -7,12 +7,13 @@ import { useT } from '@/i18n';
 export type Col<T> = { label: string; flex?: number; render: (item: T) => React.ReactNode };
 
 /** Table on desktop, stacked cards on mobile. Same data/props. */
-export function CrudTable<T extends { id: string; visible?: boolean }>({ rows, cols, onEdit, onDelete, onMove, onToggle, rowTestID }: {
-  rows: T[]; cols: Col<T>[]; onEdit?: (r: T) => void; onDelete?: (r: T) => void; onMove?: (r: T, d: -1 | 1) => void; onToggle?: (r: T) => void; rowTestID?: string;
+export function CrudTable<T extends { id: string; visible?: boolean }>({ rows, cols, onEdit, onDelete, onMove, onToggle, rowTestID, selected, onSelect }: {
+  rows: T[]; cols: Col<T>[]; onEdit?: (r: T) => void; onDelete?: (r: T) => void; onMove?: (r: T, d: -1 | 1) => void; onToggle?: (r: T) => void; rowTestID?: string; selected?: string[]; onSelect?: (id: string) => void;
 }) {
   const { desktop } = useBp();
   const { t } = useT();
   if (!rows.length) return <EmptyState icon="database-off-outline" title={t('admin.crud.noItems')} />;
+  const checkbox = (r: T) => onSelect ? <Pressable testID={`select-${r.id}`} accessibilityRole="checkbox" accessibilityState={{ checked: selected?.includes(r.id) ?? false }} accessibilityLabel={t('common.select')} onPress={() => onSelect(r.id)} className="w-10 h-10 items-center justify-center"><Icon name={selected?.includes(r.id) ? 'checkbox-marked' : 'checkbox-blank-outline'} size={22} tone={selected?.includes(r.id) ? 'primary' : 'muted'} /></Pressable> : null;
   const actions = (r: T, i: number) => (
     <View className="flex-row items-center gap-1">
       {onMove ? <>
@@ -28,6 +29,7 @@ export function CrudTable<T extends { id: string; visible?: boolean }>({ rows, c
     <Card className="overflow-hidden">
       {desktop ? (
         <View className="flex-row items-center px-4 h-10 bg-surface2">
+          {onSelect ? <View style={{ width: 40 }} /> : null}
           {cols.map((c, i) => <Txt key={i} className="text-muted text-[12px] font-bold uppercase" style={{ flex: c.flex ?? 1 }}>{c.label}</Txt>)}
           <View style={{ width: 150 }} />
         </View>
@@ -36,15 +38,18 @@ export function CrudTable<T extends { id: string; visible?: boolean }>({ rows, c
         <View key={r.id} testID={rowTestID ? `${rowTestID}-${r.id}` : undefined} className={`px-4 py-3 border-t border-line ${r.visible === false ? 'opacity-55' : ''}`}>
           {desktop ? (
             <View className="flex-row items-center">
+              {checkbox(r)}
               {cols.map((c, j) => <View key={j} style={{ flex: c.flex ?? 1 }} className="pe-3">{c.render(r)}</View>)}
               <View style={{ width: 150 }} className="items-end">{actions(r, i)}</View>
             </View>
           ) : (
             <View>
-              <View className="flex-row items-center justify-between">
+              <View className="flex-row items-center">
+                {checkbox(r)}
                 <View className="flex-1 pe-2">{cols[0].render(r)}</View>
-                {actions(r, i)}
+
               </View>
+              <View className="self-end mt-2">{actions(r, i)}</View>
               {cols.slice(1).map((c, j) => (
                 <View key={j} className="flex-row items-center mt-1.5 gap-2"><Txt className="text-muted text-[12px] w-24">{c.label}</Txt><View className="flex-1">{c.render(r)}</View></View>
               ))}

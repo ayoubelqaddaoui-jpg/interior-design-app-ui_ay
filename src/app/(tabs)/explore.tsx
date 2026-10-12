@@ -1,10 +1,11 @@
 import React from 'react';
-import { Pressable, ScrollView, View } from 'react-native';
+import { Pressable, View } from 'react-native';
 import { router } from 'expo-router';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { sorted, useStore } from '@/store/useStore';
 import { useL, useT } from '@/i18n';
 import { CreditsBadge, Icon, MediaView, PressableScale, Screen, Txt } from '@/components/ui';
+import { Carousel } from '@/components/ui/Carousel';
 import { useBp } from '@/hooks/useBp';
 
 export default function Explore() {
@@ -38,7 +39,7 @@ export default function Explore() {
                 <Icon name="chevron-right" size={16} tone="muted" flip />
               </Pressable>
             </View>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 12 }}>
+            <Carousel>
               {cats.map((c) => {
                 const n = items.filter((i) => i.categoryId === c.id && i.visible).length;
                 return (
@@ -52,7 +53,7 @@ export default function Explore() {
                   </PressableScale>
                 );
               })}
-            </ScrollView>
+            </Carousel>
           </Animated.View>
         );
       })}

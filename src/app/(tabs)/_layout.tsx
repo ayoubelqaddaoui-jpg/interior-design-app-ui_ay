@@ -4,9 +4,9 @@ import { Tabs } from 'expo-router/js-tabs';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useT } from '@/i18n';
 import { useBp } from '@/hooks/useBp';
-import { Icon, Txt } from '@/components/ui';
+import { CreditsBadge, Icon, Txt } from '@/components/ui';
 import { useStore } from '@/store/useStore';
-import { CreditsBadge } from '@/components/ui';
+import { BrandHeader } from '@/components/BrandHeader';
 
 const TABS = [
   { name: 'index', key: 'tabs.home', icon: 'home-variant-outline', on: 'home-variant' },
@@ -80,10 +80,8 @@ function TabBar({ state, navigation }: any) {
   if (desktop) {
     return (
       <View className="bg-bg border-b border-line" style={{ paddingTop: insets.top }}>
-        <View className="flex-row items-center h-16 px-8 w-full self-center" style={{ maxWidth: 1280 }}>
-          <Txt className="text-[24px] font-black me-8">{branding.appName}</Txt>
-          <View className="flex-row gap-2 flex-1">{items}</View>
-          <CreditsBadge />
+        <View className="px-8 w-full self-center" style={{ maxWidth: 1280 }}>
+          <BrandHeader branding={branding} navigation={<View className="flex-row gap-2">{items}</View>} actions={<CreditsBadge />} />
         </View>
       </View>
     );

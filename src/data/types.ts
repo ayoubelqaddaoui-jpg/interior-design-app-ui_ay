@@ -52,6 +52,7 @@ export interface InspirationCategory extends Ordered {
   title: LText;
   cover: string;
   roomTypeId?: Id;
+  galleryLayout?: GalleryLayout;
 }
 export interface InspirationItem extends Ordered {
   id: Id;
@@ -124,7 +125,15 @@ export interface ChatMessage { id: Id; role: 'user' | 'assistant'; text: string;
 export interface Conversation { id: Id; userId: Id; title: string; messages: ChatMessage[]; updatedAt: number }
 
 /* ---- single documents ---- */
-export interface Branding { appName: string; logoUri: string }
+export interface Branding {
+  appName: string; logoUri: string;
+  logoMode?: 'text' | 'image';
+  logoPosition?: 'left' | 'center' | 'right';
+  logoFont?: string; logoColor?: string; logoSize?: number;
+  logoStyle?: 'minimal' | 'signature' | 'badge';
+  logoItalic?: boolean; logoSpacing?: number;
+}
+export type GalleryLayout = 'grid' | 'masonry' | 'editorial' | 'carousel';
 /** 'custom' or any preset id (see theme/presets.ts). */
 export type ThemeId = string;
 export interface ThemeConfig { active: ThemeId; custom: Record<string, string> }
@@ -144,6 +153,11 @@ export interface AppSettings {
   homeShowAll: boolean;
   userNavStyle: UserNavStyle;
   adminNavMode: AdminNavMode;
+  arabicFont?: string;
+  frenchFont?: string;
+  galleryLayout?: GalleryLayout;
+  /** Bulk/reorder operations must be explicitly enabled per content panel. */
+  bulkPanels?: string[];
 }
 
 export interface CollMap {

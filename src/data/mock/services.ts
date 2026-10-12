@@ -67,12 +67,23 @@ export const mockServices: Services = {
   upload: {
     /** Native: copy the picked file into the app's document dir so it survives cache cleaning. Web: keep data URL. */
     async upload(uri, folder) {
-      if (Platform.OS === 'web' || uri.startsWith('http') || uri.startsWith('data:')) return uri;
+      if (Platform.OS === 'web') {
+        if (!uri.startsWith('blob:')) return uri;
+        const response = await fetch(uri);
+        const blob = await response.blob();
+        return await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(String(reader.result));
+          reader.onerror = () => reject(new Error('Unable to save uploaded image'));
+          reader.readAsDataURL(blob);
+        });
+      }
+      if (uri.startsWith('http') || uri.startsWith('data:')) return uri;
       try {
         const { File, Directory, Paths } = await import('expo-file-system');
         const dir = new Directory(Paths.document, folder);
         if (!dir.exists) dir.create();
-        const dest = new File(dir, `${Date.now()}.jpg`);
+        const dest = new File(dir, `${Date.now()}.${uri.toLowerCase().includes('.png') ? 'png' : 'jpg'}`);
         new File(uri).copy(dest);
         return dest.uri;
       } catch {
