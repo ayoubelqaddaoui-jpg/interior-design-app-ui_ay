@@ -5,6 +5,7 @@ import { create } from 'zustand';
 import * as Localization from 'expo-localization';
 import { storage } from '@/data/mock/storage';
 import type { Lang, LText } from '@/data/types';
+import { improvements } from './locales/improvements';
 import fr from './locales/fr';
 import ar from './locales/ar';
 import dar from './locales/dar';
@@ -13,7 +14,7 @@ export const LANGS: Lang[] = ['dar', 'ar', 'fr'];
 export const isRtl = (l: Lang) => l === 'dar' || l === 'ar';
 
 i18n.use(initReactI18next).init({
-  resources: { fr: { translation: fr }, ar: { translation: ar }, dar: { translation: dar } },
+  resources: { fr: { translation: { ...fr, improve: improvements.fr } }, ar: { translation: { ...ar, improve: improvements.ar } }, dar: { translation: { ...dar, improve: improvements.dar } } },
   lng: 'dar',
   fallbackLng: 'fr',
   interpolation: { escapeValue: false },

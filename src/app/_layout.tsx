@@ -5,6 +5,7 @@ import { View, ActivityIndicator } from 'react-native';
 import { Stack } from 'expo-router';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { useFonts } from 'expo-font';
 import * as SplashScreen from 'expo-splash-screen';
 import { useStore } from '@/store/useStore';
 import { useLocal } from '@/store/useLocal';
@@ -15,6 +16,12 @@ import { ToastHost } from '@/components/ui';
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
 export default function RootLayout() {
+  const [fontsLoaded, fontError] = useFonts({
+    Tajawal: require('../../assets/fonts/Tajawal.ttf'),
+    NotoNaskhArabic: require('../../assets/fonts/NotoNaskhArabic.ttf'),
+    Inter: require('../../assets/fonts/Inter.ttf'),
+    Lora: require('../../assets/fonts/Lora.ttf'),
+  });
   const ready = useStore((s) => s.ready);
   const loaded = useLocal((s) => s.loaded);
   const lang = useLang((s) => s.lang);
@@ -26,7 +33,7 @@ export default function RootLayout() {
     })();
   }, []);
 
-  const ok = ready && loaded;
+  const ok = ready && loaded && (fontsLoaded || !!fontError);
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>

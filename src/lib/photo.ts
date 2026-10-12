@@ -5,7 +5,7 @@ import { services } from '@/data/repositories';
 export type PickResult = { uri: string } | { error: 'permission' | 'cancelled' };
 
 /** Camera or Gallery ONLY. Result is downscaled so it is cheap to store/upload. */
-export async function pickPhoto(source: 'camera' | 'gallery'): Promise<PickResult> {
+export async function pickPhoto(source: 'camera' | 'gallery', options: { preserveTransparency?: boolean } = {}): Promise<PickResult> {
   try {
     let res: ImagePicker.ImagePickerResult;
     if (source === 'camera') {
@@ -13,12 +13,12 @@ export async function pickPhoto(source: 'camera' | 'gallery'): Promise<PickResul
       if (!perm.granted) return { error: 'permission' };
       res = await ImagePicker.launchCameraAsync({ mediaTypes: ['images'], quality: 0.8 });
     } else {
-      res = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.8, allowsMultipleSelection: false });
+      res = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: options.preserveTransparency ? 1 : 0.8, allowsMultipleSelection: false });
     }
     if (res.canceled || !res.assets?.[0]) return { error: 'cancelled' };
     let uri = res.assets[0].uri;
     try {
-      const out = await Manipulator.manipulateAsync(uri, [{ resize: { width: 1024 } }], { compress: 0.6, format: Manipulator.SaveFormat.JPEG });
+      const out = await Manipulator.manipulateAsync(uri, res.assets[0].width > 1024 ? [{ resize: { width: 1024 } }] : [], { compress: 0.6, format: options.preserveTransparency ? Manipulator.SaveFormat.PNG : Manipulator.SaveFormat.JPEG });
       uri = out.uri;
     } catch { /* keep original */ }
     return { uri: await services.upload.upload(uri, 'photos') };

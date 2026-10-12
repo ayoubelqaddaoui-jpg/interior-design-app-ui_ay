@@ -47,11 +47,12 @@ function Preview() {
 
 function Swatch({ id, active, onPress }: { id: string; active: boolean; onPress: () => void }) {
   const L = useL();
+  const { desktop } = useBp();
   const p = PRESET_BY_ID[id];
   const c = p.tokens;
   return (
     <Pressable testID={`theme-${id}`} accessibilityRole="radio" accessibilityState={{ selected: active }} onPress={onPress}
-      className={`rounded-2xl border-2 p-2 ${active ? 'border-primary' : 'border-line'} bg-surface`} style={{ width: 150 }}>
+      className={`rounded-2xl border-2 p-2 ${active ? 'border-primary' : 'border-line'} bg-surface`} style={{ width: desktop ? 150 : '100%', minWidth: 0 }}>
       <View className="rounded-xl overflow-hidden p-2 gap-1.5" style={{ backgroundColor: c.bg, borderWidth: 1, borderColor: c.line, height: 84 }}>
         <View className="flex-row items-center justify-between"><View style={{ width: 34, height: 6, borderRadius: 3, backgroundColor: c.fg }} /><View style={{ width: 14, height: 14, borderRadius: 7, backgroundColor: c.primary }} /></View>
         <View style={{ flex: 1, borderRadius: 8, backgroundColor: c.surface, borderWidth: 1, borderColor: c.line, padding: 5, gap: 3 }}>
@@ -101,8 +102,8 @@ export default function ThemeAdmin() {
             {groups.map(({ c, items }) => (
               <View key={c} className="mb-4">
                 <Txt className="text-muted text-[12px] font-bold uppercase tracking-wide mb-2">{t(`admin.theme.cat.${c}`)}</Txt>
-                <View className="flex-row flex-wrap gap-3">
-                  {items.map((p) => <Swatch key={p.id} id={p.id} active={cfg.active === p.id} onPress={() => setCfg((x) => ({ ...x, active: p.id }))} />)}
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginHorizontal: -4 }}>
+                  {items.map((p) => <View key={p.id} style={{ width: desktop ? 158 : '50%', padding: 4, minWidth: 0 }}><Swatch id={p.id} active={cfg.active === p.id} onPress={() => setCfg((x) => ({ ...x, active: p.id }))} /></View>)}
                 </View>
               </View>
             ))}

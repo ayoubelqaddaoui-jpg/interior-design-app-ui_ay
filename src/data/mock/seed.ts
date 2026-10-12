@@ -181,7 +181,7 @@ export const seedRequests = (): T.RenderRequest[] => {
   return [...first, ...rows];
 };
 
-export const defaultBranding = (): T.Branding => ({ appName: 'Dwira', logoUri: '' });
+export const defaultBranding = (): T.Branding => ({ appName: 'Dwira', logoUri: '', logoPosition: 'left', logoFont: 'Lora', logoStyle: 'signature', logoSize: 28 });
 export const defaultTheme = (): T.ThemeConfig => ({ active: 'light', custom: {} });
 export const defaultAssistant = (): T.AssistantConfig => ({
   type: 'ai', modelId: 'mdl_gemini',

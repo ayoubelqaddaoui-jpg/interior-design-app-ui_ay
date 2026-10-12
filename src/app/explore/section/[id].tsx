@@ -1,8 +1,9 @@
 import React from 'react';
-import { Pressable, ScrollView, View } from 'react-native';
+import { Pressable, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { sorted, useStore } from '@/store/useStore';
 import { useL, useT } from '@/i18n';
+import { Carousel } from '@/components/ui/Carousel';
 import { EmptyState, Icon, MediaView, PageHeader, Screen, Txt } from '@/components/ui';
 
 export default function SectionPage() {
@@ -28,13 +29,13 @@ export default function SectionPage() {
                 <Icon name="chevron-right" size={16} tone="muted" flip />
               </Pressable>
             </View>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 10 }}>
+            <Carousel gap={10}>
               {list.slice(0, 8).map((it) => (
                 <Pressable key={it.id} onPress={() => router.push({ pathname: '/explore/item/[id]', params: { id: it.id } })}>
                   <MediaView uri={it.image} className="rounded-xl" style={{ width: 120, height: 120 }} />
                 </Pressable>
               ))}
-            </ScrollView>
+            </Carousel>
           </View>
         );
       })}

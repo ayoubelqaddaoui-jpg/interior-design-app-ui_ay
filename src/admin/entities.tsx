@@ -31,7 +31,7 @@ const tabs: EntityConfig<'tabs'> = {
   name: 'tabs', navKey: 'tabs', icon: 'tab', ordered: true,
   fields: (c) => [{ kind: 'ltext', key: 'title', label: c.t('admin.f.title') }, ...common(c)],
   cols: (c) => [titleCol(c)],
-  blank: () => ({ title: lt(), order: 0, visible: true }),
+  blank: (c) => ({ title: lt(), order: o(c, 'tabs'), visible: true }),
   cascade: [['tools', 'tabId']],
 };
 
@@ -77,6 +77,7 @@ const categories: EntityConfig<'categories'> = {
     { kind: 'image', key: 'cover', label: c.t('admin.f.cover') },
     { kind: 'select', key: 'sectionId', label: c.t('admin.f.section'), required: true, options: (x) => opts(x, x.s.sections) },
     { kind: 'select', key: 'roomTypeId', label: c.t('admin.f.roomType'), options: (x) => opts(x, x.s.roomTypes) },
+    { kind: 'select', key: 'galleryLayout', label: c.t('improve.galleryLayout'), options: (x) => ['inherit', 'grid', 'masonry', 'editorial', 'carousel'].map((value) => ({ value: value === 'inherit' ? '' : value, label: x.t(`improve.${value}`) })) },
     ...common(c),
   ],
   cols: (c) => [thumb(c.t('admin.f.cover'), (r) => r.cover), titleCol(c), txt(c.t('admin.f.section'), (r) => c.L(c.s.sections.find((x) => x.id === r.sectionId)?.title))],

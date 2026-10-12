@@ -43,8 +43,11 @@
     "zustand": "^5.0.15"
   },
   "devDependencies": {
+    "@playwright/test": "^1.64.0",
     "@types/react": "~19.2.2",
     "babel-preset-expo": "^57.0.14",
+    "eslint": "^9.39.5",
+    "eslint-config-expo": "~57.0.2",
     "typescript": "~6.0.3"
   },
   "scripts": {
@@ -56,7 +59,9 @@
     "build:web": "expo export -p web && node scripts/postexport.js",
     "vercel-build": "npm run build:web",
     "serve:web": "node scripts/serve-dist.js",
-    "check:themes": "sucrase-node scripts/check-themes.ts"
+    "check:themes": "sucrase-node scripts/check-themes.ts",
+    "lint": "expo lint",
+    "test:ui": "node scripts/check-ui.js"
   },
   "private": true,
   "engines": {
