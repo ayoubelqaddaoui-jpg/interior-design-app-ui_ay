@@ -1,4 +1,4 @@
-type NavItem = { key: string; icon: string; href: string };
+export type NavItem = { key: string; icon: string; href: string };
 type NavGroup = { key: 'overview' | 'content' | 'creation' | 'ai' | 'appearance'; items: NavItem[] };
 
 /** Menu items grouped by topic so related screens sit together. */

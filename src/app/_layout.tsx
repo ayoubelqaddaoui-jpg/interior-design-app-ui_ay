@@ -12,6 +12,7 @@ import { useLocal } from '@/store/useLocal';
 import { initLang, useLang, isRtl } from '@/i18n';
 import { ThemeProvider } from '@/theme/ThemeProvider';
 import { UnsavedChangesHost } from '@/hooks/useLeaveGuard';
+import { AppExitHost } from '@/components/AppExitHost';
 import { GlobalSearch } from '@/components/GlobalSearch';
 import { ToastHost } from '@/components/ui';
 
@@ -47,6 +48,7 @@ export default function RootLayout() {
                 <Stack.Screen name="pro" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
               </Stack>
               <GlobalSearch />
+              <AppExitHost />
               </>
             ) : (
               <View className="flex-1 items-center justify-center bg-bg"><ActivityIndicator /></View>

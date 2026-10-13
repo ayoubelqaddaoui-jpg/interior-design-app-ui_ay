@@ -11,6 +11,8 @@ import { useStore } from '@/store/useStore';
 import { useLocal } from '@/store/useLocal';
 import { useL, useT } from '@/i18n';
 
+const EMPTY = [] as never[];
+
 /** Separate keyed instances discard queries/results when crossing the app/admin boundary. */
 export function GlobalSearch() {
   const path = usePathname();
@@ -35,7 +37,7 @@ function SearchControl({ admin }: { admin: boolean }) {
   </>;
 }
 function SearchDialog({ admin, onClose }: { admin: boolean; onClose: () => void }) {
-  const s = useStore(useShallow((s) => ({ tools: s.tools, tabs: s.tabs, styles: s.styles, sections: s.sections, categories: s.categories, roomTypes: s.roomTypes, palettes: s.palettes, inspirations: s.inspirations, models: admin ? s.models : [], users: admin ? s.users : [], requests: admin ? s.requests : [] })));
+  const s = useStore(useShallow((s) => ({ tools: s.tools, tabs: s.tabs, styles: s.styles, sections: s.sections, categories: s.categories, roomTypes: s.roomTypes, palettes: s.palettes, inspirations: s.inspirations, models: admin ? s.models : EMPTY, users: admin ? s.users : EMPTY, requests: admin ? s.requests : EMPTY })));
   const L = useL();
   const { t, lang } = useT();
   const [query, setQuery] = useState('');
