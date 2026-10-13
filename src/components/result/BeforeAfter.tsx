@@ -19,20 +19,19 @@ export function BeforeAfter({ before, after, hold, aspect = 1.1 }: { before: str
   const hint = useSharedValue(1);
   const holdV = useSharedValue(0);
 
-  useEffect(() => { holdV.value = withTiming(hold ? 1 : 0, { duration: 160 }); }, [hold, holdV]);
+  useEffect(() => { holdV.set(withTiming(hold ? 1 : 0, { duration: 160 })); }, [hold, holdV]);
 
-  const reveal = () => {
-    pos.value = 1;
-    pos.value = withDelay(350, withSequence(withTiming(0.46, { duration: 1300, easing: Easing.bezier(0.22, 1, 0.36, 1) }), withTiming(0.5, { duration: 260 })));
-    hint.value = 1;
-    hint.value = withDelay(3200, withTiming(0, { duration: 500 }));
-  };
-  useEffect(reveal, []);
+  useEffect(() => {
+    pos.set(1);
+    pos.set(withDelay(350, withSequence(withTiming(0.46, { duration: 1300, easing: Easing.bezier(0.22, 1, 0.36, 1) }), withTiming(0.5, { duration: 260 }))));
+    hint.set(1);
+    hint.set(withDelay(3200, withTiming(0, { duration: 500 })));
+  }, [pos, hint]);
 
   const pan = Gesture.Pan()
     .minDistance(0)
-    .onBegin((e) => { if (W.value) pos.value = Math.min(1, Math.max(0, e.x / W.value)); hint.value = withTiming(0, { duration: 200 }); })
-    .onUpdate((e) => { if (W.value) pos.value = Math.min(1, Math.max(0, e.x / W.value)); });
+    .onBegin((e) => { if (W.value) pos.set(Math.min(1, Math.max(0, e.x / W.value))); hint.set(withTiming(0, { duration: 200 })); })
+    .onUpdate((e) => { if (W.value) pos.set(Math.min(1, Math.max(0, e.x / W.value))); });
 
   const clip = useAnimatedStyle(() => ({ width: W.value * pos.value }));
   const line = useAnimatedStyle(() => ({ transform: [{ translateX: W.value * pos.value - 1 }] }));
@@ -44,7 +43,7 @@ export function BeforeAfter({ before, after, hold, aspect = 1.1 }: { before: str
 
   return (
     <GestureDetector gesture={pan}>
-      <View testID="before-after" style={{ aspectRatio: aspect, width: '100%', direction: 'ltr' } as any} className="rounded-3xl overflow-hidden bg-surface2" onLayout={(e) => { W.value = e.nativeEvent.layout.width; }}>
+      <View testID="before-after" style={{ aspectRatio: aspect, width: '100%', direction: 'ltr' } as any} className="rounded-3xl overflow-hidden bg-surface2" onLayout={(e) => { W.set(e.nativeEvent.layout.width); }}>
         <Image source={{ uri: after }} style={StyleSheet.absoluteFill} contentFit="cover" />
         <Animated.View style={[{ position: 'absolute', left: 0, top: 0, bottom: 0, overflow: 'hidden' }, clip]}>
           <BeforeImg uri={before} W={W} />

@@ -1,12 +1,15 @@
-import React, { useMemo, useState } from 'react';
+import { useViewState } from '@/hooks/useViewState';
+import React, { useMemo } from 'react';
 import { Pressable, TextInput, View } from 'react-native';
-import { Href, useRouter } from 'expo-router';
+import { Href } from 'expo-router';
+import { useRouter } from '@/hooks/useLeaveGuard';
 import { Card, Icon, Txt } from '@/components/ui';
-import { AdminPage } from '@/components/admin/AdminShell';
+import { ADMIN_NAV, AdminPage } from '@/components/admin/AdminShell';
 import { BarChart, RankBars } from '@/components/admin/dashboard/Charts';
 import { useBp } from '@/hooks/useBp';
 import { useL, useT } from '@/i18n';
 import { useStore } from '@/store/useStore';
+import { useAppFont } from '@/components/ui/Txt';
 import { useTheme } from '@/theme/ThemeProvider';
 import { ago, kpis, recentEvents, series, topUsage, type EventKind, type Metric, type Range } from '@/lib/stats';
 
@@ -42,16 +45,24 @@ function Kpi({ id, icon, label, value, delta, sub, active, onPress }: { id: stri
   );
 }
 
+const Section = ({ title, right, children, className = '' }: { title: string; right?: React.ReactNode; children: React.ReactNode; className?: string }) => (
+    <Card className={`p-4 ${className}`}>
+      <View className="flex-row items-center justify-between mb-3 gap-2"><Txt className="font-extrabold text-[16px] flex-1">{title}</Txt>{right}</View>
+      {children}
+    </Card>
+  );
+
 export default function Dashboard() {
   const { t, lang } = useT();
   const L = useL();
   const { desktop, tablet } = useBp();
   const router = useRouter();
   const { colors } = useTheme();
+  const fontFamily = useAppFont();
   const s = useStore();
-  const [range, setRange] = useState<Range>(30);
-  const [metric, setMetric] = useState<Metric>('designs');
-  const [q, setQ] = useState('');
+  const [range, setRange] = useViewState<Range>('range', 30);
+  const [metric, setMetric] = useViewState<Metric>('metric', 'designs');
+  const [q, setQ] = useViewState('q', '');
   const go = (h: string) => router.push(h as Href);
 
   const inp = useMemo(() => ({ requests: s.requests, history: s.history, users: s.users }), [s.requests, s.history, s.users]);
@@ -68,26 +79,31 @@ export default function Dashboard() {
     models: topUsage(inp, range, (d) => d.modelId).map((r) => ({ id: r.id, count: r.count, label: s.models.find((m) => m.id === r.id)?.name ?? r.id })),
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }), [inp, range, s.tools, s.styles, s.roomTypes, s.models, lang]);
-  const [topTab, setTopTab] = useState<'tools' | 'styles' | 'rooms' | 'models'>('tools');
+  const [topTab, setTopTab] = useViewState<'tools' | 'styles' | 'rooms' | 'models'>('topTab', 'tools');
   const best = tops.tools[0];
 
   const needle = q.trim().toLowerCase();
   const results = useMemo(() => {
     if (needle.length < 2) return null;
-    const has = (x?: string) => !!x && x.toLowerCase().includes(needle);
+    const has = (x?: string) => !!x && x.toLocaleLowerCase().includes(needle);
+    const matchTitle = (x: any) => Object.values(x.title ?? {}).some((title) => has(String(title)));
     return {
       requests: s.requests.filter((r) => has(r.name) || has(r.whatsapp) || has(L(s.tools.find((x) => x.id === r.draft.toolId)?.title))).slice(0, 4)
         .map((r) => ({ id: r.id, title: r.name, sub: L(s.tools.find((x) => x.id === r.draft.toolId)?.title), href: '/admin/requests', icon: 'inbox-full-outline' })),
       users: s.users.filter((u) => u.role === 'user' && (has(u.name) || has(u.whatsapp))).slice(0, 4)
         .map((u) => ({ id: u.id, title: u.name, sub: u.whatsapp, href: '/admin/users', icon: 'account-outline' })),
       content: [
-        ...s.tools.filter((x) => has(L(x.title))).map((x) => ({ id: x.id, title: L(x.title), sub: t('admin.nav.tools'), href: '/admin/tools', icon: 'toolbox-outline' })),
-        ...s.styles.filter((x) => has(L(x.title))).map((x) => ({ id: x.id, title: L(x.title), sub: t('admin.nav.styles'), href: '/admin/styles', icon: 'palette-swatch-outline' })),
-        ...s.roomTypes.filter((x) => has(L(x.title))).map((x) => ({ id: x.id, title: L(x.title), sub: t('admin.nav.roomTypes'), href: '/admin/roomTypes', icon: 'door-open' })),
-      ].slice(0, 5),
+        ...s.tools.filter(matchTitle).map((x) => ({ id: x.id, title: L(x.title), sub: t('admin.nav.tools'), href: '/admin/tools', icon: 'toolbox-outline' })),
+        ...s.styles.filter(matchTitle).map((x) => ({ id: x.id, title: L(x.title), sub: t('admin.nav.styles'), href: '/admin/styles', icon: 'palette-swatch-outline' })),
+        ...s.roomTypes.filter(matchTitle).map((x) => ({ id: x.id, title: L(x.title), sub: t('admin.nav.roomTypes'), href: '/admin/roomTypes', icon: 'door-open' })),
+        ...(['sections', 'categories', 'palettes'] as const).flatMap((name) => s[name].filter(matchTitle).map((x) => ({ id: x.id, title: L(x.title), sub: t(`admin.nav.${name}`), href: `/admin/${name}`, icon: 'view-grid-outline' }))),
+        ...s.inspirations.filter((x) => has(x.id) || matchTitle(s.categories.find((c) => c.id === x.categoryId) ?? {}) || matchTitle(s.styles.find((c) => c.id === x.styleId) ?? {})).map((x) => ({ id: x.id, title: L(s.categories.find((c) => c.id === x.categoryId)?.title), sub: t('admin.nav.inspirations'), href: '/admin/inspirations', icon: 'image-outline' })),
+        ...s.models.filter((x) => has(x.name) || has(x.provider)).map((x) => ({ id: x.id, title: x.name, sub: t('admin.nav.models'), href: '/admin/models', icon: 'robot-outline' })),
+        ...ADMIN_NAV.filter((x) => has(t(`admin.nav.${x.key}`))).map((x) => ({ id: `menu-${x.key}`, title: t(`admin.nav.${x.key}`), sub: t('admin.title'), href: x.href, icon: x.icon })),
+      ].slice(0, 30),
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [needle, s.requests, s.users, s.tools, s.styles, s.roomTypes, lang]);
+  }, [needle, s.requests, s.users, s.tools, s.styles, s.roomTypes, s.sections, s.categories, s.palettes, s.inspirations, s.models, lang]);
   const none = results && !results.requests.length && !results.users.length && !results.content.length;
 
   const dayLabel = (b: { start: number }) => new Date(b.start).toLocaleDateString(lang === 'fr' ? 'fr-FR' : 'en-GB', { day: 'numeric', month: 'short' });
@@ -99,12 +115,6 @@ export default function Dashboard() {
   const agoText = (at: number) => { const a = ago(at); return a.key === 'now' ? t('admin.dash.now') : t(`admin.dash.${a.key}`, { n: a.n }); };
 
   const pill = (on: boolean) => `px-3.5 h-9 rounded-full items-center justify-center ${on ? 'bg-ink' : 'bg-surface2'}`;
-  const Section = ({ title, right, children, className = '' }: { title: string; right?: React.ReactNode; children: React.ReactNode; className?: string }) => (
-    <Card className={`p-4 ${className}`}>
-      <View className="flex-row items-center justify-between mb-3 gap-2"><Txt className="font-extrabold text-[16px] flex-1">{title}</Txt>{right}</View>
-      {children}
-    </Card>
-  );
   const metricLabel = (m: Metric) => t(`admin.dash.m${m[0].toUpperCase()}${m.slice(1)}`);
 
   return (
@@ -116,7 +126,7 @@ export default function Dashboard() {
         <View className="flex-row items-center bg-surface border border-line rounded-2xl px-4 h-12 gap-2">
           <Icon name="magnify" size={20} tone="muted" />
           <TextInput testID="dash-search" value={q} onChangeText={setQ} placeholder={t('admin.dash.searchPh')} placeholderTextColor={colors.muted}
-            style={{ flex: 1, color: colors.fg, fontSize: 15, outlineStyle: 'none' } as any} />
+            style={{ flex: 1, fontFamily, color: colors.fg, fontSize: 15, outlineStyle: 'none' } as any} />
           {q ? <Pressable onPress={() => setQ('')} accessibilityLabel={t('common.close')}><Icon name="close-circle" size={18} tone="muted" /></Pressable> : null}
         </View>
         {results ? (
@@ -127,7 +137,7 @@ export default function Dashboard() {
               <View key={key} className="mb-1">
                 <Txt className="text-muted text-[11px] font-bold uppercase tracking-wide px-3 pt-2 pb-1">{t(`admin.dash.${key}`)}</Txt>
                 {rows.map((r) => (
-                  <Pressable key={r.id} onPress={() => go(r.href)} className="flex-row items-center gap-3 px-3 h-12 rounded-xl active:bg-surface2">
+                  <Pressable key={r.id} testID={`search-result-${r.id}`} onPress={() => go(`${r.href}?target=${encodeURIComponent(r.id)}&focus=${Date.now()}`)} className="flex-row items-center gap-3 px-3 h-12 rounded-xl active:bg-surface2">
                     <Icon name={r.icon} size={19} />
                     <Txt numberOfLines={1} className="font-semibold text-[14px] flex-1">{r.title}</Txt>
                     <Txt numberOfLines={1} className="text-muted text-[12px] max-w-[45%]">{r.sub}</Txt>
@@ -211,7 +221,7 @@ export default function Dashboard() {
                 { k: 'qTheme', icon: 'palette-outline', href: '/admin/theme' },
                 { k: 'qApp', icon: 'open-in-new', href: '/' },
               ].map((a) => (
-                <Pressable key={a.k} testID={`quick-${a.k}`} onPress={() => (a.href === '/' ? router.replace('/') : go(a.href))} className="flex-row items-center gap-2 bg-surface2 rounded-xl px-3 h-11" style={{ flexGrow: 1, flexBasis: tablet ? 150 : 140 }}>
+                <Pressable key={a.k} testID={`quick-${a.k}`} onPress={() => (a.href === '/' ? router.push('/') : go(a.href))} className="flex-row items-center gap-2 bg-surface2 rounded-xl px-3 h-11" style={{ flexGrow: 1, flexBasis: tablet ? 150 : 140 }}>
                   <Icon name={a.icon} size={18} /><Txt numberOfLines={1} className="font-semibold text-[13px] flex-1">{t(`admin.dash.${a.k}`)}</Txt>
                 </Pressable>
               ))}

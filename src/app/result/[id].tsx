@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Pressable, View } from 'react-native';
-import { Redirect, router, useLocalSearchParams } from 'expo-router';
+import { Redirect, useLocalSearchParams } from 'expo-router';
+import { router } from '@/hooks/useLeaveGuard';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { useMe, useStore } from '@/store/useStore';
 import { useWizard } from '@/store/useWizard';
@@ -23,7 +24,7 @@ export default function Result() {
 
   if (!item || !item.after) return <Redirect href="/" />;
 
-  const goHome = () => { router.dismissAll(); router.replace('/'); };
+  const goBack = () => router.back();
   const regenerate = () => {
     if ((me?.credits ?? 0) <= 0) { toast(t('result.noCredits')); router.push('/pro'); return; }
     const w = useWizard.getState();
@@ -48,7 +49,7 @@ export default function Result() {
   );
 
   return (
-    <Screen max={desktop ? 760 : 620} header={<PageHeader title={L(tool?.title) || t('result.title')} onBack={goHome} />}
+    <Screen max={desktop ? 760 : 620} header={<PageHeader title={L(tool?.title) || t('result.title')} onBack={goBack} />}
       footer={<View className="flex-row gap-2.5"><Button testID="btn-regen" title={t('result.regenerate')} icon="refresh" variant="outline" onPress={regenerate} className="flex-1" /><Button testID="btn-new" title={t('result.newDesign')} onPress={newDesign} className="flex-1" /></View>}>
       <Animated.View entering={FadeInDown.duration(400)}>
         <BeforeAfter before={item.before} after={item.after} hold={hold} aspect={desktop ? 1.25 : 0.9} />
