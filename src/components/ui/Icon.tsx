@@ -1,5 +1,10 @@
 import React from 'react';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { Platform } from 'react-native';
+import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
+import createIconSet from '@expo/vector-icons/createIconSet';
+const WebIcons = createIconSet(MaterialCommunityIcons.glyphMap, 'DwiraIcons', require('../../../assets/fonts/web/MaterialCommunityIcons.woff2'));
+const Icons = Platform.OS === 'web' ? WebIcons : MaterialCommunityIcons;
+export const loadIcons = () => Icons.loadFont();
 import { useTheme } from '@/theme/ThemeProvider';
 import { useT } from '@/i18n';
 import type { TokenKey } from '@/theme/tokens';
@@ -8,7 +13,7 @@ export function Icon({ name, size = 22, tone = 'fg', color, flip }: { name: stri
   const { colors } = useTheme();
   const { rtl } = useT();
   return (
-    <MaterialCommunityIcons
+    <Icons
       name={name as any}
       size={size}
       color={color ?? colors[tone]}

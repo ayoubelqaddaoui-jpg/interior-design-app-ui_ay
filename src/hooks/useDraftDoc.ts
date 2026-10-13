@@ -8,8 +8,7 @@ import { useBackCheckpoint, useLeaveGuard, router } from './useLeaveGuard';
 const baselines = new Map<DocName, DocMap[DocName]>();
 /** Repository data is untouched until Submit. The shared store is the live preview. */
 export function useDraftDoc<K extends DocName>(name: K) {
-  const documentState = useStore((s) => s.doc);
-  const draft = documentState[name];
+  const draft = useStore((s) => s.doc[name]);
   const saved = (baselines.get(name) ?? draft) as DocMap[K];
   const dirty = JSON.stringify(draft) !== JSON.stringify(saved);
   const set = (value: DocMap[K] | ((old: DocMap[K]) => DocMap[K])) => {

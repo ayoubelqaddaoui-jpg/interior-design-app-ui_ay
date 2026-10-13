@@ -3,7 +3,7 @@ import { Pressable, View } from 'react-native';
 import { Button, Card, Icon, Toggle, Txt } from '@/components/ui';
 import { AdminPage } from '@/components/admin/AdminShell';
 import { NavPreview } from '@/components/admin/NavPreview';
-import { useT } from '@/i18n';
+import { useL, useT } from '@/i18n';
 import { useDraftDoc } from '@/hooks/useDraftDoc';
 import { FontSelector } from '@/components/admin/FontSelector';
 import { ExhibitionLayouts } from '@/components/admin/ExhibitionLayouts';
@@ -11,7 +11,6 @@ import { toast } from '@/store/useToast';
 import { ARABIC_FONTS, FRENCH_FONTS } from '@/components/ui/Txt';
 import { Field } from '@/components/admin/FormModal';
 import { useStore } from '@/store/useStore';
-import { useL } from '@/i18n';
 import { ENTITIES } from '@/admin/entities';
 import type { AdminNavMode, UserNavStyle } from '@/data/types';
 

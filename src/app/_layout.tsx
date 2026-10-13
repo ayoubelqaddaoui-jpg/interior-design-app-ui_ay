@@ -1,11 +1,12 @@
 import '../global.css';
 import '@/lib/interop';
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, ActivityIndicator } from 'react-native';
 import { Stack } from 'expo-router';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { useFonts } from 'expo-font';
+import { ensureFont } from '@/lib/fonts';
+import { loadIcons } from '@/components/ui/Icon';
 import * as SplashScreen from 'expo-splash-screen';
 import { useStore } from '@/store/useStore';
 import { useLocal } from '@/store/useLocal';
@@ -19,10 +20,7 @@ import { ToastHost } from '@/components/ui';
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
 export default function RootLayout() {
-  const [fontsLoaded, fontError] = useFonts({
-    Tajawal: require('../../assets/fonts/Tajawal.ttf'),
-    Inter: require('../../assets/fonts/Inter.ttf'),
-  });
+  const [booted, setBooted] = useState(false);
   const ready = useStore((s) => s.ready);
   const loaded = useLocal((s) => s.loaded);
   const lang = useLang((s) => s.lang);
@@ -30,11 +28,16 @@ export default function RootLayout() {
   useEffect(() => {
     (async () => {
       await Promise.all([initLang(), useLocal.getState().load(), useStore.getState().init()]);
+      const { settings, branding } = useStore.getState().doc;
+      const family = useLang.getState().lang === 'fr' ? settings.frenchFont || 'Inter' : settings.arabicFont || 'Tajawal';
+      // Resolve actual persisted fonts once, before text mounts: no fallback/swap layout shift.
+      await Promise.allSettled([ensureFont(family), ensureFont(branding.logoFont || 'Inter'), loadIcons()]);
+      setBooted(true);
       SplashScreen.hideAsync().catch(() => {});
     })();
   }, []);
 
-  const ok = ready && loaded && (fontsLoaded || !!fontError);
+  const ok = ready && loaded && booted;
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>

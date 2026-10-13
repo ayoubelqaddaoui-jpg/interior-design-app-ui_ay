@@ -5,10 +5,10 @@ import { uid } from '@/lib/uid';
 /** In-memory + AsyncStorage collection. Seed is used the first time only. */
 export function createMockCollection<T extends { id: string }>(name: string, seed: () => T[]): CollectionRepo<T> {
   let cache: T[] | null = null;
+  let pending: Promise<T[]> | null = null;
   const load = async () => {
     if (cache) return cache;
-    cache = (await storage.read<T[]>(name)) ?? seed();
-    return cache;
+    return pending ??= storage.read<T[]>(name).then(stored => { cache = stored ?? seed(); return cache; }).finally(() => { pending = null; });
   };
   const save = async () => {
     await storage.write(name, cache);
