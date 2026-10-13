@@ -274,6 +274,8 @@ async function main() {
     assert(header && header.y >= 0 && header.y + header.height < 1000, `Title hidden in ${entity} form`);
     const inputs = await page.locator('[data-testid^="lt-title-"]').all();
     for (const input of inputs) { const bounds = await input.boundingBox(); assert(bounds.height >= 40 && bounds.height <= 48, `Oversized input in ${entity}`); }
+    // Sheet animation and font specimens settle before testing persistent footer bounds.
+    await page.waitForTimeout(350);
     const save = await page.getByTestId('form-save').boundingBox();
     assert(save && save.y >= 0 && save.y + save.height <= 1000, `Save hidden in ${entity} form`);
     await page.getByText('Annuler', { exact: true }).last().click();

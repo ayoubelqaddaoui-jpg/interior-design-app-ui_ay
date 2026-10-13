@@ -2,7 +2,7 @@ import '../global.css';
 import '@/lib/interop';
 import React, { useEffect, useState } from 'react';
 import { View, ActivityIndicator } from 'react-native';
-import { Stack } from 'expo-router';
+import { Stack, usePathname } from 'expo-router';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { ensureFont } from '@/lib/fonts';
@@ -20,6 +20,7 @@ import { ToastHost } from '@/components/ui/Toast';
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
 export default function RootLayout() {
+  const initialPath = usePathname();
   const [booted, setBooted] = useState(false);
   const ready = useStore((s) => s.ready);
   const loaded = useLocal((s) => s.loaded);
@@ -31,10 +32,12 @@ export default function RootLayout() {
       const { settings, branding } = useStore.getState().doc;
       const family = useLang.getState().lang === 'fr' ? settings.frenchFont || 'Inter' : settings.arabicFont || 'Tajawal';
       // Resolve actual persisted fonts once, before text mounts: no fallback/swap layout shift.
-      await Promise.allSettled([ensureFont(family), ensureFont(branding.logoFont || 'Inter'), loadIcons()]);
+      await Promise.allSettled([ensureFont(family), ensureFont(branding.logoFont || 'Inter'), loadIcons(), ...(initialPath.startsWith('/admin') ? [ensureFont(settings.arabicFont || 'Tajawal'), ensureFont(settings.frenchFont || 'Inter')] : [])]);
       setBooted(true);
       SplashScreen.hideAsync().catch(() => {});
     })();
+  // Startup route is captured once; later navigation must never restart initialization.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const ok = ready && loaded && booted;

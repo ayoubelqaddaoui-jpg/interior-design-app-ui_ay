@@ -73,7 +73,7 @@ export function useCollectionDraft<K extends CollName>(name: K) {
       useStore.setState({ [name]: saved } as any);
     }
   };
-  useLeaveGuard(dirty, save, discard, { before: baseline, after: list });
+  useLeaveGuard(dirty, save, discard, { before: baseline && Object.fromEntries(baseline.map(row => [row.id, row])), after: Object.fromEntries(list.map(row => [row.id, row])) });
   useBackCheckpoint(dirty, () => router.back());
   const forget = (ids: string[]) => {
     const saved = collectionBaselines.get(name);
