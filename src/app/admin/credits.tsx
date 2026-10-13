@@ -1,9 +1,11 @@
+import { useViewState } from '@/hooks/useViewState';
 import React, { useState } from 'react';
 import { Pressable, View } from 'react-native';
 import { Button, Card, Input, Txt } from '@/components/ui';
 import { AdminPage } from '@/components/admin/AdminShell';
 import { useT } from '@/i18n';
 import { useStore } from '@/store/useStore';
+import { router, useBackCheckpoint, useLeaveGuard } from '@/hooks/useLeaveGuard';
 import { toast } from '@/store/useToast';
 
 export default function Credits() {
@@ -11,9 +13,12 @@ export default function Credits() {
   const s = useStore();
   const users = s.users.filter((u) => u.role === 'user');
   const [def, setDef] = useState(String(s.doc.settings.defaultFreeCredits));
-  const [uid, setUid] = useState(users[0]?.id ?? '');
-  const [amt, setAmt] = useState('1');
+  const [uid, setUid] = useViewState('credit-user', users[0]?.id ?? '');
+  const [amt, setAmt] = useViewState('credit-amount', '1');
   const saveDef = async () => { await s.patchDoc('settings', { defaultFreeCredits: Math.max(0, parseInt(def, 10) || 0) }); toast(t('admin.crud.saved')); };
+  const dirty = def !== String(s.doc.settings.defaultFreeCredits);
+  useLeaveGuard(dirty, saveDef, () => setDef(String(s.doc.settings.defaultFreeCredits)));
+  useBackCheckpoint(dirty, () => router.back());
   const grant = async () => {
     const u = s.users.find((x) => x.id === uid); const n = parseInt(amt, 10) || 0;
     if (!u || n <= 0) return;
@@ -22,12 +27,12 @@ export default function Credits() {
   };
   return (
     <AdminPage title={t('admin.nav.credits')} max={720}>
-      <Card className="p-5 mb-5">
+      <Card className="p-3 mb-3">
         <Input testID="credits-default" label={t('admin.credits.defaultCredits')} value={def} onChangeText={(v) => setDef(v.replace(/\D/g, ''))} keyboardType="number-pad" />
         <Txt className="text-muted text-[12px] mb-3 -mt-1">{t('admin.credits.defaultNote')}</Txt>
-        <Button testID="credits-save" title={t('common.save')} onPress={saveDef} />
+        <Button testID="credits-save" title={t('improve.submit')} onPress={saveDef} />
       </Card>
-      <Card className="p-5">
+      <Card className="p-3">
         <Txt className="font-extrabold text-[17px] mb-3">{t('admin.credits.grant')}</Txt>
         <Txt className="text-[13px] font-semibold text-muted mb-1.5">{t('admin.credits.user')}</Txt>
         <View className="flex-row flex-wrap gap-2 mb-4">

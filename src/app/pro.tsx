@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import { useViewState } from '@/hooks/useViewState';
+import React from 'react';
 import { Pressable, View } from 'react-native';
-import { router } from 'expo-router';
+import { router } from '@/hooks/useLeaveGuard';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { tArr, useT } from '@/i18n';
@@ -18,7 +19,7 @@ const PLANS = [
 export default function Pro() {
   const { t } = useT();
   const me = useMe();
-  const [plan, setPlan] = useState<string>('monthly');
+  const [plan, setPlan] = useViewState<string>('plan', 'monthly');
   return (
     <Screen max={520} padded={false} footer={<View className="px-4"><Button testID="pro-cta" title={t('pro.cta')} size="lg" full onPress={() => toast(t('pro.thanks'))} /><Txt className="text-muted text-[11px] text-center mt-2">{t('pro.demoNote')}</Txt></View>}>
       <LinearGradient colors={['#FBDD2D', '#F7B500']} style={{ paddingTop: 20, paddingBottom: 36, paddingHorizontal: 20, borderBottomLeftRadius: 32, borderBottomRightRadius: 32 }}>

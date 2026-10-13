@@ -1,6 +1,8 @@
+import { useViewState } from '@/hooks/useViewState';
 import React, { useState } from 'react';
 import { View } from 'react-native';
-import { Redirect, router } from 'expo-router';
+import { Redirect } from 'expo-router';
+import { router } from '@/hooks/useLeaveGuard';
 import Animated, { FadeInDown, ZoomIn } from 'react-native-reanimated';
 import { useStore, useMe } from '@/store/useStore';
 import { useWizard } from '@/store/useWizard';
@@ -14,8 +16,8 @@ export default function Lead() {
   const { t } = useT();
   const me = useMe();
   const w = useWizard();
-  const [name, setName] = useState(me?.name ?? '');
-  const [phone, setPhone] = useState(me?.whatsapp ?? '');
+  const [name, setName] = useViewState('name', me?.name ?? '');
+  const [phone, setPhone] = useViewState('phone', me?.whatsapp ?? '');
   const [err, setErr] = useState<{ n?: string; p?: string }>({});
   const [busy, setBusy] = useState(false);
 

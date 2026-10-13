@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import { useViewState } from '@/hooks/useViewState';
+import React from 'react';
 import { Linking, Pressable, View } from 'react-native';
-import { router } from 'expo-router';
+import { router } from '@/hooks/useLeaveGuard';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { useStore } from '@/store/useStore';
@@ -15,8 +16,8 @@ export default function Assistant() {
   const insets = useSafeAreaInsets();
   const { desktop } = useBp();
   const cfg = useStore((s) => s.doc.assistant);
-  const [cid, setCid] = useState<string | undefined>();
-  const [key, setKey] = useState(0);
+  const [cid, setCid] = useViewState<string | undefined>('conversation', undefined);
+  const [key, setKey] = useViewState('chat-key', 0);
 
   if (cfg.type === 'whatsapp') {
     return (

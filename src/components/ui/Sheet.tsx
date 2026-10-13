@@ -1,4 +1,5 @@
 import React from 'react';
+import { useBackCheckpoint, useNativeOverlayBack } from '@/hooks/useLeaveGuard';
 import { Modal, Pressable, View, ScrollView, KeyboardAvoidingView, Platform } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '@/theme/ThemeProvider';
@@ -7,8 +8,14 @@ import { useT } from '@/i18n';
 import { Txt } from './Txt';
 import { Icon } from './Icon';
 
+function NativeOverlayBoundary({ visible, onClose }: { visible: boolean; onClose: () => void }) {
+  useNativeOverlayBack(visible, onClose);
+  return null;
+}
+
 /** Bottom sheet on phones, centred dialog on larger screens. Re-applies theme vars (needed for web portals). */
-export function Sheet({ visible, onClose, title, children, wide, footer }: { visible: boolean; onClose: () => void; title?: string; children: React.ReactNode; wide?: boolean; footer?: React.ReactNode }) {
+export function Sheet({ visible, onClose, title, children, wide, footer, history = true }: { visible: boolean; onClose: () => void; title?: string; children: React.ReactNode; wide?: boolean; footer?: React.ReactNode; history?: boolean }) {
+  useBackCheckpoint(visible && history, onClose, 1);
   const insets = useSafeAreaInsets();
   const { style } = useTheme();
   const { tablet, height } = useBp();
@@ -16,6 +23,7 @@ export function Sheet({ visible, onClose, title, children, wide, footer }: { vis
   return (
     <Modal visible={visible} transparent animationType={tablet ? 'fade' : 'slide'} onRequestClose={onClose} statusBarTranslucent>
       <View style={[style, { flex: 1, direction: rtl ? 'rtl' : 'ltr' } as any]}>
+        {history ? <NativeOverlayBoundary visible={visible} onClose={onClose} /> : null}
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
           <Pressable onPress={onClose} style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: tablet ? 'center' : 'flex-end', alignItems: 'center' }}>
             <Pressable

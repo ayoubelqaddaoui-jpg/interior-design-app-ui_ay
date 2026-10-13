@@ -7,12 +7,12 @@ import { Txt } from './Txt';
 
 export function ToastHost() {
   const { msg, id } = useToast();
-  const [visible, setVisible] = React.useState(false);
+  const [expired, setExpired] = React.useState(0);
+  const visible = !!msg && expired !== id;
   const insets = useSafeAreaInsets();
   useEffect(() => {
     if (!msg) return;
-    setVisible(true);
-    const t = setTimeout(() => setVisible(false), 2400);
+    const t = setTimeout(() => setExpired(id), 2400);
     return () => clearTimeout(t);
   }, [id, msg]);
   if (!visible) return null;

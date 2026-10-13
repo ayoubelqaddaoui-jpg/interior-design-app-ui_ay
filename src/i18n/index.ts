@@ -1,4 +1,4 @@
-import i18n from 'i18next';
+import { default as i18n } from 'i18next';
 import { initReactI18next, useTranslation } from 'react-i18next';
 import { Platform } from 'react-native';
 import { create } from 'zustand';

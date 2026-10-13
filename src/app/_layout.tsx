@@ -11,6 +11,8 @@ import { useStore } from '@/store/useStore';
 import { useLocal } from '@/store/useLocal';
 import { initLang, useLang, isRtl } from '@/i18n';
 import { ThemeProvider } from '@/theme/ThemeProvider';
+import { UnsavedChangesHost } from '@/hooks/useLeaveGuard';
+import { GlobalSearch } from '@/components/GlobalSearch';
 import { ToastHost } from '@/components/ui';
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
@@ -18,9 +20,7 @@ SplashScreen.preventAutoHideAsync().catch(() => {});
 export default function RootLayout() {
   const [fontsLoaded, fontError] = useFonts({
     Tajawal: require('../../assets/fonts/Tajawal.ttf'),
-    NotoNaskhArabic: require('../../assets/fonts/NotoNaskhArabic.ttf'),
     Inter: require('../../assets/fonts/Inter.ttf'),
-    Lora: require('../../assets/fonts/Lora.ttf'),
   });
   const ready = useStore((s) => s.ready);
   const loaded = useLocal((s) => s.loaded);
@@ -39,16 +39,20 @@ export default function RootLayout() {
       <SafeAreaProvider>
         <ThemeProvider>
           {/* `direction` flips every flex-row on native + web: Darija/Arabic = RTL, French = LTR. */}
-          <View style={{ flex: 1, direction: isRtl(lang) ? 'rtl' : 'ltr' } as any} key={lang}>
+          <View style={{ flex: 1, direction: isRtl(lang) ? 'rtl' : 'ltr' } as any}>
             {ok ? (
+              <>
+              <GlobalSearch />
               <Stack screenOptions={{ headerShown: false, animation: 'slide_from_right', contentStyle: { backgroundColor: 'transparent' } }}>
                 <Stack.Screen name="(tabs)" />
                 <Stack.Screen name="pro" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
               </Stack>
+              </>
             ) : (
               <View className="flex-1 items-center justify-center bg-bg"><ActivityIndicator /></View>
             )}
             <ToastHost />
+            <UnsavedChangesHost />
           </View>
         </ThemeProvider>
       </SafeAreaProvider>

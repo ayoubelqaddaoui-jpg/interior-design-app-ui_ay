@@ -1,6 +1,8 @@
-import React, { useMemo, useState } from 'react';
-import { Pressable, ScrollView, View } from 'react-native';
-import { router } from 'expo-router';
+import { RememberScroll, useViewState } from '@/hooks/useViewState';
+import React, { useMemo } from 'react';
+import { Pressable, View } from 'react-native';
+import { useLocalSearchParams } from 'expo-router';
+import { router } from '@/hooks/useLeaveGuard';
 import { useStore, sorted } from '@/store/useStore';
 import { useWizard } from '@/store/useWizard';
 import { useL, useT } from '@/i18n';
@@ -13,6 +15,7 @@ const ALL = '__all__';
 
 export default function Home() {
   const { t } = useT();
+  const { target } = useLocalSearchParams<{ target?: string }>();
   const L = useL();
   const { desktop, pick } = useBp();
   const tabs = useStore((s) => s.tabs);
@@ -20,11 +23,11 @@ export default function Home() {
   const branding = useStore((s) => s.doc.branding);
   const visibleTabs = useMemo(() => sorted(tabs).filter((x) => x.visible), [tabs]);
   const tabsVisible = useStore((s) => s.doc.settings.homeTabsVisible) !== false;
-  const [selectedTab, setTabId] = useState<string>(ALL);
+  const [selectedTab, setTabId] = useViewState<string>('selectedTab', ALL);
 
   const tabId = !tabsVisible || selectedTab === ALL ? ALL : visibleTabs.some((x) => x.id === selectedTab) ? selectedTab : ALL;
 
-  const list = sorted(tools).filter((x) => x.visible && (tabId === ALL || x.tabId === tabId));
+  const list = sorted(tools).filter((x) => x.visible && (x.id === target || tabId === ALL || x.tabId === tabId));
   const pills = useMemo(() => [{ id: ALL, label: t('home.all') }].concat(visibleTabs.map((x) => ({ id: x.id, label: L(x.title) }))), [visibleTabs, t, L]);
   const cols = pick(1, 2, 3);
 
@@ -35,7 +38,7 @@ export default function Home() {
       {!desktop ? (
         <BrandHeader branding={branding} actions={<CreditsBadge />} />
       ) : null}
-      {tabsVisible ? <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingVertical: 8 }}>
+      {tabsVisible ? <RememberScroll stateKey="home-filter-menu" horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingVertical: 8 }}>
         {pills.map((x) => {
           const on = x.id === tabId;
           return (
@@ -44,7 +47,7 @@ export default function Home() {
             </Pressable>
           );
         })}
-      </ScrollView> : null}
+      </RememberScroll> : null}
     </View>
   );
 

@@ -1,7 +1,10 @@
+import { useAppFont } from '@/components/ui/Txt';
 import React, { useEffect, useRef, useState } from 'react';
 import { FlatList, KeyboardAvoidingView, Platform, Pressable, TextInput, View } from 'react-native';
 import { Image } from 'expo-image';
 import Animated, { FadeInDown, useAnimatedStyle, useSharedValue, withDelay, withRepeat, withSequence, withTiming } from 'react-native-reanimated';
+import { useFocusEffect } from 'expo-router';
+import { useViewState } from '@/hooks/useViewState';
 import { useStore } from '@/store/useStore';
 import { services, ME } from '@/data/repositories';
 import { useL, useT } from '@/i18n';
@@ -24,17 +27,38 @@ export function ChatView({ conversationId, onCreated, header }: { conversationId
   const { t } = useT();
   const L = useL();
   const { colors } = useTheme();
+  const fontFamily = useAppFont();
   const config = useStore((s) => s.doc.assistant);
   const conv = useStore((s) => s.conversations.find((c) => c.id === conversationId));
-  const [text, setText] = useState('');
-  const [image, setImage] = useState('');
+  const [text, setText] = useViewState(`chat:${conversationId ?? 'new'}:text`, '');
+  const [image, setImage] = useViewState(`chat:${conversationId ?? 'new'}:image`, '');
   const [busy, setBusy] = useState(false);
   const [attach, setAttach] = useState(false);
   const list = useRef<FlatList>(null);
   const [local, setLocal] = useState<ChatMessage[]>([]);
   const messages = conv?.messages ?? local;
 
-  useEffect(() => { setTimeout(() => list.current?.scrollToEnd({ animated: true }), 80); }, [messages.length, busy]);
+  const [offset, setOffset] = useViewState(`chat:${conversationId ?? 'new'}:scroll`, -1);
+  const restoring = useRef(true);
+  const latestOffset = useRef(offset);
+  React.useLayoutEffect(() => { latestOffset.current = offset; }, [offset]);
+  const restore = React.useCallback(() => {
+    if (latestOffset.current < 0) list.current?.scrollToEnd({ animated: false });
+    else list.current?.scrollToOffset({ offset: latestOffset.current, animated: false });
+  }, []);
+  useFocusEffect(React.useCallback(() => {
+    restoring.current = true;
+    const timer = setTimeout(() => { restore(); restoring.current = false; }, 150);
+    return () => { clearTimeout(timer); restoring.current = true; };
+  }, [restore]));
+  const previous = useRef({ length: messages.length, busy });
+  useEffect(() => {
+    const changed = previous.current.length !== messages.length || previous.current.busy !== busy;
+    previous.current = { length: messages.length, busy };
+    if (!changed) return;
+    const timer = setTimeout(() => list.current?.scrollToEnd({ animated: true }), 80);
+    return () => clearTimeout(timer);
+  }, [messages.length, busy]);
 
   const pick = async (src: 'camera' | 'gallery') => {
     setAttach(false);
@@ -68,6 +92,9 @@ export function ChatView({ conversationId, onCreated, header }: { conversationId
       {header}
       <FlatList
         ref={list}
+        scrollEventThrottle={16}
+        onScroll={(event) => { if (!restoring.current) setOffset(event.nativeEvent.contentOffset.y); }}
+        onContentSizeChange={() => { if (restoring.current) restore(); }}
         data={data}
         keyExtractor={(m) => m.id}
         contentContainerStyle={{ padding: 16, flexGrow: 1 }}
@@ -95,7 +122,7 @@ export function ChatView({ conversationId, onCreated, header }: { conversationId
         <View className="flex-1 flex-row items-end bg-surface2 rounded-3xl px-3 min-h-[48px]">
           <Pressable testID="chat-attach" onPress={() => setAttach(true)} className="h-12 w-9 items-center justify-center"><Icon name="image-plus" size={22} tone="muted" /></Pressable>
           <TextInput testID="chat-input" value={text} onChangeText={setText} placeholder={t('assistant.placeholder')} placeholderTextColor={colors.muted} multiline onSubmitEditing={send}
-            style={{ flex: 1, color: colors.fg, fontSize: 16, maxHeight: 110, paddingVertical: 13, outlineStyle: 'none' } as any} />
+            style={{ fontFamily, flex: 1, color: colors.fg, fontSize: 16, maxHeight: 110, paddingVertical: 13, outlineStyle: 'none' } as any} />
         </View>
         <Pressable testID="chat-send" onPress={send} className={`w-12 h-12 rounded-full items-center justify-center ${text.trim() || image ? 'bg-primary' : 'bg-surface2'}`}>
           <Icon name="arrow-up" size={22} tone={text.trim() || image ? 'onprimary' : 'muted'} />

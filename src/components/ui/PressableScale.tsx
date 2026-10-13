@@ -10,8 +10,8 @@ export function PressableScale({ children, style, scaleTo = 0.97, ...p }: Pressa
     <Pressable
       {...p}
       style={style}
-      onPressIn={(e) => { s.value = withSpring(scaleTo, { damping: 18, stiffness: 320 }); p.onPressIn?.(e); }}
-      onPressOut={(e) => { s.value = withSpring(1, { damping: 14, stiffness: 240 }); p.onPressOut?.(e); }}
+      onPressIn={(e) => { s.set(withSpring(scaleTo, { damping: 18, stiffness: 320 })); p.onPressIn?.(e); }}
+      onPressOut={(e) => { s.set(withSpring(1, { damping: 14, stiffness: 240 })); p.onPressOut?.(e); }}
     >
       <Animated.View style={[a, { flexGrow: 1 }]}>{children as any}</Animated.View>
     </Pressable>
