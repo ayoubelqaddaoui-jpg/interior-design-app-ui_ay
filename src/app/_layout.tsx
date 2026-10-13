@@ -42,11 +42,11 @@ export default function RootLayout() {
           <View style={{ flex: 1, direction: isRtl(lang) ? 'rtl' : 'ltr' } as any}>
             {ok ? (
               <>
-              <GlobalSearch />
               <Stack screenOptions={{ headerShown: false, animation: 'slide_from_right', contentStyle: { backgroundColor: 'transparent' } }}>
                 <Stack.Screen name="(tabs)" />
                 <Stack.Screen name="pro" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
               </Stack>
+              <GlobalSearch />
               </>
             ) : (
               <View className="flex-1 items-center justify-center bg-bg"><ActivityIndicator /></View>
