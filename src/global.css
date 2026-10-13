@@ -1,3 +1,18 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* Shared desktop scroll treatment, including nested panes and modal portals. */
+@media (hover: hover) and (pointer: fine) {
+  * { scrollbar-width: thin; scrollbar-color: var(--scroll-thumb, #9a8f82) var(--scroll-track, #f2efea); }
+  /* Modern Chromium supports both APIs; prefer the sculpted gradient thumb there. */
+  @supports selector(::-webkit-scrollbar) {
+    * { scrollbar-width: auto; scrollbar-color: auto; }
+  }
+  *::-webkit-scrollbar-button { display: none; }
+  *::-webkit-scrollbar { width: 10px; height: 10px; }
+  *::-webkit-scrollbar-track { background: var(--scroll-track, #f2efea); border-radius: 20px; }
+  *::-webkit-scrollbar-thumb { background: linear-gradient(180deg, var(--scroll-thumb, #9a8f82), var(--scroll-accent, #cfb787)); border: 3px solid var(--scroll-track, #f2efea); border-radius: 20px; min-height: 42px; }
+  *::-webkit-scrollbar-thumb:hover { border-width: 2px; }
+  *::-webkit-scrollbar-corner { background: transparent; }
+}

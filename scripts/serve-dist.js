@@ -7,11 +7,16 @@ const root = path.resolve(__dirname, '..', 'dist');
 const port = Number(process.env.PORT || process.argv[2] || 4173);
 const types = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.png': 'image/png', '.jpg': 'image/jpeg', '.ico': 'image/x-icon', '.ttf': 'font/ttf', '.svg': 'image/svg+xml', '.mp4': 'video/mp4' };
 http.createServer((req, res) => {
-  const url = decodeURIComponent(req.url.split('?')[0]);
+  let url;
+  try { url = decodeURIComponent(req.url.split('?')[0]); } catch { res.writeHead(400); return res.end('Invalid URL'); }
   let file = path.join(root, path.normalize(url));
-  if (!file.startsWith(root)) { res.writeHead(403); return res.end(); }
+  if (file !== root && !file.startsWith(root + path.sep)) { res.writeHead(403); return res.end(); }
   if (/node_modules/.test(url)) { res.writeHead(404); return res.end('blocked (mimics Vercel)'); }
-  if (!fs.existsSync(file) || fs.statSync(file).isDirectory()) file = path.join(root, 'index.html');
+  if (!fs.existsSync(file) || fs.statSync(file).isDirectory()) {
+    if (/^\/(?:_expo|assets)\//.test(url) || url === '/favicon.ico') { res.writeHead(404); return res.end('Asset not found'); }
+    file = path.join(root, 'index.html');
+  }
+  if (path.extname(file) === '.html') res.setHeader('Cache-Control', 'no-cache');
   res.writeHead(200, { 'Content-Type': types[path.extname(file)] || 'application/octet-stream' });
   fs.createReadStream(file).pipe(res);
 }).listen(port, '0.0.0.0', () => console.log(`dist served on http://localhost:${port}`));

@@ -8,7 +8,7 @@ export function Screen({ children, header, footer, scroll = true, max = 1100, pa
   children?: React.ReactNode; header?: React.ReactNode; footer?: React.ReactNode; scroll?: boolean; max?: number; padded?: boolean; bottomInset?: number; className?: string;
 }) {
   const insets = useSafeAreaInsets();
-  const { tablet } = useBp();
+  const { tablet, desktop } = useBp();
   const px = padded ? (tablet ? 28 : 16) : 0;
   const body = (
     <View style={{ width: '100%', maxWidth: max, paddingHorizontal: px, alignSelf: 'center', flex: scroll ? undefined : 1 }} className={className}>{children}</View>
@@ -17,7 +17,7 @@ export function Screen({ children, header, footer, scroll = true, max = 1100, pa
     <View className="flex-1 bg-bg" style={{ paddingTop: insets.top }}>
       {header ? <View style={{ width: '100%', maxWidth: max, paddingHorizontal: px, alignSelf: 'center' }}>{header}</View> : null}
       {scroll ? (
-        <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: bottomInset + 24 }} showsVerticalScrollIndicator={false}>{body}</ScrollView>
+        <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: bottomInset + 24 }} showsVerticalScrollIndicator={desktop}>{body}</ScrollView>
       ) : body}
       {footer ? (
         <View style={{ paddingBottom: Math.max(insets.bottom, 12), paddingTop: 10 }} className="bg-bg">

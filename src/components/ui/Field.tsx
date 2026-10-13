@@ -12,8 +12,8 @@ export function Input({ label, error, className = '', language, ...p }: TextInpu
       <TextInput
         placeholderTextColor={colors.muted}
         {...p}
-        className={`bg-surface2 text-fg rounded-xl px-4 min-h-[48px] text-[16px] border ${error ? 'border-danger' : 'border-transparent'} ${className}`}
-        style={[{ fontFamily, color: colors.fg, textAlign: undefined, outlineStyle: 'none' } as any, p.style]}
+        className={`bg-surface2 text-fg rounded-xl px-4 min-h-[44px] text-[16px] border ${error ? 'border-danger' : 'border-transparent'} ${className}`}
+        style={[{ fontFamily, color: colors.fg, minWidth: 0, width: '100%', flexGrow: 0, flexShrink: 0, height: p.multiline ? undefined : 44, paddingVertical: 10, textAlign: undefined, outlineStyle: 'none' } as any, p.style]}
       />
       {error ? <Txt className="text-danger text-[12px] mt-1">{error}</Txt> : null}
     </View>

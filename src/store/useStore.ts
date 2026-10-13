@@ -3,6 +3,8 @@ import type { CollMap, CollName, DocMap, DocName, AppUser } from '@/data/types';
 import { repos, docs, ME } from '@/data/repositories';
 import { moveSelection } from '@/lib/reorder';
 import { uid } from '@/lib/uid';
+import { defaultAssistant, defaultBranding, defaultSettings, defaultTheme, seedPalettes } from '@/data/mock/seed';
+import { storage } from '@/data/mock/storage';
 
 type Colls = { [K in CollName]: CollMap[K][] };
 
@@ -30,10 +32,18 @@ const COLLS = Object.keys(empty) as CollName[];
 /** One shared store: user app and admin panel read/write the same state, so changes appear instantly. */
 export const useStore = create<State>((set, get) => ({
   ...empty,
-  doc: null as unknown as DocMap,
+  doc: { branding: defaultBranding(), theme: defaultTheme(), assistant: defaultAssistant(), settings: defaultSettings() },
   ready: false,
   async init() {
     if (get().ready) return;
+    // One-time upgrade: preserve existing edits/order and never resurrect deleted presets.
+    if (!await storage.read<boolean>('migration:curated-palettes-v2')) {
+      const palettes = await repos.palettes.list();
+      const curated = seedPalettes().filter((p) => !['pal_surprise', 'pal_neutral', 'pal_earth', 'pal_blue', 'pal_pastel', 'pal_green'].includes(p.id));
+      let order = palettes.length ? Math.max(...palettes.map((p) => p.order)) + 1 : 0;
+      for (const palette of curated) if (!palettes.some((p) => p.id === palette.id)) await repos.palettes.create({ ...palette, order: order++ });
+      await storage.write('migration:curated-palettes-v2', true);
+    }
     const lists = await Promise.all(COLLS.map((c) => repos[c].list()));
     const [branding, theme, assistant, settings] = await Promise.all([docs.branding.get(), docs.theme.get(), docs.assistant.get(), docs.settings.get()]);
     const patch: Record<string, unknown> = {};

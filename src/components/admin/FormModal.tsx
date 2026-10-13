@@ -48,7 +48,7 @@ export function Field({ f, value, onChange, ctx, error }: { f: FieldDef; value: 
   switch (f.kind) {
     case 'text': case 'secret': case 'number':
       return <Input label={f.label} value={value == null ? '' : String(value)} error={error} secureTextEntry={f.kind === 'secret'} keyboardType={f.kind === 'number' ? 'numeric' : 'default'}
-        multiline={'multiline' in f && f.multiline} style={'multiline' in f && f.multiline ? { minHeight: 120, textAlignVertical: 'top', paddingTop: 12 } : undefined}
+        multiline={'multiline' in f && f.multiline} style={'multiline' in f && f.multiline ? { minHeight: 88, textAlignVertical: 'top', paddingTop: 12 } : undefined}
         autoCapitalize={f.kind === 'secret' ? 'none' : undefined}
         onChangeText={(v) => onChange(f.kind === 'number' ? (v === '' ? 0 : Number(v.replace(/[^\d.-]/g, '')) || 0) : v)} />;
     case 'ltext':
@@ -57,7 +57,7 @@ export function Field({ f, value, onChange, ctx, error }: { f: FieldDef; value: 
           {label}
           {LANG_LABELS.map(({ k, key }) => (
             <Input key={k} language={k} testID={`lt-${f.key}-${k}`} placeholder={t(`admin.f.${key}`)} value={(value as LText)?.[k] ?? ''} error={k === 'dar' ? error : undefined}
-              multiline={f.multiline} style={{ textAlign: k === 'fr' ? 'left' : 'right', writingDirection: k === 'fr' ? 'ltr' : 'rtl' } as any}
+              multiline={f.multiline} label={t(`admin.f.${key}`)} style={{ textAlign: k === 'fr' ? 'left' : 'right', writingDirection: k === 'fr' ? 'ltr' : 'rtl' } as any}
               onChangeText={(v) => onChange({ ...(value ?? { dar: '', ar: '', fr: '' }), [k]: v })} />
           ))}
         </View>
@@ -166,45 +166,66 @@ export function FormFields({ fields, value, errors, ctx, onChange }: { fields: F
   const [width, setWidth] = useState(0);
   return <View onLayout={(e) => setWidth(e.nativeEvent.layout.width)} style={{ flexDirection: 'row', flexWrap: 'wrap', marginHorizontal: -6 }}>
     {fields.filter((f) => !f.show || f.show(value ?? {})).map((f) => <View key={f.key} style={{ width: width >= 680 && !['media', 'colors', 'icon'].includes(f.kind) ? '50%' : '100%', padding: 6, minWidth: 0 }}>
-      <View className="bg-surface rounded-2xl border border-line p-4" style={{ minWidth: 0 }}><Field f={f} ctx={ctx} value={value?.[f.key]} error={errors[f.key]} onChange={(v) => onChange(f.key, v)} /></View>
+      <View className="bg-surface rounded-xl border border-line p-3" style={{ minWidth: 0 }}><Field f={f} ctx={ctx} value={value?.[f.key]} error={errors[f.key]} onChange={(v) => onChange(f.key, v)} /></View>
     </View>)}
   </View>;
 }
 
-function BatchFormDialog({ mode, title, fields, initial, blank, onClose, onSubmit }: { mode: 'add' | 'edit' | null; title: string; fields: FieldDef[]; initial: any; blank: () => any; onClose: () => void; onSubmit: (values: any[], keys: string[]) => Promise<void> }) {
+function BatchFormDialog({ mode, title, fields, initial, initialKeys = [], blank, onClose, onSubmit }: { mode: 'add' | 'edit' | null; title: string; fields: FieldDef[]; initial: any; initialKeys?: string[]; blank: () => any; onClose: () => void; onSubmit: (values: any[], keys: string[]) => Promise<void> }) {
   const { t } = useT(); const L = useL(); const s = useStore(); const ctx = { s, L, t };
+  const titleField = fields.find((f) => f.key === 'title' && f.kind === 'ltext') ?? fields.find((f) => f.key === 'name' && f.kind === 'text');
+  const [pasteMode, setPasteMode] = useState(!!titleField);
+  const [text, setText] = useState('');
+  const [shared, setShared] = useState<any>(() => mode === 'add' ? blank() : {});
   const [drafts, setDrafts] = useState<any[]>(() => mode === 'add' ? [blank(), blank()] : mode === 'edit' ? [{ ...initial }] : []);
-  const [keys, setKeys] = useState<string[]>([]);
+  const [pasteDrafts, setPasteDrafts] = useState<any[]>([]);
+  const [keys, setKeys] = useState<string[]>(initialKeys);
   const [errors, setErrors] = useState<Record<string, string>[]>([]);
+  const [pasteError, setPasteError] = useState('');
   const [busy, setBusy] = useState(false);
+  const sharedFields = fields.filter((f) => f.key !== titleField?.key);
+  const pasted = mode === 'add' && pasteMode;
+  const lines = text.split(/\r?\n/).map((line) => line.trim().replace(/^(?:[-*•]\s+|\d+[.)]\s+)/, '')).filter(Boolean);
   const submit = async () => {
+    if (pasted && (!lines.length || lines.length > 50)) { setPasteError(t('improve.pasteError')); return; }
     const active = mode === 'edit' ? fields.filter((f) => keys.includes(f.key)) : fields;
-    const nextErrors = drafts.map((v) => validate(active, v, t));
+    const values = pasted ? pasteDrafts.map((draft, i) => ({ ...shared, id: draft.id, [titleField!.key]: titleField!.kind === 'ltext' ? { dar: lines[i], ar: lines[i], fr: lines[i] } : lines[i] })) : drafts;
+    const nextErrors = values.map((v) => validate(active, v, t));
     setErrors(nextErrors);
     if (nextErrors.some((e) => Object.keys(e).length)) return;
     setBusy(true);
-    try {
-      const normalized = drafts.map((v) => normalize(active, v));
-      await onSubmit(normalized, keys);
-    } catch { toast(t('improve.saveError')); } finally { setBusy(false); }
+    try { await onSubmit(values.map((v) => normalize(active, v)), keys); }
+    catch { toast(t('improve.saveError')); } finally { setBusy(false); }
   };
-  return <Sheet visible={!!mode} title={title} wide onClose={() => { if (!busy) onClose(); }} footer={<View className="flex-row gap-3"><Button title={t('common.cancel')} variant="soft" onPress={onClose} disabled={busy} className="flex-1" /><Button testID="batch-save" title={t('common.save')} onPress={submit} loading={busy} disabled={mode === 'edit' && !keys.length} className="flex-1" /></View>}>
+  return <Sheet visible={!!mode} title={title} wide={mode === 'add'} onClose={() => { if (!busy) onClose(); }} footer={<View className="flex-row gap-3"><Button title={t('common.cancel')} variant="soft" onPress={onClose} disabled={busy} className="flex-1" /><Button testID="batch-save" title={pasted ? t('improve.createCount', { count: lines.length }) : t('common.save')} onPress={submit} loading={busy} disabled={mode === 'edit' && !keys.length || pasted && (!lines.length || lines.length > 50)} className="flex-1" /></View>}>
     {mode === 'edit' ? <>
-      <Txt className="text-muted mb-3">{t('improve.batchHelp')}</Txt>
-      {fields.filter((f) => !f.show || f.show(drafts[0] ?? {})).map((f) => <View key={f.key} className="rounded-2xl border border-line p-4 mb-3 bg-surface">
-        <View className="flex-row items-center justify-between gap-3 mb-2"><Txt className="flex-1 font-bold">{f.label}</Txt><Toggle label={f.label} testID={`batch-field-${f.key}`} value={keys.includes(f.key)} onValueChange={(on) => setKeys((old) => on ? [...old, f.key] : old.filter((key) => key !== f.key))} /></View>
-        {keys.includes(f.key) ? <Field f={f} value={drafts[0]?.[f.key]} error={errors[0]?.[f.key]} ctx={ctx} onChange={(v) => setDrafts(([old]) => [{ ...old, [f.key]: v }])} /> : null}
+      <Txt className="text-muted text-[13px] leading-[21px] mb-3">{t('improve.batchHelp')}</Txt>
+      {fields.filter((f) => !f.show || f.show(drafts[0] ?? {})).map((f) => <View key={f.key} className="rounded-xl border border-line p-3 mb-3 bg-surface">
+        <View className="flex-row items-center gap-3 mb-2"><Toggle label={f.label} testID={`batch-field-${f.key}`} value={keys.includes(f.key)} onValueChange={(on) => setKeys((old) => on ? [...old, f.key] : old.filter((key) => key !== f.key))} /><Txt className="flex-1 font-bold text-[14px]">{f.label}</Txt></View>
+        <View pointerEvents={keys.includes(f.key) ? 'auto' : 'none'} style={{ opacity: keys.includes(f.key) ? 1 : 0.4 }}><Field f={f} value={drafts[0]?.[f.key]} error={errors[0]?.[f.key]} ctx={ctx} onChange={(v) => setDrafts(([old]) => [{ ...old, [f.key]: v }])} /></View>
       </View>)}
     </> : <>
-      {drafts.map((v, i) => <View key={v.id} className="mb-5">
-        <View className="flex-row items-center justify-between mb-2"><Txt className="font-bold text-[17px]">{t('admin.crud.addNew')} · {i + 1}</Txt>{drafts.length > 1 ? <Button size="sm" variant="soft" title={t('improve.removeDraft')} disabled={busy} onPress={() => setDrafts((old) => old.filter((_, index) => i !== index))} /> : null}</View>
-        <FormFields fields={fields} value={v} errors={errors[i] ?? {}} ctx={ctx} onChange={(key, value) => setDrafts((old) => old.map((item, index) => index === i ? { ...item, [key]: value } : item))} />
-      </View>)}
-      <Button testID="batch-add-another" variant="soft" icon="plus" title={t('improve.addAnother')} disabled={busy || drafts.length >= 50} onPress={() => setDrafts((old) => [...old, blank()])} />
+      {titleField ? <View className="flex-row flex-wrap gap-2 mb-4"><Button size="sm" icon="text-box-outline" variant={pasteMode ? 'primary' : 'soft'} title={t('improve.pasteMode')} onPress={() => { setPasteMode(true); setErrors([]); }} /><Button testID="batch-individual" size="sm" icon="form-select" variant={!pasteMode ? 'primary' : 'soft'} title={t('improve.individual')} onPress={() => { setPasteMode(false); setErrors([]); }} /></View> : null}
+      {pasteMode && titleField ? <>
+        <Txt className="text-muted text-[13px] leading-[21px] mb-3">{t('improve.pasteHelp')}</Txt>
+        <Input testID="batch-titles" label={t('improve.pasteTitles')} multiline value={text} error={pasteError} placeholder="Salon\nCuisine\nChambre" style={{ minHeight: 120, maxHeight: 200, textAlignVertical: 'top' }} onChangeText={(value) => {
+          setText(value);
+          const count = value.split(/\r?\n/).map((line) => line.trim().replace(/^(?:[-*•]\s+|\d+[.)]\s+)/, '')).filter(Boolean).length;
+          setPasteError(count > 50 ? t('improve.pasteError') : '');
+          setPasteDrafts((old) => Array.from({ length: Math.min(count, 50) }, (_, i) => old[i] ?? blank()));
+        }} />
+        <Txt className="font-bold text-[16px] mb-3">{t('improve.sharedSettings')}</Txt>
+        <FormFields fields={sharedFields} value={shared} errors={errors[0] ?? {}} ctx={ctx} onChange={(key, value) => setShared((old: any) => ({ ...old, [key]: value }))} />
+      </> : <>
+        {drafts.map((v, i) => <View key={v.id} className="mb-5">
+          <View className="flex-row items-center justify-between mb-2"><Txt className="font-bold text-[17px]">{t('admin.crud.addNew')} · {i + 1}</Txt>{drafts.length > 1 ? <Button size="sm" variant="soft" icon="close" title={t('improve.removeDraft')} disabled={busy} onPress={() => setDrafts((old) => old.filter((_, index) => i !== index))} /> : null}</View>
+          <FormFields fields={fields} value={v} errors={errors[i] ?? {}} ctx={ctx} onChange={(key, value) => setDrafts((old) => old.map((item, index) => index === i ? { ...item, [key]: value } : item))} />
+        </View>)}
+        <Button testID="batch-add-another" variant="soft" icon="plus" title={t('improve.addAnother')} disabled={busy || drafts.length >= 50} onPress={() => setDrafts((old) => [...old, blank()])} />
+      </>}
     </>}
   </Sheet>;
 }
-
 
 /** Opening a different record starts a fresh draft; store updates never overwrite typing. */
 export function FormModal(props: React.ComponentProps<typeof FormDialog>) {
