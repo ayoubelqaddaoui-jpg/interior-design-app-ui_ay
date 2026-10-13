@@ -1,4 +1,4 @@
-import { useAppFont } from '@/components/ui/Txt';
+import { useAppFont, Txt } from '@/components/ui/Txt';
 import React, { useEffect, useRef, useState } from 'react';
 import { FlatList, KeyboardAvoidingView, Platform, Pressable, TextInput, View } from 'react-native';
 import { Image } from 'expo-image';
@@ -10,7 +10,6 @@ import { services, ME } from '@/data/repositories';
 import { useL, useT } from '@/i18n';
 import { Icon } from '@/components/ui/Icon';
 import { Sheet } from '@/components/ui/Sheet';
-import { Txt } from '@/components/ui/Txt';
 import { pickPhoto } from '@/lib/photo';
 import { uid } from '@/lib/uid';
 import { useTheme } from '@/theme/ThemeProvider';

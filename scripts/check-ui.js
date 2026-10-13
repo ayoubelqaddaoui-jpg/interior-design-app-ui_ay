@@ -20,6 +20,7 @@ async function main() {
   const browser = await chromium.launch({ headless: true });
   const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
   const errors = [];
+  page.on('dialog', dialog => dialog.accept());
   page.on('pageerror', (e) => errors.push(e.message));
   await page.addInitScript(() => {
     if (!localStorage.getItem('test-initialized')) {
@@ -34,7 +35,7 @@ async function main() {
 
 
   // Draft documents, form previews, inline changes, exact search, and history restoration.
-  await go('/admin', 'dash-search');
+  await go('/admin', 'range-90');
   const originalSettings = await saved('doc:settings');
   await page.getByTestId('nav-interface').click();
   await page.getByTestId('layout-masonry').click();
@@ -46,7 +47,7 @@ async function main() {
   assert.equal(await page.getByTestId('layout-masonry').getAttribute('aria-checked'), 'true');
   await page.evaluate(() => history.back());
   await page.getByTestId('unsaved-discard').click();
-  await page.getByTestId('dash-search').waitFor();
+  await page.getByTestId('range-90').waitFor();
   assert.deepEqual(await saved('doc:settings'), originalSettings);
 
   await page.getByTestId('nav-interface').click();
@@ -78,6 +79,8 @@ async function main() {
   assert.match(await page.getByTestId('form-preview').innerText(), /Unsubmitted preview/);
   assert.deepEqual(await saved('tools'), originalTools);
   await page.evaluate(() => history.back());
+  assert.match(await page.getByTestId('unsaved-differences').innerText(), /Unsubmitted preview/);
+  assert((await page.getByTestId('unsaved-differences').innerText()).includes(toolName));
   await page.getByTestId('unsaved-cancel').click();
   assert.equal(await page.getByTestId('lt-title-fr').inputValue(), 'Unsubmitted preview');
   await page.getByTestId('sheet-close').click();
@@ -98,9 +101,10 @@ async function main() {
   await page.getByTestId('crud-discard').click();
 
   await page.getByTestId('nav-dashboard').click();
-  await page.getByTestId('dash-search').fill('Japandi');
   await page.getByTestId('range-90').click();
-  await page.getByTestId('search-result-pal_japandi').click();
+  await page.getByTestId('global-search-open').click();
+  await page.getByTestId('global-search-input').fill('Japandi');
+  await page.getByTestId('global-result-pal_japandi').click();
   const target = page.getByTestId('target-pal_japandi');
   await target.waitFor();
   await page.waitForTimeout(500);
@@ -108,9 +112,7 @@ async function main() {
   assert(targetBox.y >= 0 && targetBox.y + targetBox.height <= 1000);
   assert.match(page.url(), /target=pal_japandi/);
   await page.getByTestId('admin-back').click();
-  assert.equal(await page.getByTestId('dash-search').inputValue(), 'Japandi');
   assert.match(await page.getByTestId('range-90').getAttribute('class'), /bg-ink/);
-  await page.getByTestId('dash-search').fill('');
   await page.waitForTimeout(300);
   const pageScroll = page.locator('[data-testid^="scroll-"][data-testid$=":page"]').last();
   await pageScroll.evaluate((el) => { el.scrollTop = 100; });
@@ -118,7 +120,7 @@ async function main() {
   const previousScroll = await pageScroll.evaluate((el) => el.scrollTop);
   await page.getByTestId('nav-users').click();
   await page.evaluate(() => history.back());
-  await page.getByTestId('dash-search').waitFor();
+  await page.getByTestId('range-90').waitFor();
   await page.waitForTimeout(500);
   assert(Math.abs(await pageScroll.evaluate((el) => el.scrollTop) - previousScroll) < 2, 'Page scroll was reset');
 
@@ -150,7 +152,7 @@ async function main() {
   }
   await page.setViewportSize({ width: 1440, height: 1000 });
 
-  for (const [path, id] of [['/admin', 'dash-search'], ['/admin/?period=30', 'dash-search'], ['/admin/requests', 'req-auto'], ['/admin/palettes', 'crud-add'], ['/tool/tool_interior', 'wizard-continue']]) {
+  for (const [path, id] of [['/admin', 'range-90'], ['/admin/?period=30', 'range-90'], ['/admin/requests', 'req-auto'], ['/admin/palettes', 'crud-add'], ['/tool/tool_interior', 'wizard-continue']]) {
     await go(path, id);
     await page.reload(); await page.getByTestId(id).first().waitFor();
   }

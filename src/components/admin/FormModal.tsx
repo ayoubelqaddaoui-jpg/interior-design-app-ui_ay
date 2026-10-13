@@ -1,13 +1,12 @@
 import React, { useEffect, useState } from 'react';
 import { Pressable, View } from 'react-native';
 import { Button } from '@/components/ui/Button';
-import { Icon } from '@/components/ui/Icon';
+import { Icon, ICON_CHOICES } from '@/components/ui/Icon';
 import { Input } from '@/components/ui/Field';
 import { MediaView } from '@/components/ui/MediaView';
 import { Sheet } from '@/components/ui/Sheet';
 import { Toggle } from '@/components/ui/Toggle';
 import { Txt } from '@/components/ui/Txt';
-import { ICON_CHOICES } from '@/components/ui/Icon';
 import { ColorPicker } from './ColorPicker';
 import { ImageField } from './ImageField';
 import { useStore } from '@/store/useStore';
