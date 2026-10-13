@@ -12,7 +12,7 @@ export function Sheet({ visible, onClose, title, children, wide, footer }: { vis
   const insets = useSafeAreaInsets();
   const { style } = useTheme();
   const { tablet, height } = useBp();
-  const { rtl } = useT();
+  const { rtl, t } = useT();
   return (
     <Modal visible={visible} transparent animationType={tablet ? 'fade' : 'slide'} onRequestClose={onClose} statusBarTranslucent>
       <View style={[style, { flex: 1, direction: rtl ? 'rtl' : 'ltr' } as any]}>
@@ -21,12 +21,12 @@ export function Sheet({ visible, onClose, title, children, wide, footer }: { vis
             <Pressable
               onPress={() => {}}
               className={`bg-bg w-full ${tablet ? `rounded-3xl ${wide ? 'max-w-[960px]' : 'max-w-[520px]'}` : 'rounded-t-3xl'}`}
-              style={{ maxHeight: height * 0.9, flexShrink: 1, minHeight: 0 }}
+              style={{ maxHeight: height * 0.9, width: tablet ? '92%' : '100%', flexShrink: 1, minHeight: 0 }}
             >
               {title ? (
-                <View className="flex-row items-center justify-between px-5 pt-4 pb-2">
-                  <Txt className="text-[18px] font-extrabold flex-1">{title}</Txt>
-                  <Pressable onPress={onClose} hitSlop={10} className="w-9 h-9 rounded-full bg-surface2 items-center justify-center"><Icon name="close" size={20} /></Pressable>
+                <View testID="sheet-header" style={{ flexShrink: 0 }} className="flex-row items-center justify-between px-5 py-4 border-b border-line gap-3">
+                  <Txt className="text-[18px] leading-[26px] font-extrabold flex-1">{title}</Txt>
+                  <Pressable accessibilityRole="button" accessibilityLabel={t('common.close')} testID="sheet-close" onPress={onClose} hitSlop={10} className="w-9 h-9 rounded-full bg-surface2 items-center justify-center"><Icon name="close" size={20} /></Pressable>
                 </View>
               ) : null}
               <ScrollView keyboardShouldPersistTaps="handled" style={{ flexShrink: 1, minHeight: 0 }} contentContainerStyle={{ padding: tablet ? 24 : 16, paddingTop: title ? 12 : 20, paddingBottom: footer ? 20 : Math.max(28, insets.bottom + 16) }}>{children}</ScrollView>

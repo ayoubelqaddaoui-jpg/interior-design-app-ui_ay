@@ -31,8 +31,13 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const cfg = useStore((s) => s.doc?.theme) ?? { active: 'light', custom: {} };
   const ctx = useThemeFor(cfg);
   useEffect(() => {
-    if (Platform.OS === 'web' && typeof document !== 'undefined') document.body.style.backgroundColor = ctx.colors.bg;
-  }, [ctx.colors.bg]);
+    if (Platform.OS === 'web' && typeof document !== 'undefined') {
+      document.body.style.backgroundColor = ctx.colors.bg;
+      document.documentElement.style.setProperty('--scroll-thumb', ctx.colors.muted);
+      document.documentElement.style.setProperty('--scroll-accent', ctx.colors.primary);
+      document.documentElement.style.setProperty('--scroll-track', ctx.colors.surface2);
+    }
+  }, [ctx.colors]);
   return (
     <ThemeCtx.Provider value={ctx}>
       <View style={ctx.style} className="flex-1 bg-bg">

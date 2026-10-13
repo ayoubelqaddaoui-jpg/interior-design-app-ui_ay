@@ -17,7 +17,7 @@ export function ColorPicker({ label, value, onChange }: { label?: string; value:
           ? React.createElement('input', { type: 'color', value: isHex(value) ? value : '#000000', onChange: (e: any) => onChange(e.target.value.toUpperCase()), style: { width: 44, height: 44, border: 0, padding: 0, borderRadius: 12, background: 'none', cursor: 'pointer' } })
           : <View style={{ width: 44, height: 44, borderRadius: 12, backgroundColor: isHex(value) ? value : '#000', borderWidth: 1, borderColor: colors.line }} />}
         <TextInput value={value} onChangeText={(v) => onChange(v.startsWith('#') ? v : '#' + v)} autoCapitalize="characters" maxLength={7}
-          style={{ flex: 1, height: 44, borderRadius: 12, paddingHorizontal: 12, backgroundColor: colors.surface2, color: colors.fg, fontSize: 15, outlineStyle: 'none' } as any} />
+          style={{ flex: 1, minWidth: 0, maxWidth: 220, height: 44, borderRadius: 12, paddingHorizontal: 12, backgroundColor: colors.surface2, color: colors.fg, fontSize: 15, outlineStyle: 'none' } as any} />
       </View>
       <View className="flex-row flex-wrap gap-2 mt-2.5">
         {SWATCHES.map((c) => (

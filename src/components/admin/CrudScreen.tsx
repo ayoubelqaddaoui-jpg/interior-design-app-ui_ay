@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
-import { View } from 'react-native';
-import { Button, Card, ConfirmSheet, Txt } from '@/components/ui';
+import { Pressable, ScrollView, View } from 'react-native';
+import { Button, Card, ConfirmSheet, Icon, Txt } from '@/components/ui';
 import { CrudTable } from './CrudTable';
 import { BatchFormModal, FormModal, validate } from './FormModal';
 import { AdminPage } from './AdminShell';
@@ -20,6 +20,7 @@ export function CrudScreen({ entity }: { entity: string }) {
   const [editing, setEditing] = useState<any | null>(null);
   const [isNew, setIsNew] = useState(false);
   const [selected, setSelected] = useState<string[]>([]);
+  const [quickKeys, setQuickKeys] = useState<string[]>([]);
   const [batch, setBatch] = useState<'add' | 'edit' | null>(null);
   const [bulkDelete, setBulkDelete] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -74,27 +75,26 @@ export function CrudScreen({ entity }: { entity: string }) {
   };
 
   return (
-    <AdminPage title={t(`admin.nav.${cfg.navKey}`)} right={<Button testID="crud-add" icon="plus" size="sm" title={t('admin.crud.addNew')} onPress={() => open()} />}>
+    <AdminPage title={t(`admin.nav.${cfg.navKey}`)} right={<View className="flex-row items-center gap-2"><Button testID="crud-add" icon="plus" size="sm" title={t('common.add')} onPress={() => open()} />{bulkEnabled ? <Pressable testID="crud-batch-add" accessibilityRole="button" accessibilityLabel={t('improve.addMultiple')} onPress={() => setBatch('add')} className="w-10 h-10 rounded-full border border-line bg-surface2 items-center justify-center"><Icon name="playlist-plus" size={23} /></Pressable> : null}</View>}
+      floating={bulkEnabled && selected.length ? <Card testID="bulk-panel" className="p-3 rounded-3xl" style={{ boxShadow: '0 8px 36px rgba(0,0,0,0.2)' } as any}>
+        <View className="flex-row items-center gap-2 mb-2"><View className="bg-primary rounded-full px-3 py-1"><Txt className="text-onprimary font-bold">{selected.length}</Txt></View><Txt className="font-bold flex-1">{t('improve.selectedShort')}</Txt><Button testID="bulk-done" size="sm" variant="ghost" icon="close" title={t('common.done')} disabled={busy} onPress={() => setSelected([])} /></View>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 4 }}>
+          <Button size="sm" icon="select-all" variant="ghost" title={t('common.all')} disabled={busy} onPress={() => setSelected(rows.map((r) => r.id))} />
+          <Button testID="crud-batch-edit" size="sm" icon="pencil-outline" variant="ghost" title={t('common.edit')} disabled={busy} onPress={() => { setQuickKeys([]); setBatch('edit'); }} />
+          <Button testID="crud-batch-visibility" size="sm" icon="eye-outline" variant="ghost" title={t('improve.visibilityShort')} disabled={busy} onPress={() => { setQuickKeys(['visible']); setBatch('edit'); }} />
+          {cfg.ordered ? ([-1, 1] as const).map((d) => <Button key={d} testID={`crud-batch-move-${d}`} size="sm" icon={d === -1 ? 'arrow-up' : 'arrow-down'} variant="ghost" title={t(d === -1 ? 'improve.upShort' : 'improve.downShort')} disabled={busy} onPress={() => run(() => s.moveMany(cfg.name, selected, d))} />) : null}
+          <Button testID="crud-batch-delete" size="sm" icon="trash-can-outline" variant="ghost" title={t('common.delete')} disabled={busy} onPress={() => setBulkDelete(true)} />
+        </ScrollView>
+      </Card> : undefined}>
       {entity === 'tabs' ? <HomeTabsOption /> : null}
-      {bulkEnabled ? <Card className="p-4 mb-4">
-        <Txt className="font-bold mb-3">{t('improve.selected', { count: selected.length })}</Txt>
-        <View className="flex-row flex-wrap gap-2">
-          <Button size="sm" variant="soft" title={t('improve.selectAll')} disabled={busy} onPress={() => setSelected(rows.map((r) => r.id))} />
-          <Button size="sm" variant="soft" title={t('improve.clearSelection')} disabled={!selected.length || busy} onPress={() => setSelected([])} />
-          <Button testID="crud-batch-add" size="sm" icon="plus" title={t('improve.addMultiple')} disabled={busy} onPress={() => setBatch('add')} />
-          <Button testID="crud-batch-edit" size="sm" variant="soft" title={t('improve.editMultiple')} disabled={!selected.length || busy} onPress={() => setBatch('edit')} />
-          <Button testID="crud-batch-delete" size="sm" variant="soft" title={t('improve.deleteMultiple')} disabled={!selected.length || busy} onPress={() => setBulkDelete(true)} />
-          {cfg.ordered ? ([-1, 1] as const).map((d) => <Button key={d} testID={`crud-batch-move-${d}`} size="sm" variant="soft" title={t(d === -1 ? 'improve.up' : 'improve.down')} disabled={!selected.length || busy} onPress={() => run(() => s.moveMany(cfg.name, selected, d))} />) : null}
-        </View>
-      </Card> : null}
-      <CrudTable selected={selected} onSelect={bulkEnabled ? (id) => { if (!busy) setSelected((old) => old.includes(id) ? old.filter((x) => x !== id) : [...old, id]); } : undefined} rows={rows} cols={cfg.cols(ctx)} rowTestID="row"
+      <CrudTable onLongPress={bulkEnabled ? (id) => { if (!busy) setSelected((old) => old.includes(id) ? old : [...old, id]); } : undefined} selected={selected} onSelect={bulkEnabled ? (id) => { if (!busy) setSelected((old) => old.includes(id) ? old.filter((x) => x !== id) : [...old, id]); } : undefined} rows={rows} cols={cfg.cols(ctx)} rowTestID="row"
         onEdit={open} onDelete={setDel}
         onMove={cfg.ordered && bulkEnabled ? (r, d) => s.move(cfg.name, r.id, d) : undefined}
         onToggle={(r) => s.update(cfg.name, r.id, { visible: r.visible === false } as any)} />
       <View className="h-6" />
       <FormModal visible={!!editing} title={`${isNew ? t('admin.crud.addNew') : t('admin.crud.editItem')} · ${t(`admin.nav.${cfg.navKey}`)}`}
         fields={cfg.fields(ctx)} initial={editing} onClose={() => setEditing(null)} onSubmit={submit} />
-      <BatchFormModal mode={batch} title={`${t(batch === 'add' ? 'improve.addMultiple' : 'improve.editMultiple')} · ${t(`admin.nav.${cfg.navKey}`)}`} fields={cfg.fields(ctx)} initial={rows.find((r) => selected.includes(r.id))} blank={() => ({ ...cfg.blank({ ...ctx, s: useStore.getState() }), id: uid(cfg.name) })} onClose={() => setBatch(null)} onSubmit={submitBatch} />
+      <BatchFormModal initialKeys={quickKeys} mode={batch} title={batch === 'edit' ? t('improve.editCount', { count: selected.length }) : t('improve.addMultiple')} fields={cfg.fields(ctx)} initial={rows.find((r) => selected.includes(r.id))} blank={() => ({ ...cfg.blank({ ...ctx, s: useStore.getState() }), id: uid(cfg.name) })} onClose={() => setBatch(null)} onSubmit={submitBatch} />
       <ConfirmSheet visible={bulkDelete} onClose={() => setBulkDelete(false)} message={t('improve.deleteCount', { count: selected.length })} confirmLabel={t('common.delete')} cancelLabel={t('common.cancel')} onConfirm={() => run(async () => { if (bulkEnabled) { await removeRows(cfg.name, selected); setSelected([]); } })} />
       <ConfirmSheet visible={!!del} onClose={() => setDel(null)} message={t('admin.crud.confirmDelete')} confirmLabel={t('common.delete')} cancelLabel={t('common.cancel')} onConfirm={() => del && run(() => removeRows(cfg.name, [del.id]))} />
     </AdminPage>

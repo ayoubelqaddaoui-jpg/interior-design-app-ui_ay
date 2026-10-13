@@ -32,6 +32,14 @@ async function main() {
   const saved = (key) => page.evaluate((key) => JSON.parse(localStorage.getItem(`dwira:v1:${key}`)), key);
   const seed = async (key, value) => { await page.evaluate(({ key, value }) => localStorage.setItem(`dwira:v1:${key}`, JSON.stringify(value)), { key, value }); };
 
+  for (const [path, id] of [['/admin', 'dash-search'], ['/admin/?period=30', 'dash-search'], ['/admin/requests', 'req-auto'], ['/admin/palettes', 'crud-add'], ['/tool/tool_interior', 'wizard-continue']]) {
+    await go(path, id);
+    await page.reload(); await page.getByTestId(id).first().waitFor();
+  }
+  const fresh = await browser.newPage();
+  await fresh.goto(`${base}/admin/requests`);
+  await fresh.getByTestId('admin-signin').waitFor();
+  await fresh.close();
   await go('/', 'brand-mark');
   assert.match(await page.getByTestId('brand-mark').innerText(), /Dwira/);
   // Check actual muted looping playback on the reported Home staging card.
@@ -78,7 +86,7 @@ async function main() {
   await go('/admin/interface', 'bulk-enable-tabs');
   await page.getByTestId('chip-Inter').click();
   await page.getByTestId('chip-Tajawal').click();
-  await page.getByTestId('bulk-enable-tabs').click();
+  if (await page.getByTestId('bulk-enable-tabs').getAttribute('aria-checked') !== 'true') await page.getByTestId('bulk-enable-tabs').click();
   await page.waitForTimeout(300);
   const settings = await saved('doc:settings');
   assert.equal(settings.frenchFont, 'Inter');
@@ -86,15 +94,26 @@ async function main() {
   assert(settings.bulkPanels.includes('tabs'));
   await go('/admin/tabs', 'crud-batch-add');
   await page.getByTestId('crud-batch-add').click();
-  await page.getByTestId('lt-title-fr').nth(0).fill('Regression A');
-  await page.getByTestId('lt-title-fr').nth(1).fill('Regression B');
+  await page.getByTestId('batch-titles').waitFor();
+  await page.getByTestId('batch-titles').fill('Regression A\n\n- Regression B');
+  await page.getByTestId('sw-visible').click();
   await page.getByTestId('batch-save').click();
   await page.getByTestId('batch-save').waitFor({ state: 'hidden' });
   let tabs = await saved('tabs');
   const added = tabs.filter((row) => row.title.fr.startsWith('Regression'));
   assert.equal(added.length, 2);
+  assert(added.every((row) => row.visible === false && row.title.fr === row.title.ar && row.title.fr === row.title.dar));
   assert.notEqual(added[0].order, added[1].order);
-  for (const row of added) await page.getByTestId(`select-${row.id}`).click();
+  assert.equal(await page.getByTestId('bulk-panel').count(), 0);
+  const hold = await page.getByTestId(`row-${added[0].id}`).boundingBox();
+  await page.mouse.move(hold.x + 100, hold.y + 15);
+  await page.mouse.down(); await page.waitForTimeout(600); await page.mouse.up();
+  await page.getByTestId('bulk-panel').waitFor();
+  await page.getByTestId(`select-${added[1].id}`).click();
+  await page.getByTestId(`edit-${added[0].id}`).click();
+  await page.getByTestId('form-save').waitFor();
+  await page.getByText('Annuler', { exact: true }).last().click();
+  assert.equal(await page.getByTestId(`select-${added[0].id}`).getAttribute('aria-checked'), 'true');
   await page.getByTestId('crud-batch-edit').click();
   await page.getByTestId('batch-field-title').click();
   await page.getByTestId('lt-title-fr').fill('Regression edited');
@@ -127,6 +146,10 @@ async function main() {
     await go(`/admin/${entity}`, 'crud-add');
     await page.getByTestId('crud-add').click();
     await page.waitForFunction(() => { const button = document.querySelector('[data-testid="form-save"]'); const bounds = button?.getBoundingClientRect(); return bounds && bounds.top >= 0 && bounds.bottom <= window.innerHeight; });
+    const header = await page.getByTestId('sheet-header').boundingBox();
+    assert(header && header.y >= 0 && header.y + header.height < 1000, `Title hidden in ${entity} form`);
+    const inputs = await page.locator('[data-testid^="lt-title-"]').all();
+    for (const input of inputs) { const bounds = await input.boundingBox(); assert(bounds.height >= 40 && bounds.height <= 48, `Oversized input in ${entity}`); }
     const save = await page.getByTestId('form-save').boundingBox();
     assert(save && save.y >= 0 && save.y + save.height <= 1000, `Save hidden in ${entity} form`);
     await page.getByText('Annuler', { exact: true }).last().click();
@@ -149,8 +172,90 @@ async function main() {
   await next.click();
   await page.waitForTimeout(500);
   assert.equal(await page.getByTestId('carousel-previous').first().getAttribute('aria-disabled'), null);
+
+  // One-time palette upgrades preserve customized records and deliberate deletions.
+  const migration = await browser.newPage();
+  await migration.addInitScript(() => {
+    if (!localStorage.getItem('migration-test')) {
+      localStorage.setItem('dwira:v1:palettes', JSON.stringify([{ id: 'pal_neutral', title: { dar: 'محايد', ar: 'محايد', fr: 'Edited palette' }, colors: ['#123456'], order: 42, visible: false, isSurprise: false }]));
+      localStorage.setItem('migration-test', 'yes');
+    }
+    localStorage.setItem('dwira:v1:local', JSON.stringify({ adminSession: true }));
+  });
+  await migration.goto(`${base}/admin/palettes`); await migration.getByTestId('crud-add').waitFor();
+  let migrated = await migration.evaluate(() => JSON.parse(localStorage.getItem('dwira:v1:palettes')));
+  assert.equal(migrated.length, 11);
+  assert.equal(migrated[0].title.fr, 'Edited palette'); assert.equal(migrated[0].order, 42); assert.equal(migrated[0].visible, false);
+  await migration.evaluate(() => localStorage.setItem('dwira:v1:palettes', JSON.stringify(JSON.parse(localStorage.getItem('dwira:v1:palettes')).filter((row) => row.id !== 'pal_linen'))));
+  await migration.reload(); await migration.getByTestId('crud-add').waitFor();
+  migrated = await migration.evaluate(() => JSON.parse(localStorage.getItem('dwira:v1:palettes')));
+  assert.equal(migrated.length, 10);
+  assert(!migrated.some((row) => row.id === 'pal_linen'));
+  await migration.getByTestId('crud-batch-add').click();
+  await migration.getByTestId('batch-titles').fill(Array.from({ length: 51 }, (_, i) => `Title ${i}`).join('\n'));
+  assert.equal(await migration.getByTestId('batch-save').getAttribute('aria-disabled'), 'true');
+  await migration.close();
+  assert.equal((await fetch(`${base}/assets/missing-regression.ttf`)).status, 404);
+
+  // Hiding home filters never hides tools, including those assigned to hidden tabs.
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await go('/', 'brand-mark');
+  const toolCount = await page.locator('[data-testid^="tool-tool_"]').count();
+  await page.getByTestId('hometab-tab_interior').click();
+  await go('/admin/tabs', 'home-tabs-visible');
+  await page.getByTestId('home-tabs-visible').click();
+  await go('/', 'brand-mark');
+  assert.equal(await page.locator('[data-testid^="hometab-"]').count(), 0);
+  assert.equal(await page.locator('[data-testid^="tool-tool_"]').count(), toolCount);
+  await go('/admin/tabs', 'home-tabs-visible');
+  await page.getByTestId('home-tabs-visible').click();
+
+  // Mobile request cards, bulk panel and title-paste creation stay inside the viewport.
+  for (const lang of ['fr', 'ar']) {
+    await seed('lang', lang);
+    await page.setViewportSize({ width: 375, height: 900 });
+    await go('/admin/requests', 'req-auto');
+    const card = page.getByTestId('req-req_1');
+    const box = await card.boundingBox();
+    assert(box.x >= 0 && box.x + box.width <= 375 && box.height > 120);
+    await go('/admin/tabs', 'crud-add');
+    const row = page.getByTestId('row-tab_interior');
+    const bounds = await row.boundingBox();
+    await page.mouse.move(bounds.x + bounds.width / 2, bounds.y + 16);
+    await page.mouse.down(); await page.waitForTimeout(600); await page.mouse.up();
+    await page.getByTestId('bulk-panel').waitFor();
+    const panel = await page.getByTestId('bulk-panel').boundingBox();
+    assert(panel.x >= 0 && panel.x + panel.width <= 375 && panel.y + panel.height <= 900);
+    await page.getByTestId('bulk-done').click();
+    assert.equal(await page.getByTestId('bulk-panel').count(), 0);
+    await page.getByTestId('crud-batch-add').click();
+    await page.getByTestId('batch-titles').fill('Mobile A\nMobile B');
+    await page.waitForFunction(() => document.querySelector('[data-testid="batch-save"]').getBoundingClientRect().bottom <= innerHeight);
+    assert.equal(await page.getByTestId('batch-titles').inputValue(), 'Mobile A\nMobile B');
+    await page.getByTestId('sheet-header').getByRole('button').click();
+  }
+  // Slider origin follows its heading direction; controls sit at the image sides.
+  for (const lang of ['fr', 'ar']) {
+    await seed('lang', lang);
+    await page.setViewportSize({ width: 1440, height: 1000 });
+    await go('/explore');
+    await page.getByTestId('carousel-next').first().waitFor();
+    await page.waitForTimeout(700);
+    const first = await page.getByTestId('cat-cat_living').boundingBox();
+    const second = await page.getByTestId('cat-cat_nursery').boundingBox();
+    assert(lang === 'ar' ? first.x > second.x : first.x < second.x);
+    const arrow = await page.getByTestId('carousel-next').first().boundingBox();
+    assert(arrow.y > first.y && arrow.y + arrow.height < first.y + first.height);
+    await page.getByTestId('carousel-next').first().click(); await page.waitForTimeout(500);
+    assert.notEqual(await page.getByTestId('carousel-previous').first().getAttribute('aria-disabled'), 'true');
+    const before = await page.getByTestId('cat-cat_living').boundingBox();
+    assert(lang === 'ar' ? before.x > first.x : before.x < first.x);
+  }
+  const scrollColor = await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--scroll-accent'));
+  assert(scrollColor.trim().startsWith('#'));
+
   assert.deepEqual(errors, []);
-  console.log('PASS: ordering, actual uploaded logos, muted card autoplay, LTR/RTL branding positions, fonts, bulk add/edit/move/delete, mobile themes, desktop/mobile content forms, gallery modes and desktop sliders');
+  console.log('PASS: direct routes/refresh/login, asset 404s, safe palette upgrades, shared text-paste creation/limits, long-press selection, isolated row actions, bulk add/edit/move/delete, home-tab visibility, mobile request spacing, compact dialogs, theme scroll colors, uploaded logos, video autoplay, fonts, galleries and RTL side controls');
   await browser.close();
 }
 main().catch((error) => { console.error(error); process.exit(1); });

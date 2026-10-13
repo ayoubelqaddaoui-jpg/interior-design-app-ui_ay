@@ -19,14 +19,13 @@ export default function Home() {
   const tools = useStore((s) => s.tools);
   const branding = useStore((s) => s.doc.branding);
   const visibleTabs = useMemo(() => sorted(tabs).filter((x) => x.visible), [tabs]);
-  const showAll = useStore((s) => s.doc.settings.homeShowAll) !== false;
-  const [selectedTab, setTabId] = useState<string>(showAll ? ALL : '');
+  const tabsVisible = useStore((s) => s.doc.settings.homeTabsVisible) !== false;
+  const [selectedTab, setTabId] = useState<string>(ALL);
 
-  const tabId = selectedTab === ALL && showAll ? ALL : visibleTabs.some((x) => x.id === selectedTab) ? selectedTab : showAll ? ALL : visibleTabs[0]?.id ?? '';
+  const tabId = !tabsVisible || selectedTab === ALL ? ALL : visibleTabs.some((x) => x.id === selectedTab) ? selectedTab : ALL;
 
-  const visibleTabIds = useMemo(() => new Set(visibleTabs.map((x) => x.id)), [visibleTabs]);
-  const list = sorted(tools).filter((x) => x.visible && visibleTabIds.has(x.tabId) && (tabId === ALL || x.tabId === tabId));
-  const pills = useMemo(() => (showAll ? [{ id: ALL, label: t('home.all') }] : []).concat(visibleTabs.map((x) => ({ id: x.id, label: L(x.title) }))), [showAll, visibleTabs, t, L]);
+  const list = sorted(tools).filter((x) => x.visible && (tabId === ALL || x.tabId === tabId));
+  const pills = useMemo(() => [{ id: ALL, label: t('home.all') }].concat(visibleTabs.map((x) => ({ id: x.id, label: L(x.title) }))), [visibleTabs, t, L]);
   const cols = pick(1, 2, 3);
 
   const open = (id: string) => { useWizard.getState().start(id); router.push({ pathname: '/tool/[id]', params: { id } }); };
@@ -36,7 +35,7 @@ export default function Home() {
       {!desktop ? (
         <BrandHeader branding={branding} actions={<CreditsBadge />} />
       ) : null}
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingVertical: 8 }}>
+      {tabsVisible ? <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingVertical: 8 }}>
         {pills.map((x) => {
           const on = x.id === tabId;
           return (
@@ -45,7 +44,7 @@ export default function Home() {
             </Pressable>
           );
         })}
-      </ScrollView>
+      </ScrollView> : null}
     </View>
   );
 

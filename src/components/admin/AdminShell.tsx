@@ -97,7 +97,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
   };
 
   const GroupedList = ({ onItem }: { onItem?: () => void }) => (
-    <ScrollView contentContainerStyle={{ paddingHorizontal: 12, paddingBottom: 12 }} showsVerticalScrollIndicator={false}>
+    <ScrollView contentContainerStyle={{ paddingHorizontal: 12, paddingBottom: 12 }} showsVerticalScrollIndicator={desktop}>
       {ADMIN_GROUPS.map((g) => (
         <View key={g.key} className="mb-3">
           <Txt className="text-muted text-[11px] font-bold uppercase tracking-wide px-3 mb-1">{t(`admin.group.${g.key}`)}</Txt>
@@ -124,7 +124,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
   const Rail = () => (
     <View className="w-[64px] bg-surface border-e border-line items-center" style={{ paddingTop: insets.top + 8 }}>
       <Brand compact />
-      <ScrollView showsVerticalScrollIndicator={false} style={{ flex: 1, alignSelf: 'stretch' }} contentContainerStyle={{ alignItems: 'center', paddingVertical: 10 }}>
+      <ScrollView showsVerticalScrollIndicator={desktop} style={{ flex: 1, alignSelf: 'stretch' }} contentContainerStyle={{ alignItems: 'center', paddingVertical: 10 }}>
         {ADMIN_GROUPS.map((g, gi) => (
           <View key={g.key} className="items-center" style={{ gap: 4 }}>
             {gi > 0 ? <View className="h-px w-8 bg-line my-2" /> : null}
@@ -252,10 +252,10 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
 }
 
 /** Standard admin page: title row + scrollable, width-limited body. */
-export function AdminPage({ title, right, children, max = 1100 }: { title: string; right?: React.ReactNode; children: React.ReactNode; max?: number }) {
+export function AdminPage({ title, right, children, max = 1100, floating }: { title: string; right?: React.ReactNode; children: React.ReactNode; max?: number; floating?: React.ReactNode }) {
   const { tablet } = useBp();
   return (
-    <ScrollView contentContainerStyle={{ padding: tablet ? 28 : 16, paddingBottom: 60 }}>
+    <View style={{ flex: 1, minHeight: 0 }}><ScrollView contentContainerStyle={{ padding: tablet ? 28 : 16, paddingBottom: floating ? 200 : 60 }}>
       <View style={{ width: '100%', maxWidth: max, alignSelf: 'center' }}>
         <View className="flex-row items-center justify-between mb-5 gap-3">
           <Txt className="text-[24px] font-extrabold flex-1" accessibilityRole="header">{title}</Txt>
@@ -263,6 +263,6 @@ export function AdminPage({ title, right, children, max = 1100 }: { title: strin
         </View>
         {children}
       </View>
-    </ScrollView>
+    </ScrollView>{floating ? <View style={{ position: 'absolute', bottom: 20, left: 12, right: 12, maxWidth: 700, alignSelf: 'center', marginHorizontal: 'auto', zIndex: 10 } as any}>{floating}</View> : null}</View>
   );
 }

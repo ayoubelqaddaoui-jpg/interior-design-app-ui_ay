@@ -177,8 +177,8 @@ const fr = {
       layout: 'Changer la disposition du menu',
     },
     tabsOpt: {
-      showAllTitle: 'Afficher tous les outils par défaut',
-      showAllDesc: 'Activé : l’accueil montre tous les outils, les onglets servent de filtre optionnel. Désactivé : le premier onglet est toujours sélectionné.',
+      showAllTitle: 'Afficher les onglets sur l’accueil',
+      showAllDesc: 'Affichez ou masquez tous les onglets. Toutes les cartes restent visibles.',
     },
     iface: {
       title: 'Interface & menus',

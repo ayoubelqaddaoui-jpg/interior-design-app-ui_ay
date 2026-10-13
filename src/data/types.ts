@@ -149,8 +149,10 @@ export type AdminNavMode = 'rail' | 'drawer' | 'top';
 export interface AppSettings {
   defaultFreeCredits: number;
   autoSendWhatsApp: boolean;
-  /** true: Home shows every tool by default (tabs only filter when the user picks one). */
+  /** Legacy preference, retained for persisted settings compatibility. */
   homeShowAll: boolean;
+  /** Show the home tab filters; hiding them never hides tool cards. */
+  homeTabsVisible?: boolean;
   userNavStyle: UserNavStyle;
   adminNavMode: AdminNavMode;
   arabicFont?: string;

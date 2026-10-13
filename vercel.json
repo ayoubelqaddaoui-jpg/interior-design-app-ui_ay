@@ -4,11 +4,11 @@
   "installCommand": "npm ci --no-audit --no-fund",
   "buildCommand": "npm run build:web",
   "outputDirectory": "dist",
-  "cleanUrls": true,
+  "cleanUrls": false,
   "trailingSlash": false,
   "rewrites": [
     {
-      "source": "/(.*)",
+      "source": "/((?!_expo/|assets/|favicon\\.ico).*)",
       "destination": "/index.html"
     }
   ],

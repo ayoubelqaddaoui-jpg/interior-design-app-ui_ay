@@ -15,7 +15,7 @@ const TONE: Record<RequestStatus, string> = { pending: 'bg-danger', processing: 
 
 function Badge({ s }: { s: RequestStatus }) {
   const { t } = useT();
-  return <View className={`self-start rounded-full px-2.5 py-0.5 ${TONE[s]}`}><Txt className={`text-[12px] font-bold ${s === 'processing' ? 'text-onprimary' : 'text-white'}`}>{t(`admin.enums.${s}`)}</Txt></View>;
+  return <View className={`self-start rounded-full px-2.5 py-1 ${TONE[s]}`}><Txt className={`text-[12px] font-bold ${s === 'processing' ? 'text-onprimary' : 'text-white'}`}>{t(`admin.enums.${s}`)}</Txt></View>;
 }
 
 function Choices({ r }: { r: RenderRequest }) {
@@ -30,7 +30,7 @@ function Choices({ r }: { r: RenderRequest }) {
     d.mode, d.paletteId && L(s.palettes.find((x) => x.id === d.paletteId)?.title),
     d.modelId && s.models.find((x) => x.id === d.modelId)?.name,
   ].filter(Boolean) as string[];
-  return <Txt className="text-muted text-[13px]" aria-label={t('admin.f.choices')}>{parts.join(' · ') || '—'}</Txt>;
+  return <Txt className="text-muted text-[13px] leading-[21px]" aria-label={t('admin.f.choices')}>{parts.join(' · ') || '—'}</Txt>;
 }
 
 function Detail({ id, onClose }: { id: string | null; onClose: () => void }) {
@@ -80,7 +80,7 @@ export default function Requests() {
   return (
     <AdminPage title={t('admin.req.title')}>
       <Card className="p-4 mb-4 flex-row items-center gap-3">
-        <View className="flex-1"><Txt className="font-bold text-[14px]">{t('admin.req.autoSend')}</Txt><Txt className="text-muted text-[12px]">{t('admin.req.autoSendNote')}</Txt></View>
+        <View className="flex-1"><Txt className="font-bold text-[14px]">{t('admin.req.autoSend')}</Txt><Txt className="text-muted text-[12px] leading-[20px] mt-2">{t('admin.req.autoSendNote')}</Txt></View>
         <Toggle testID="req-auto" label={t('admin.req.autoSend')} value={auto} onValueChange={(v) => s.patchDoc('settings', { autoSendWhatsApp: v })} />
       </Card>
       <View className="flex-row flex-wrap gap-2 mb-4">
@@ -109,9 +109,11 @@ export default function Requests() {
                 <View style={{ flex: 0.9 }}><Badge s={r.status} /></View>
                 <View style={{ width: 90 }} className="items-end"><Icon name="chevron-right" flip /></View>
               </>) : (
-                <View className="flex-1 gap-0.5">
-                  <View className="flex-row items-center justify-between"><Txt className="font-bold flex-1" numberOfLines={1}>{r.name}</Txt><Badge s={r.status} /></View>
-                  <Txt className="text-muted text-[12px]">{r.whatsapp} · {new Date(r.createdAt).toLocaleDateString()}</Txt>
+                <View className="flex-1 gap-2" style={{ minWidth: 0 }}>
+                  <Txt className="font-bold text-[15px] leading-[23px]">{r.name}</Txt>
+                  <Txt className="text-muted text-[13px] leading-[20px]" style={{ writingDirection: 'ltr', textAlign: 'left' }}>{r.whatsapp}</Txt>
+                  <View className="flex-row flex-wrap items-center gap-3"><Badge s={r.status} /><Txt className="text-muted text-[12px] leading-[18px]">{new Date(r.createdAt).toLocaleDateString()}</Txt></View>
+                  <Choices r={r} />
                 </View>
               )}
             </Pressable>

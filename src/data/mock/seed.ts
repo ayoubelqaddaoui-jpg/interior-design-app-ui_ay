@@ -98,6 +98,16 @@ export const seedPalettes = (): T.Palette[] =>
     { id: 'pal_earth', isSurprise: false, colors: ['#B5651D', '#D98E4A', '#8C4A2F', '#5B6B3A'], title: L('ألوان الأرض الدافئة', 'ألوان ترابية دافئة', 'Tons terre chauds') },
     { id: 'pal_blue', isSurprise: false, colors: ['#9DB7D5', '#5F86B0', '#2F4A6D', '#E8EEF5'], title: L('أزرق هادئ', 'أزرق هادئ', 'Bleus apaisants') },
     { id: 'pal_pastel', isSurprise: false, colors: ['#F7D6E0', '#F2B5D4', '#B8E0D2', '#EAD7F7'], title: L('باستيل ناعم', 'ألوان باستيل', 'Pastels doux') },
+    { id: 'pal_linen', isSurprise: false, colors: ['#F7F3EB', '#DED1BD', '#B9A48A', '#66594B'], title: L('كتان طبيعي', 'كتان طبيعي', 'Lin naturel') },
+    { id: 'pal_sage', isSurprise: false, colors: ['#EFF1E7', '#C4CEB5', '#8B9E7D', '#414E3C'], title: L('مريمية وزيتون', 'المريمية والزيتون', 'Sauge & olive') },
+    { id: 'pal_terracotta', isSurprise: false, colors: ['#F4E6D8', '#D8A48F', '#B85F44', '#6D3B2E'], title: L('طين وزليج', 'الطين الدافئ', 'Terre cuite') },
+    { id: 'pal_coastal', isSurprise: false, colors: ['#F6F4EE', '#D3E3E6', '#7DA6B2', '#304F61'], title: L('نسيم البحر', 'نسيم البحر', 'Brise marine') },
+    { id: 'pal_mocha', isSurprise: false, colors: ['#F1E8DC', '#CCB59F', '#99755F', '#4D342A'], title: L('موكا وكريمة', 'الموكا والكريمة', 'Moka & crème') },
+    { id: 'pal_burgundy', isSurprise: false, colors: ['#F1E6DD', '#CEB4A2', '#8C4053', '#442333'], title: L('عنابي فاخر', 'عنابي فاخر', 'Bordeaux raffiné') },
+    { id: 'pal_indigo', isSurprise: false, colors: ['#F0EBDD', '#C3B69A', '#626F9A', '#263455'], title: L('نيلي ونحاس', 'النيلي والنحاس', 'Indigo & laiton') },
+    { id: 'pal_desert', isSurprise: false, colors: ['#F5E9D5', '#D5B58C', '#BC8261', '#726F52'], title: L('رمل الصحراء', 'رمال الصحراء', 'Sable du désert') },
+    { id: 'pal_japandi', isSurprise: false, colors: ['#F2EEE6', '#C7C4B6', '#8A8D81', '#383C37'], title: L('جاباندي هادئ', 'جاباندي هادئ', 'Japandi serein') },
+    { id: 'pal_rose', isSurprise: false, colors: ['#F5ECE9', '#D8B7B3', '#A6787B', '#5B464D'], title: L('وردي غباري', 'وردي ناعم', 'Rose poudré') },
     { id: 'pal_green', isSurprise: false, colors: ['#2E4A3A', '#5B7F5C', '#A8C3A0', '#F1EFE3'], title: L('أخضر الغابة', 'أخضر الغابة', 'Vert forêt') },
   ]);
 
@@ -189,4 +199,4 @@ export const defaultAssistant = (): T.AssistantConfig => ({
   whatsappNumber: '+212600000000',
   welcome: L('مرحبا! أنا مساعد ديال التصميم الداخلي، كيفاش نقدر نعاونك؟', 'مرحبًا! كيف يمكنني مساعدتك في تصميم منزلك؟', 'Bonjour ! Comment puis-je vous aider pour votre déco ?'),
 });
-export const defaultSettings = (): T.AppSettings => ({ defaultFreeCredits: 1, autoSendWhatsApp: false, homeShowAll: true, userNavStyle: 'floating', adminNavMode: 'drawer' });
+export const defaultSettings = (): T.AppSettings => ({ defaultFreeCredits: 1, autoSendWhatsApp: false, homeShowAll: true, homeTabsVisible: true, userNavStyle: 'floating', adminNavMode: 'drawer', bulkPanels: ['tabs', 'tools', 'sections', 'categories', 'inspirations', 'styles', 'roomTypes', 'palettes', 'models'] });
