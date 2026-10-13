@@ -8,6 +8,7 @@ import { Sheet } from '@/components/ui/Sheet';
 import { Txt } from '@/components/ui/Txt';
 import { ADMIN_NAV } from '@/lib/adminNav';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useSearchInset } from '@/hooks/useSearchInset';
 import { useBp } from '@/hooks/useBp';
 import { useShallow } from 'zustand/react/shallow';
 import { requestLeave, router } from '@/hooks/useLeaveGuard';
@@ -31,10 +32,11 @@ function SearchControl({ admin }: { admin: boolean }) {
   const { rtl, t } = useT();
   const insets = useSafeAreaInsets();
   const { desktop } = useBp();
+  const obstruction = useSearchInset();
   return <>
     <Pressable testID="global-search-open" accessibilityRole="button" accessibilityLabel={t('common.search')} onPress={() => setOpen(true)}
       className="w-12 h-12 rounded-full bg-primary items-center justify-center border border-line"
-      style={{ position: Platform.OS === 'web' ? 'fixed' as any : 'absolute', bottom: Math.max(insets.bottom, 12) + (!admin && !desktop ? 76 : 12), ...(rtl ? { left: Math.max(insets.left, 16) } : { right: Math.max(insets.right, 16) }), zIndex: 45, elevation: 8, shadowColor: '#000', shadowOpacity: 0.15, shadowRadius: 8 }}>
+      style={{ position: Platform.OS === 'web' ? 'fixed' as any : 'absolute', bottom: Math.max(insets.bottom, 12) + (admin ? obstruction + 12 : !desktop ? 76 : 12), ...(rtl ? { left: Math.max(insets.left, 16) } : { right: Math.max(insets.right, 16) }), zIndex: 45, elevation: 8, shadowColor: '#000', shadowOpacity: 0.15, shadowRadius: 8 }}>
       <Icon name="magnify" tone="onprimary" />
     </Pressable>
     {open ? <SearchDialog admin={admin} onClose={() => setOpen(false)} /> : null}

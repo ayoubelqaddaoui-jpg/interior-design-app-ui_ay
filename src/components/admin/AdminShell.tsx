@@ -11,6 +11,7 @@ import { useT } from '@/i18n';
 import { useLocal } from '@/store/useLocal';
 import { useStore } from '@/store/useStore';
 import { RememberScroll, SearchTarget, useViewState } from '@/hooks/useViewState';
+import { useSearchObstacle } from '@/hooks/useSearchInset';
 import { useDraftDoc } from '@/hooks/useDraftDoc';
 import type { AdminNavMode } from '@/data/types';
 
@@ -51,10 +52,11 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
   useBackCheckpoint(open, () => setOpen(false), 1);
   useNativeOverlayBack(open, () => setOpen(false));
   const settingsDraft = useDraftDoc('settings');
+  const measureDraft = useSearchObstacle(settingsDraft.dirty);
 
   const go = (href: string) => router.push(href as Href);
   const logout = () => requestLeave(() => { useLocal.getState().set({ adminSession: false }); });
-  const draftBar = settingsDraft.dirty ? <View testID="admin-draft-bar" className="bg-soft border-t border-line p-2 flex-row items-center gap-2"><Txt className="flex-1 text-[12px] font-semibold">{t('improve.previewLabel')}</Txt><Button size="sm" variant="soft" title={t('improve.discard')} onPress={settingsDraft.discard} /><Button testID="admin-draft-submit" size="sm" title={t('improve.submit')} onPress={settingsDraft.save} /></View> : null;
+  const draftBar = settingsDraft.dirty ? <View onLayout={measureDraft} testID="admin-draft-bar" className="bg-soft border-t border-line p-2 flex-row items-center gap-2"><Txt className="flex-1 text-[12px] font-semibold">{t('improve.previewLabel')}</Txt><Button size="sm" variant="soft" title={t('improve.discard')} onPress={settingsDraft.discard} /><Button testID="admin-draft-submit" size="sm" title={t('improve.submit')} onPress={settingsDraft.save} /></View> : null;
   const nextMode = () => settingsDraft.patch( { adminNavMode: MODES[(MODES.indexOf(mode) + 1) % MODES.length] });
   const label = (k: string) => t(`admin.nav.${k}`);
 
@@ -236,6 +238,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
 /** Standard admin page: title row + scrollable, width-limited body. */
 export function AdminPage({ title, right, children, max = 1100, floating }: { title: string; right?: React.ReactNode; children: React.ReactNode; max?: number; floating?: React.ReactNode }) {
   const { tablet } = useBp();
+  const measureFloating = useSearchObstacle(!!floating, 20);
   const router = useRouter();
   const { t } = useT();
   return (
@@ -248,6 +251,6 @@ export function AdminPage({ title, right, children, max = 1100, floating }: { ti
         </View>
         {children}
       </View>
-    </RememberScroll>{floating ? <View style={{ position: 'absolute', bottom: 20, left: 12, right: 12, maxWidth: 700, alignSelf: 'center', marginHorizontal: 'auto', zIndex: 10 } as any}>{floating}</View> : null}</View>
+    </RememberScroll>{floating ? <View onLayout={measureFloating} style={{ position: 'absolute', bottom: 20, left: 12, right: 12, maxWidth: 700, alignSelf: 'center', marginHorizontal: 'auto', zIndex: 10 } as any}>{floating}</View> : null}</View>
   );
 }
