@@ -147,6 +147,11 @@ export interface AssistantConfig {
 export type UserNavStyle = 'classic' | 'floating' | 'minimal';
 export type AdminNavMode = 'rail' | 'drawer' | 'top';
 export interface AppSettings {
+  appSearchEnabled?: boolean;
+  adminSearchEnabled?: boolean;
+  exitConfirmationEnabled?: boolean;
+  exitTitle?: LText;
+  exitMessage?: LText;
   defaultFreeCredits: number;
   autoSendWhatsApp: boolean;
   /** Legacy preference, retained for persisted settings compatibility. */

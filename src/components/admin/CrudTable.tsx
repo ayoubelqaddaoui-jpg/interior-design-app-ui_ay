@@ -33,7 +33,7 @@ export function CrudTable<T extends { id: string; visible?: boolean }>({ rows, c
   if (!rows.length) return <EmptyState icon="database-off-outline" title={t('admin.crud.noItems')} />;
   const checkbox = (r: T) => onSelect ? <Pressable testID={`select-${r.id}`} accessibilityRole="checkbox" aria-checked={selected?.includes(r.id) ?? false} accessibilityState={{ checked: selected?.includes(r.id) ?? false }} accessibilityLabel={t('common.select')} onPress={(event) => { event.stopPropagation(); onSelect(r.id); }} className="w-10 h-10 items-center justify-center"><Icon name={selected?.includes(r.id) ? 'checkbox-marked' : 'checkbox-blank-outline'} size={22} tone={selected?.includes(r.id) ? 'primary' : 'muted'} /></Pressable> : null;
   const actions = (r: T, i: number) => (
-    <View className="flex-row flex-wrap items-center gap-1">
+    <View className="flex-row items-center gap-1" style={{ flexShrink: 0 }}>
       {onMove ? <>
         <Pressable accessibilityLabel={t('admin.crud.up')} disabled={i === 0} onPress={(event) => { event.stopPropagation(); onMove(r, -1); }} className={`w-8 h-8 items-center justify-center ${i === 0 ? 'opacity-25' : ''}`}><Icon name="arrow-up" size={18} /></Pressable>
         <Pressable accessibilityLabel={t('admin.crud.down')} disabled={i === rows.length - 1} onPress={(event) => { event.stopPropagation(); onMove(r, 1); }} className={`w-8 h-8 items-center justify-center ${i === rows.length - 1 ? 'opacity-25' : ''}`}><Icon name="arrow-down" size={18} /></Pressable>
@@ -61,7 +61,7 @@ export function CrudTable<T extends { id: string; visible?: boolean }>({ rows, c
         <View className="flex-row items-center px-4 h-10 bg-surface2">
           {onSelect ? <View style={{ width: 40 }} /> : null}
           {cols.map((c, i) => <Txt key={i} className="text-muted text-[12px] font-bold uppercase" style={{ flex: c.flex ?? 1, minWidth: 0 }}>{c.label}</Txt>)}
-          <View style={{ width: onEdit || onDelete || onToggle || onMove ? 176 : 0 }} />
+          <View style={{ width: onEdit || onDelete || onToggle || onMove ? 192 : 0 }} />
         </View>
       ) : null}
       {visibleRows.map((r, i) => (
@@ -70,7 +70,7 @@ export function CrudTable<T extends { id: string; visible?: boolean }>({ rows, c
             <View className="flex-row items-center">
               {checkbox(r)}
               {cols.map((c, j) => <View key={j} style={{ flex: c.flex ?? 1, minWidth: 0 }} className="pe-3">{c.render(r)}</View>)}
-              <View style={{ width: onEdit || onDelete || onToggle || onMove ? 176 : 0 }} className="items-end">{actions(r, currentPage * pageSize + i)}</View>
+              <View style={{ width: onEdit || onDelete || onToggle || onMove ? 192 : 0 }} className="items-end">{actions(r, currentPage * pageSize + i)}</View>
             </View>
           ) : (
             <View>

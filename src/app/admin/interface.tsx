@@ -9,6 +9,9 @@ import { FontSelector } from '@/components/admin/FontSelector';
 import { ExhibitionLayouts } from '@/components/admin/ExhibitionLayouts';
 import { toast } from '@/store/useToast';
 import { ARABIC_FONTS, FRENCH_FONTS } from '@/components/ui/Txt';
+import { Field } from '@/components/admin/FormModal';
+import { useStore } from '@/store/useStore';
+import { useL } from '@/i18n';
 import { ENTITIES } from '@/admin/entities';
 import type { AdminNavMode, UserNavStyle } from '@/data/types';
 
@@ -31,11 +34,21 @@ function Option({ id, active, title, desc, testID, onPress, children }: { id: st
 
 export default function InterfaceAdmin() {
   const { t } = useT();
+  const L = useL();
+  const store = useStore();
   const { draft: settings, patch: set, save, discard, dirty } = useDraftDoc('settings');
   const wrap = { flexDirection: 'row' as const, flexWrap: 'wrap' as const, gap: 12 };
   return (
     <AdminPage title={t('admin.iface.title')} right={<Button testID="interface-submit" size="sm" title={t('improve.submit')} disabled={!dirty} onPress={async () => { if (await save()) toast(t('admin.crud.saved')); }} />}>
       <Txt className="text-muted text-[12px] mb-3">{t('improve.previewNote')}</Txt>
+      <Card className="p-3 mb-3">
+        {(['appSearchEnabled', 'adminSearchEnabled', 'exitConfirmationEnabled'] as const).map((key) => <View key={key} className="flex-row items-center justify-between py-2 gap-3">
+          <Txt className="flex-1 font-semibold">{t(`improve.${key === 'appSearchEnabled' ? 'appSearch' : key === 'adminSearchEnabled' ? 'adminSearch' : 'exitEnabled'}`)}</Txt>
+          <Toggle testID={`setting-${key}`} label={t(`improve.${key === 'appSearchEnabled' ? 'appSearch' : key === 'adminSearchEnabled' ? 'adminSearch' : 'exitEnabled'}`)} value={settings[key] !== false} onValueChange={(value) => set({ [key]: value })} />
+        </View>)}
+        <Txt className="font-bold text-[17px] my-3">{t('improve.exitSettings')}</Txt>
+        {(['exitTitle', 'exitMessage'] as const).map((key) => <Field key={key} f={{ key, kind: 'ltext', label: t(`improve.${key}`), multiline: key === 'exitMessage' }} value={settings[key]} ctx={{ s: store, L, t }} onChange={(value) => set({ [key]: value })} />)}
+      </Card>
       <Card className="p-3 mb-3">
         <Txt className="font-extrabold text-[17px]">{t('admin.iface.userNav')}</Txt>
         <Txt className="text-muted text-[13px] mb-4">{t('admin.iface.userNavDesc')}</Txt>
