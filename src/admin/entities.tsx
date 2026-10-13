@@ -1,6 +1,8 @@
 import React from 'react';
 import { View } from 'react-native';
-import { MediaView, Icon, Txt } from '@/components/ui';
+import { MediaView } from '@/components/ui/MediaView';
+import { Icon } from '@/components/ui/Icon';
+import { Txt } from '@/components/ui/Txt';
 import type { FieldDef, Ctx, Opt } from '@/components/admin/FormModal';
 import type { Col } from '@/components/admin/CrudTable';
 import type { CollMap, CollName, LText } from '@/data/types';

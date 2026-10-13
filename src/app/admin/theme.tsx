@@ -1,6 +1,9 @@
 import React, { useMemo } from 'react';
 import { Pressable, View } from 'react-native';
-import { Button, Card, Icon, Txt } from '@/components/ui';
+import { Button } from '@/components/ui/Button';
+import { Card } from '@/components/ui/Card';
+import { Icon } from '@/components/ui/Icon';
+import { Txt } from '@/components/ui/Txt';
 import { AdminPage } from '@/components/admin/AdminShell';
 import { ColorPicker } from '@/components/admin/ColorPicker';
 import { useBp } from '@/hooks/useBp';

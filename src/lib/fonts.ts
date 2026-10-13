@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-require-imports -- Static Metro font assets. */
 import { useEffect, useSyncExternalStore } from 'react';
 import { Platform } from 'react-native';
 import * as Font from 'expo-font';

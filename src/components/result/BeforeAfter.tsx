@@ -3,7 +3,8 @@ import { View, StyleSheet } from 'react-native';
 import { Image } from 'expo-image';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, { Easing, runOnJS, useAnimatedStyle, useSharedValue, withDelay, withSequence, withTiming, interpolate } from 'react-native-reanimated';
-import { Icon, Txt } from '@/components/ui';
+import { Icon } from '@/components/ui/Icon';
+import { Txt } from '@/components/ui/Txt';
 import { useT } from '@/i18n';
 
 /**

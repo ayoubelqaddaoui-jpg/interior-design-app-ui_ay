@@ -1,6 +1,10 @@
 import React from 'react';
 import { Pressable, View } from 'react-native';
-import { Button, Card, Icon, Toggle, Txt } from '@/components/ui';
+import { Button } from '@/components/ui/Button';
+import { Card } from '@/components/ui/Card';
+import { Icon } from '@/components/ui/Icon';
+import { Toggle } from '@/components/ui/Toggle';
+import { Txt } from '@/components/ui/Txt';
 import { AdminPage } from '@/components/admin/AdminShell';
 import { NavPreview } from '@/components/admin/NavPreview';
 import { useL, useT } from '@/i18n';

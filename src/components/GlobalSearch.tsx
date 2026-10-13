@@ -1,7 +1,11 @@
 import React, { useDeferredValue, useMemo, useState } from 'react';
 import { Platform, Pressable, View } from 'react-native';
 import { Href, usePathname } from 'expo-router';
-import { Button, Icon, Input, Sheet, Txt } from '@/components/ui';
+import { Button } from '@/components/ui/Button';
+import { Icon } from '@/components/ui/Icon';
+import { Input } from '@/components/ui/Field';
+import { Sheet } from '@/components/ui/Sheet';
+import { Txt } from '@/components/ui/Txt';
 import { ADMIN_NAV } from '@/lib/adminNav';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useBp } from '@/hooks/useBp';

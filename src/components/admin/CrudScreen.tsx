@@ -1,6 +1,11 @@
 import React, { useCallback, useMemo, useState } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
-import { Button, Card, ConfirmSheet, Icon, Input, Txt } from '@/components/ui';
+import { Button } from '@/components/ui/Button';
+import { Card } from '@/components/ui/Card';
+import { ConfirmSheet } from '@/components/ui/Sheet';
+import { Icon } from '@/components/ui/Icon';
+import { Input } from '@/components/ui/Field';
+import { Txt } from '@/components/ui/Txt';
 import { CrudTable } from './CrudTable';
 import { BatchFormModal, FormModal, validate } from './FormModal';
 import { AdminPage } from './AdminShell';

@@ -4,7 +4,9 @@ import { usePathname, router as expoRouter } from 'expo-router';
 import { useStore } from '@/store/useStore';
 import { useL, useT } from '@/i18n';
 import { registerAppExit, useBackCheckpoint } from '@/hooks/useLeaveGuard';
-import { Button, Sheet, Txt } from '@/components/ui';
+import { Button } from '@/components/ui/Button';
+import { Sheet } from '@/components/ui/Sheet';
+import { Txt } from '@/components/ui/Txt';
 
 /** OS/tab close prompts cannot be customized. Only app-controlled exits use this sheet. */
 export function AppExitHost() {
@@ -12,16 +14,17 @@ export function AppExitHost() {
   const admin = path === '/admin' || path.startsWith('/admin/');
   const settings = useStore(s => s.doc.settings);
   const enabled = !admin && settings.exitConfirmationEnabled !== false;
+  if (!enabled) return null;
+  return <ExitBoundary key={path} path={path} />;
+}
+function ExitBoundary({ path }: { path: string }) {
+  const settings = useStore(s => s.doc.settings);
+  const enabled = true;
   const [pending, setPending] = useState<(() => void) | null>(null);
   const [leaving, setLeaving] = useState(false);
   const allowed = useRef(false);
   const { t } = useT();
   const L = useL();
-  useEffect(() => {
-    allowed.current = false;
-    setLeaving(false);
-    setPending(null);
-  }, [path, enabled]);
   useEffect(() => {
     if (!enabled) return;
     return registerAppExit(action => setPending(() => action));

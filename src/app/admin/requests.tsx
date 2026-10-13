@@ -1,7 +1,14 @@
 import { SearchTarget, useViewState } from '@/hooks/useViewState';
 import React from 'react';
 import { Linking, Pressable, View } from 'react-native';
-import { Button, Card, EmptyState, Icon, MediaView, Sheet, Toggle, Txt } from '@/components/ui';
+import { Button } from '@/components/ui/Button';
+import { Card } from '@/components/ui/Card';
+import { EmptyState } from '@/components/ui/EmptyState';
+import { Icon } from '@/components/ui/Icon';
+import { MediaView } from '@/components/ui/MediaView';
+import { Sheet } from '@/components/ui/Sheet';
+import { Toggle } from '@/components/ui/Toggle';
+import { Txt } from '@/components/ui/Txt';
 import { AdminPage } from '@/components/admin/AdminShell';
 import { ImageField } from '@/components/admin/ImageField';
 import { useBp } from '@/hooks/useBp';

@@ -1,7 +1,11 @@
 import React, { useState } from 'react';
 import { View } from 'react-native';
 import { useRouter } from '@/hooks/useLeaveGuard';
-import { Button, Card, Icon, Input, Txt } from '@/components/ui';
+import { Button } from '@/components/ui/Button';
+import { Card } from '@/components/ui/Card';
+import { Icon } from '@/components/ui/Icon';
+import { Input } from '@/components/ui/Field';
+import { Txt } from '@/components/ui/Txt';
 import { services } from '@/data/repositories';
 import { useT } from '@/i18n';
 import { useLocal } from '@/store/useLocal';

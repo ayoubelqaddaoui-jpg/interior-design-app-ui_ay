@@ -1,6 +1,10 @@
 import React from 'react';
 import { Pressable, View } from 'react-native';
-import { Button, Card, Icon, Input, Txt } from '@/components/ui';
+import { Button } from '@/components/ui/Button';
+import { Card } from '@/components/ui/Card';
+import { Icon } from '@/components/ui/Icon';
+import { Input } from '@/components/ui/Field';
+import { Txt } from '@/components/ui/Txt';
 import { AdminPage } from '@/components/admin/AdminShell';
 import { Field, type Ctx } from '@/components/admin/FormModal';
 import { useL, useT } from '@/i18n';

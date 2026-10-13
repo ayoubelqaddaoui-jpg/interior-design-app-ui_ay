@@ -4,7 +4,9 @@ import { Image } from 'expo-image';
 import Animated, { useAnimatedStyle, withSpring } from 'react-native-reanimated';
 import { sorted, useStore } from '@/store/useStore';
 import { useL, useT } from '@/i18n';
-import { GridSelector, Icon, Txt } from '@/components/ui';
+import { GridSelector } from '@/components/ui/GridSelector';
+import { Icon } from '@/components/ui/Icon';
+import { Txt } from '@/components/ui/Txt';
 
 function Circle({ uri, on }: { uri: string; on: boolean }) {
   const a = useAnimatedStyle(() => ({ transform: [{ scale: withSpring(on ? 1.06 : 1, { damping: 12 }) }] }));

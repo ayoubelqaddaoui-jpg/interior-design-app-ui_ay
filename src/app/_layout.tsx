@@ -15,7 +15,7 @@ import { ThemeProvider } from '@/theme/ThemeProvider';
 import { UnsavedChangesHost } from '@/hooks/useLeaveGuard';
 import { AppExitHost } from '@/components/AppExitHost';
 import { GlobalSearch } from '@/components/GlobalSearch';
-import { ToastHost } from '@/components/ui';
+import { ToastHost } from '@/components/ui/Toast';
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
 

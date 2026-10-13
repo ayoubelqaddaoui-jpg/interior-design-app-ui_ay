@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { Pressable, View } from 'react-native';
-import { Icon, Sheet, Txt } from '@/components/ui';
+import { Icon } from '@/components/ui/Icon';
+import { Sheet } from '@/components/ui/Sheet';
+import { Txt } from '@/components/ui/Txt';
 import { ensureFont, useFontFamily } from '@/lib/fonts';
 import { useT } from '@/i18n';
 import { toast } from '@/store/useToast';

@@ -1,7 +1,10 @@
 import { useViewState } from '@/hooks/useViewState';
 import React, { useState } from 'react';
 import { Pressable, View } from 'react-native';
-import { Button, Card, Input, Txt } from '@/components/ui';
+import { Button } from '@/components/ui/Button';
+import { Card } from '@/components/ui/Card';
+import { Input } from '@/components/ui/Field';
+import { Txt } from '@/components/ui/Txt';
 import { AdminPage } from '@/components/admin/AdminShell';
 import { useT } from '@/i18n';
 import { useStore } from '@/store/useStore';

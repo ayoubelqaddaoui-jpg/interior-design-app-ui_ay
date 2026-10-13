@@ -1,6 +1,9 @@
 import React from 'react';
 import { Pressable, View } from 'react-native';
-import { Button, Input, MediaView, Txt } from '@/components/ui';
+import { Button } from '@/components/ui/Button';
+import { Input } from '@/components/ui/Field';
+import { MediaView } from '@/components/ui/MediaView';
+import { Txt } from '@/components/ui/Txt';
 import { useT } from '@/i18n';
 import { pickPhoto } from '@/lib/photo';
 

@@ -2,7 +2,9 @@ import React from 'react';
 import { Pressable, View } from 'react-native';
 import { sorted, useStore } from '@/store/useStore';
 import { useL, useT } from '@/i18n';
-import { GridSelector, Icon, Txt } from '@/components/ui';
+import { GridSelector } from '@/components/ui/GridSelector';
+import { Icon } from '@/components/ui/Icon';
+import { Txt } from '@/components/ui/Txt';
 import type { RenderMode } from '@/data/types';
 
 export function StepMode({ mode, paletteId, onMode, onPalette }: { mode?: RenderMode; paletteId?: string; onMode: (m: RenderMode) => void; onPalette: (id?: string) => void }) {

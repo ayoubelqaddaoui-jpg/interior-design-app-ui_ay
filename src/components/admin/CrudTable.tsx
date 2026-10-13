@@ -1,7 +1,12 @@
 import React, { useEffect, useState } from 'react';
 import { useLocalSearchParams } from 'expo-router';
 import { Pressable, View } from 'react-native';
-import { Button, Card, EmptyState, Icon, MediaView, Txt } from '@/components/ui';
+import { Button } from '@/components/ui/Button';
+import { Card } from '@/components/ui/Card';
+import { EmptyState } from '@/components/ui/EmptyState';
+import { Icon } from '@/components/ui/Icon';
+import { MediaView } from '@/components/ui/MediaView';
+import { Txt } from '@/components/ui/Txt';
 import { useBp } from '@/hooks/useBp';
 import { SearchTarget, useViewState } from '@/hooks/useViewState';
 import { useT } from '@/i18n';

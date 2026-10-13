@@ -1,6 +1,6 @@
 import React from 'react';
 import { Platform, TextInput, View } from 'react-native';
-import { Txt } from '@/components/ui';
+import { Txt } from '@/components/ui/Txt';
 import { useTheme } from '@/theme/ThemeProvider';
 
 const SWATCHES = ['#FBDD2D', '#F59E0B', '#EF4444', '#EC4899', '#8B5CF6', '#2563EB', '#0B1B4D', '#06B6D4', '#16A34A', '#111111', '#6B7280', '#FFFFFF'];

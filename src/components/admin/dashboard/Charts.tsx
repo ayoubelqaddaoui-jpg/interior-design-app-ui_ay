@@ -1,6 +1,6 @@
 import React from 'react';
 import { View } from 'react-native';
-import { Txt } from '@/components/ui';
+import { Txt } from '@/components/ui/Txt';
 import type { Bucket, Metric } from '@/lib/stats';
 
 /** Simple bar chart made of Views (no chart library needed, works on web + native). */

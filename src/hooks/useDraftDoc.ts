@@ -21,7 +21,7 @@ export function useDraftDoc<K extends DocName>(name: K) {
     try {
       await useStore.getState().patchDoc(name, useStore.getState().doc[name]);
       baselines.delete(name);
-      useStore.setState((s) => ({ doc: { ...s.doc } }));
+      useStore.setState((s) => ({ doc: { ...s.doc, [name]: { ...s.doc[name] } } }));
       return true;
     } catch { toast(String(i18n.t('improve.saveError'))); return false; }
   };

@@ -1,6 +1,6 @@
 import React from 'react';
 import { View } from 'react-native';
-import { Icon } from '@/components/ui';
+import { Icon } from '@/components/ui/Icon';
 
 const ICONS = ['home-variant', 'compass-outline', 'clock-outline', 'face-agent'];
 

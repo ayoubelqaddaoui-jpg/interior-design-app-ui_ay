@@ -3,7 +3,8 @@ import { View, StyleSheet } from 'react-native';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, { Easing, FadeInDown, FadeOutUp, useAnimatedStyle, useSharedValue, withDelay, withRepeat, withTiming } from 'react-native-reanimated';
-import { Icon, Txt } from '@/components/ui';
+import { Icon } from '@/components/ui/Icon';
+import { Txt } from '@/components/ui/Txt';
 import { tArr, useT } from '@/i18n';
 import { useTheme } from '@/theme/ThemeProvider';
 

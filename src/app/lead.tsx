@@ -8,7 +8,12 @@ import { useStore, useMe } from '@/store/useStore';
 import { useWizard } from '@/store/useWizard';
 import { ME } from '@/data/repositories';
 import { useT } from '@/i18n';
-import { Button, Icon, Input, PageHeader, Screen, Txt } from '@/components/ui';
+import { Button } from '@/components/ui/Button';
+import { Icon } from '@/components/ui/Icon';
+import { Input } from '@/components/ui/Field';
+import { PageHeader } from '@/components/ui/StepHeader';
+import { Screen } from '@/components/ui/Screen';
+import { Txt } from '@/components/ui/Txt';
 import { cleanPhone, validPhone } from '@/lib/share';
 
 /** First free render: ask for Name + WhatsApp. Creates a Render Request for the admin. */
