@@ -15,7 +15,7 @@ async function main() {
       localStorage.setItem('safety-test', '1');
       localStorage.setItem('dwira:v1:lang', JSON.stringify(lang));
       localStorage.setItem('dwira:v1:local', JSON.stringify({ adminSession: true }));
-      localStorage.setItem('dwira:v1:users', JSON.stringify([{ id: 'private-admin-record', name: 'PrivateSearchSentinel', whatsapp: '000000000', credits: 2, role: 'user', createdAt: Date.now() }]));
+      localStorage.setItem('dwira:v1:users', JSON.stringify([{ id: 'usr_admin', name: 'Admin', whatsapp: '', credits: 0, role: 'admin', createdAt: Date.now() }, { id: 'private-admin-record', name: 'PrivateSearchSentinel', whatsapp: '000000000', credits: 2, role: 'user', createdAt: Date.now() }]));
     }, lang);
     const go = async (path, id) => { await page.goto(`${base}${path}`); await page.getByTestId(id).first().waitFor(); };
     const search = async query => { await page.getByTestId('global-search-open').click(); await page.getByTestId('global-search-input').fill(query); };

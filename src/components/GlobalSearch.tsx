@@ -23,8 +23,9 @@ export function GlobalSearch() {
   const path = usePathname();
   const admin = path === '/admin' || path.startsWith('/admin/');
   const session = useLocal((s) => s.adminSession);
+  const isAdmin = useStore(s => s.users.some(user => user.role === 'admin'));
   const enabled = useStore((s) => admin ? s.doc.settings.adminSearchEnabled !== false : s.doc.settings.appSearchEnabled !== false);
-  if (!enabled || (admin && !session)) return null;
+  if (!enabled || (admin && (!session || !isAdmin))) return null;
   return <SearchControl key={admin ? 'admin' : 'app'} admin={admin} />;
 }
 function SearchControl({ admin }: { admin: boolean }) {
