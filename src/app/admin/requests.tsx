@@ -46,7 +46,7 @@ function Detail({ id, onClose }: { id: string | null; onClose: () => void }) {
   React.useEffect(() => { if (record.current !== id) { record.current = id; setFinal(r?.finalResult ?? ''); } }, [id, r?.finalResult, setFinal]);
   const dirty = !!r && final !== (r.finalResult ?? '');
   const saveDraft = async () => { if (r) await s.update('requests', r.id, { finalResult: final }); };
-  useLeaveGuard(dirty, saveDraft, () => { setFinal(r?.finalResult ?? ''); onClose(); });
+  useLeaveGuard(dirty, saveDraft, () => { setFinal(r?.finalResult ?? ''); onClose(); }, { before: { finalResult: r?.finalResult ?? '' }, after: { finalResult: final }, labels: { finalResult: t('admin.f.finalResult') } });
   const close = () => requestLeave(onClose);
   if (!r) return <Sheet visible={false} onClose={onClose}><View /></Sheet>;
   const set = async (status: RequestStatus, extra: Partial<RenderRequest> = {}) => {

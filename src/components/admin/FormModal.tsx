@@ -152,7 +152,7 @@ function FormDialog({ visible, title, fields, initial, onClose, onSubmit, onDraf
     try { await onSubmit(normalize(fields, v)); return true; } catch { toast(t('improve.saveError')); return false; } finally { setBusy(false); }
   };
   const dirty = visible && JSON.stringify(v) !== JSON.stringify(initial ?? {});
-  useLeaveGuard(dirty, submit, onClose);
+  useLeaveGuard(dirty, submit, onClose, { before: initial ?? {}, after: v, labels: Object.fromEntries(fields.map(f => [f.key, f.label])), secrets: fields.filter(f => f.kind === 'secret').map(f => f.key) });
   useEffect(() => { if (visible) onDraftChange?.(v); }, [v, visible, onDraftChange]);
   const close = () => { if (!busy) requestLeave(onClose); };
   return (
@@ -211,7 +211,8 @@ function BatchFormDialog({ mode, title, fields, initial, initialKeys = [], blank
   };
   const snapshot = JSON.stringify({ text, shared, drafts, keys });
   const [original] = useState(snapshot);
-  useLeaveGuard(!!mode && snapshot !== original, submit, onClose);
+  const [originalValues] = useState(() => ({ text, shared, drafts, keys }));
+  useLeaveGuard(!!mode && snapshot !== original, submit, onClose, { before: originalValues, after: { text, shared, drafts, keys }, labels: { text: t('improve.pasteText'), keys: t('improve.selectedFields'), ...Object.fromEntries(fields.flatMap(f => [[`shared.${f.key}`, f.label], [`drafts.0.${f.key}`, f.label]])) }, secrets: fields.filter(f => f.kind === 'secret').flatMap(f => [`shared.${f.key}`, ...drafts.map((_, i) => `drafts.${i}.${f.key}`)]) });
   const close = () => { if (!busy) requestLeave(onClose); };
   return <Sheet visible={!!mode} title={title} wide={mode === 'add'} onClose={close} footer={<View className="flex-row gap-3"><Button title={t('common.cancel')} variant="soft" onPress={close} disabled={busy} className="flex-1" /><Button testID="batch-save" title={pasted ? t('improve.createCount', { count: lines.length }) : t('common.save')} onPress={submit} loading={busy} disabled={mode === 'edit' && !keys.length || pasted && (!lines.length || lines.length > 50)} className="flex-1" /></View>}>
     {mode === 'edit' ? <>

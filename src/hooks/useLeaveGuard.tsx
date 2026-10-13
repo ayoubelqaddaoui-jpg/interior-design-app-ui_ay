@@ -6,10 +6,19 @@ import { create } from 'zustand';
 import { Button } from '@/components/ui/Button';
 import { Sheet } from '@/components/ui/Sheet';
 import { Txt } from '@/components/ui/Txt';
-import { useT } from '@/i18n';
+import i18n, { useT } from '@/i18n';
+import { changes, type Change } from '@/lib/changes';
 import { toast } from '@/store/useToast';
 
-type Guard = { save: () => Promise<boolean | void>; discard: () => void };
+type Guard = { save: () => Promise<boolean | void>; discard: () => void; changes?: () => Change[] };
+export type DraftDetails = { before: unknown; after: unknown; labels?: Record<string, string>; secrets?: string[] };
+let exitHandler: ((action: () => void) => void) | null = null;
+export function registerAppExit(handler: typeof exitHandler) { exitHandler = handler; return () => { if (exitHandler === handler) exitHandler = null; }; }
+export function requestAppExit(action: () => void) { if (exitHandler) exitHandler(action); else action(); }
+const exitAware = (href: unknown, action: () => void) => {
+  const value = typeof href === 'string' ? href : (href as { pathname?: string })?.pathname;
+  if (value?.startsWith('/admin') || /^(https?:|mailto:|tel:)/.test(value ?? '')) requestAppExit(action); else action();
+};
 const guards = new Map<symbol, Guard>();
 const dialog = create<{ pending: (() => void) | null }>(() => ({ pending: null }));
 let bypass = false;
@@ -37,14 +46,14 @@ function navigate(action: () => void) {
 }
 export const router = {
   ...expoRouter,
-  navigate: (...args: Parameters<typeof expoRouter.navigate>) => requestLeave(() => navigate(() => expoRouter.navigate(...args))),
-  push: (...args: Parameters<typeof expoRouter.push>) => requestLeave(() => navigate(() => expoRouter.push(...args))),
-  replace: (...args: Parameters<typeof expoRouter.replace>) => requestLeave(() => navigate(() => expoRouter.replace(...args))),
+  navigate: (...args: Parameters<typeof expoRouter.navigate>) => requestLeave(() => navigate(() => exitAware(args[0], () => expoRouter.navigate(...args)))),
+  push: (...args: Parameters<typeof expoRouter.push>) => requestLeave(() => navigate(() => exitAware(args[0], () => expoRouter.push(...args)))),
+  replace: (...args: Parameters<typeof expoRouter.replace>) => requestLeave(() => navigate(() => exitAware(args[0], () => expoRouter.replace(...args)))),
   back: () => {
     if (dialog.getState().pending) { dialog.setState({ pending: null }); return; }
     const overlay = topCheckpoint();
     if (overlay && overlay.priority > 0) { overlay.action(); return; }
-    requestLeave(() => { if (expoRouter.canGoBack()) expoRouter.back(); });
+    requestLeave(() => { if (expoRouter.canGoBack()) expoRouter.back(); else requestAppExit(() => { if (Platform.OS !== 'web') BackHandler.exitApp(); }); });
   },
   dismiss: (...args: Parameters<typeof expoRouter.dismiss>) => requestLeave(() => navigate(() => expoRouter.dismiss(...args))),
   dismissAll: () => requestLeave(() => navigate(() => expoRouter.dismissAll())),
@@ -58,15 +67,18 @@ export function useNativeOverlayBack(active: boolean, onBack: () => void) {
   usePreventRemove(active && focused && Platform.OS !== 'web', () => onBack());
 }
 
-export function useLeaveGuard(dirty: boolean, save: Guard['save'], discard: Guard['discard']) {
+export function useLeaveGuard(dirty: boolean, save: Guard['save'], discard: Guard['discard'], details?: DraftDetails) {
   const focused = useIsFocused();
   const navigation = useNavigation();
-  const ref = useRef({ save, discard });
-  useLayoutEffect(() => { ref.current = { save, discard }; });
+  const ref = useRef({ save, discard, details });
+  useLayoutEffect(() => { ref.current = { save, discard, details }; });
   useEffect(() => {
     if (!dirty || !focused) return;
     const id = Symbol('draft');
-    guards.set(id, { save: () => ref.current.save(), discard: () => ref.current.discard() });
+    guards.set(id, { save: () => ref.current.save(), discard: () => ref.current.discard(), changes: () => {
+      const value = ref.current.details;
+      return value ? changes(value.before, value.after).map(change => ({ ...change, label: value.labels?.[change.path] ?? value.labels?.[change.path.split('.')[0]], secret: value.secrets?.some(key => change.path === key || change.path.startsWith(`${key}.`)) })) : [];
+    } });
     return () => { guards.delete(id); };
   }, [dirty, focused]);
   usePreventRemove(dirty && focused && Platform.OS !== 'web', ({ data }) => {
@@ -151,8 +163,28 @@ export function UnsavedChangesHost() {
   if (!pending) return null;
   return <Sheet visible={!!pending} history={false} onClose={() => { if (!busy) dialog.setState({ pending: null }); }} title={t('improve.unsavedTitle')}>
     <Txt testID="unsaved-message" className="font-bold text-[17px] mb-4">{t('improve.unsaved')}</Txt>
+    <View testID="unsaved-differences" className="gap-3 mb-4">
+      {[...new Map([...guards.values()].flatMap(guard => guard.changes?.() ?? []).map(change => [JSON.stringify([change.path, change.before, change.after]), change])).values()].map((change, index) => {
+        const label = change.label ?? change.path.split('.').map(key => {
+          const settingKeys: Record<string, string> = { frenchFont: 'improve.frenchFont', arabicFont: 'improve.arabicFont', galleryLayout: 'improve.galleryLayout', appSearchEnabled: 'improve.appSearch', adminSearchEnabled: 'improve.adminSearch', exitConfirmationEnabled: 'improve.exitEnabled', userNavStyle: 'admin.iface.userNav', adminNavMode: 'admin.iface.adminNav', defaultFreeCredits: 'admin.credits.defaultCredits' };
+          const translation = settingKeys[key] ?? ['admin.f.', 'improve.', 'admin.nav.'].map(prefix => prefix + key).find(candidate => i18n.exists(candidate));
+          return translation ? t(translation) : key;
+        }).join(' · ');
+        const value = (input: unknown) => {
+          if (change.secret) return t('improve.protectedValue');
+          if (input == null || input === '') return t('improve.emptyValue');
+          if (typeof input === 'boolean') return t(input ? 'improve.yes' : 'improve.no');
+          return String(input);
+        };
+        return <View key={index} className="border border-line rounded-xl p-3 gap-1">
+          <Txt className="font-bold text-[13px]">{label}{change.label && change.path.includes('.') ? ` · ${change.path.split('.').slice(1).join(' · ')}` : ''}</Txt>
+          <Txt testID={`change-old-${index}`} className="text-muted text-[13px]">{t('improve.oldValue')}: {value(change.before)}</Txt>
+          <Txt testID={`change-new-${index}`} className="text-[13px]">{t('improve.newValue')}: {value(change.after)}</Txt>
+        </View>;
+      })}
+    </View>
     <View className="gap-2">
-      <Button testID="unsaved-save" title={t('common.save')} loading={busy} onPress={() => resolve(true)} />
+      <Button testID="unsaved-save" title={t('improve.saveChanges')} loading={busy} onPress={() => resolve(true)} />
       <Button testID="unsaved-discard" title={t('improve.discard')} variant="soft" disabled={busy} onPress={() => resolve(false)} />
       <Button testID="unsaved-cancel" title={t('common.cancel')} variant="ghost" disabled={busy} onPress={() => dialog.setState({ pending: null })} />
     </View>

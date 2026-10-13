@@ -31,7 +31,7 @@ export function useDraftDoc<K extends DocName>(name: K) {
     baselines.delete(name);
     if (baseline) useStore.setState((s) => ({ doc: { ...s.doc, [name]: baseline } }));
   };
-  useLeaveGuard(dirty, save, discard);
+  useLeaveGuard(dirty, save, discard, { before: saved, after: draft });
   useBackCheckpoint(dirty, () => router.back());
   return { draft, saved, set, patch, save, discard, dirty };
 }
@@ -74,7 +74,7 @@ export function useCollectionDraft<K extends CollName>(name: K) {
       useStore.setState({ [name]: saved } as any);
     }
   };
-  useLeaveGuard(dirty, save, discard);
+  useLeaveGuard(dirty, save, discard, { before: baseline, after: list });
   useBackCheckpoint(dirty, () => router.back());
   const forget = (ids: string[]) => {
     const saved = collectionBaselines.get(name);
