@@ -16,7 +16,7 @@ export function PushNavigationHost() {
       if (disposed) return;
       n.setNotificationHandler({ handleNotification: async () => ({ shouldShowBanner: true, shouldShowList: true, shouldPlaySound: true, shouldSetBadge: false }) });
       const handle = (response: import('expo-notifications').NotificationResponse) => {
-        const data = response.notification.request.content.data;
+        const data = response.notification.request.content.data || {};
         const phone = String(data.phone || '').replace(/[^\d+]/g, '').slice(0, 32);
         if (response.actionIdentifier === 'call' && /^\+?\d{6,20}$/.test(phone)) { void Linking.openURL(`tel:${phone}`); return; }
         if (typeof data.url === 'string' && /^\/admin\/requests(?:\?|$)/.test(data.url)) router.push(data.url as Href);

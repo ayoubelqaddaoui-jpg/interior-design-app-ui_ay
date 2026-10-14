@@ -26,9 +26,13 @@ export async function api<T>(path: string, options: { method?: string; body?: un
     if (token) headers.Authorization = `Bearer ${token}`;
     headers['X-Dwira-Native'] = '1';
   }
-  const response = await fetch(`${BASE}${path}`, { method: options.method || 'GET', headers, credentials: 'include', body: options.body == null ? undefined : JSON.stringify(options.body), signal: AbortSignal.timeout(15000) });
-  if (!response.ok) throw new BackendError(response.status);
-  return response.json();
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 15000);
+  try {
+    const response = await fetch(`${BASE}${path}`, { method: options.method || 'GET', headers, credentials: 'include', body: options.body == null ? undefined : JSON.stringify(options.body), signal: controller.signal });
+    if (!response.ok) throw new BackendError(response.status);
+    return await response.json();
+  } finally { clearTimeout(timeout); }
 }
 export async function backendLogin(email: string, password: string) {
   try {
