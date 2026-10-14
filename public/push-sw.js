@@ -14,7 +14,7 @@ self.addEventListener('push', event => {
   const phone = String(payload.phone || '').replace(/[^\d+]/g, '').replace(/(?!^)\+/g, '').slice(0, 32);
   const actions = Array.isArray(payload.actions) ? payload.actions.filter(action => ['open', 'call'].includes(action.action) && typeof action.title === 'string').slice(0, 2).map(action => ({ action: action.action, title: action.title.slice(0, 40) })) : [];
   event.waitUntil(self.registration.showNotification(payload.title.slice(0, 120), {
-    body: payload.body.slice(0, 220), icon: '/assets/notification-icon.png',
+    body: payload.body.slice(0, 220), icon: '/favicon.ico',
     tag: `demand-${String(payload.requestId).slice(0, 100)}`, lang: payload.lang || 'en', dir: payload.dir === 'rtl' ? 'rtl' : 'ltr',
     actions, data: { url: safeUrl(payload.url), phone },
   }));

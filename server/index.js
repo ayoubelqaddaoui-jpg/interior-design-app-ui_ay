@@ -160,7 +160,7 @@ function createBackend({ env = process.env, store = createStore(path.resolve(env
         throw fail(404, 'API route not found');
       }
       // Optional same-origin hosting; no offline cache of admin data or personal information.
-      const root = path.resolve(__dirname, '..', 'dist');
+      const root = path.resolve(env.STATIC_DIR || path.join(__dirname, '..', 'dist'));
       const pathname = decodeURIComponent(url.pathname);
       let file = path.resolve(root, '.' + pathname);
       if (!file.startsWith(root + path.sep) && file !== root) throw fail(403, 'Forbidden');
