@@ -9,10 +9,11 @@ const crypto = require('node:crypto');
 const { chromium } = require('@playwright/test');
 const base = 'http://localhost:8080';
 async function main() {
-  const browser = await chromium.launch();
+  const browser = await chromium.launch({ channel: 'chromium' });
   const errors = [];
   for (const [lang, viewport] of [['fr', { width: 1440, height: 1000 }], ['ar', { width: 390, height: 844 }], ['dar', { width: 390, height: 844 }]]) {
-    const context = await browser.newContext({ viewport, permissions: ['notifications'] });
+    const context = await browser.newContext({ viewport });
+    await context.grantPermissions(['notifications'], { origin: base });
     const ec = crypto.createECDH('prime256v1'); ec.generateKeys();
     const fake = { endpoint: `https://fcm.googleapis.com/fcm/send/test-${crypto.randomUUID()}`, keys: { p256dh: ec.getPublicKey().toString('base64url'), auth: crypto.randomBytes(16).toString('base64url') } };
     await context.addInitScript(({ lang, fake }) => {
@@ -48,9 +49,9 @@ async function main() {
     await (await chooser).setFiles('assets/favicon.png');
     await client.getByTestId('remove-photo').waitFor();
     await client.getByTestId('wizard-continue').click();
-    await client.locator('[data-testid^="room-room_"]').first().click();
+    await client.locator('[data-testid^="room-"]').first().click();
     await client.getByTestId('wizard-continue').click();
-    await client.locator('[data-testid^="style-style_"]').first().click();
+    await client.locator('[data-testid^="style-"]').first().click();
     await client.getByTestId('wizard-continue').click();
     await client.waitForTimeout(300);
     if (await client.getByTestId('wizard-continue').count()) await client.getByTestId('wizard-continue').click();
