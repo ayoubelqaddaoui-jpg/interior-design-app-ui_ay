@@ -14,6 +14,7 @@ import { initLang, useLang, isRtl } from '@/i18n';
 import { ThemeProvider } from '@/theme/ThemeProvider';
 import { UnsavedChangesHost } from '@/hooks/useLeaveGuard';
 import { AppExitHost } from '@/components/AppExitHost';
+import { PushNavigationHost } from '@/components/PushNavigationHost';
 import { GlobalSearch } from '@/components/GlobalSearch';
 import { ToastHost } from '@/components/ui/Toast';
 
@@ -55,6 +56,7 @@ export default function RootLayout() {
               </Stack>
               <GlobalSearch />
               <AppExitHost />
+              <PushNavigationHost />
               </>
             ) : (
               <View className="flex-1 items-center justify-center bg-bg"><ActivityIndicator /></View>

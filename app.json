@@ -59,7 +59,13 @@
           "imageWidth": 140
         }
       ],
-      "expo-secure-store"
+      "expo-secure-store",
+      [
+        "expo-notifications",
+        {
+          "defaultChannel": "demands"
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": false

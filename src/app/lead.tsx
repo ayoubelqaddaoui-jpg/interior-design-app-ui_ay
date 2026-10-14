@@ -4,6 +4,8 @@ import { View } from 'react-native';
 import { Redirect } from 'expo-router';
 import { router } from '@/hooks/useLeaveGuard';
 import Animated, { FadeInDown, ZoomIn } from 'react-native-reanimated';
+import { toast } from '@/store/useToast';
+import { uid } from '@/lib/uid';
 import { useStore, useMe } from '@/store/useStore';
 import { useWizard } from '@/store/useWizard';
 import { ME } from '@/data/repositories';
@@ -21,6 +23,7 @@ export default function Lead() {
   const { t } = useT();
   const me = useMe();
   const w = useWizard();
+  const [requestId] = useViewState('requestId', () => uid('req'));
   const [name, setName] = useViewState('name', me?.name ?? '');
   const [phone, setPhone] = useViewState('phone', me?.whatsapp ?? '');
   const [err, setErr] = useState<{ n?: string; p?: string }>({});
@@ -37,11 +40,13 @@ export default function Lead() {
     setBusy(true);
     const st = useStore.getState();
     const whatsapp = cleanPhone(phone);
-    await st.update('users', ME, { name: name.trim(), whatsapp, leadDone: true });
-    await st.create('requests', { userId: ME, name: name.trim(), whatsapp, photoUri: w.photoUri, draft: w.draft, status: 'pending', createdAt: Date.now() });
-    w.setLead({ name: name.trim(), whatsapp });
-    setBusy(false);
-    router.replace('/render');
+    try {
+      const request = await st.create('requests', { id: requestId, userId: ME, name: name.trim(), whatsapp, photoUri: w.photoUri, draft: w.draft, status: 'pending', createdAt: Date.now() });
+      await st.update('users', ME, { name: request.name, whatsapp: request.whatsapp, leadDone: true });
+      w.setLead({ name: request.name, whatsapp: request.whatsapp });
+      router.replace('/render');
+    } catch { toast(t('push.demandError')); }
+    finally { setBusy(false); }
   };
 
   return (

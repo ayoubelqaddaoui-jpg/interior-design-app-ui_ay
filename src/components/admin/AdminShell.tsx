@@ -8,6 +8,7 @@ import { Icon } from '@/components/ui/Icon';
 import { Txt } from '@/components/ui/Txt';
 import { useBp } from '@/hooks/useBp';
 import { useT } from '@/i18n';
+import { backendLogout } from '@/lib/backend';
 import { useLocal } from '@/store/useLocal';
 import { useStore } from '@/store/useStore';
 import { RememberScroll, SearchTarget, useViewState } from '@/hooks/useViewState';
@@ -55,7 +56,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
   const measureDraft = useSearchObstacle(settingsDraft.dirty);
 
   const go = (href: string) => router.push(href as Href);
-  const logout = () => requestLeave(() => { useLocal.getState().set({ adminSession: false }); });
+  const logout = () => requestLeave(() => { void backendLogout().catch(() => {}); useLocal.getState().set({ adminSession: false }); });
   const draftBar = settingsDraft.dirty ? <View onLayout={measureDraft} testID="admin-draft-bar" className="bg-soft border-t border-line p-2 flex-row items-center gap-2"><Txt className="flex-1 text-[12px] font-semibold">{t('improve.previewLabel')}</Txt><Button size="sm" variant="soft" title={t('improve.discard')} onPress={settingsDraft.discard} /><Button testID="admin-draft-submit" size="sm" title={t('improve.submit')} onPress={settingsDraft.save} /></View> : null;
   const nextMode = () => settingsDraft.patch( { adminNavMode: MODES[(MODES.indexOf(mode) + 1) % MODES.length] });
   const label = (k: string) => t(`admin.nav.${k}`);

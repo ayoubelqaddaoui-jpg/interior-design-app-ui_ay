@@ -1,3 +1,4 @@
+import i18n from '@/i18n';
 import { Platform } from 'react-native';
 import type { Lang } from '@/data/types';
 import { api, backendEnabled } from './backend';
@@ -20,7 +21,7 @@ export async function enablePush(language: Lang): Promise<PushStatus> {
   const config = await api<{ android: boolean }>('/push/config');
   if (!config.android) return 'unconfigured';
   const n = await notifications();
-  await n.setNotificationChannelAsync('demands', { name: 'Demands', importance: n.AndroidImportance.HIGH });
+  await n.setNotificationChannelAsync('demands', { name: String(i18n.t('push.title')), importance: n.AndroidImportance.HIGH });
   const permission = await n.requestPermissionsAsync();
   if (!permission.granted) return permission.status === 'denied' ? 'blocked' : 'disabled';
   const device = await n.getDevicePushTokenAsync();

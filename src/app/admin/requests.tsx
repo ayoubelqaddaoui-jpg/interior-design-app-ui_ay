@@ -18,7 +18,9 @@ import { toast } from '@/store/useToast';
 import { waLink } from '@/lib/share';
 import { useDraftDoc } from '@/hooks/useDraftDoc';
 import { requestLeave, useLeaveGuard } from '@/hooks/useLeaveGuard';
-import { useLocalSearchParams } from 'expo-router';
+import { useFocusEffect, useLocalSearchParams } from 'expo-router';
+import { PushNotifications } from '@/components/admin/PushNotifications';
+import { backendEnabled } from '@/lib/backend';
 import type { RenderRequest, RequestStatus } from '@/data/types';
 
 const STATUSES: RequestStatus[] = ['pending', 'processing', 'delivered'];
@@ -91,12 +93,20 @@ export default function Requests() {
   const s = useStore();
   const [open, setOpen] = useViewState<string | null>('open', null);
   const [filter, setFilter] = useViewState<RequestStatus | 'all'>('filter', 'all');
-  const { target } = useLocalSearchParams<{ target?: string }>();
+  const { target, open: requestedOpen, call } = useLocalSearchParams<{ target?: string; open?: string; call?: string }>();
+  useFocusEffect(React.useCallback(() => {
+    if (backendEnabled) void useStore.getState().reload('requests');
+  }, []));
+  React.useEffect(() => {
+    if (requestedOpen && s.requests.some(row => row.id === requestedOpen)) setOpen(requestedOpen);
+  }, [requestedOpen, s.requests, setOpen]);
   const rows = [...s.requests].sort((a, b) => b.createdAt - a.createdAt).filter((r) => r.id === target || filter === 'all' || r.status === filter);
   const { draft: settings, patch } = useDraftDoc('settings');
   const auto = settings.autoSendWhatsApp;
   return (
     <AdminPage title={t('admin.req.title')}>
+      <PushNotifications />
+      {typeof call === 'string' && /^\+?\d{6,20}$/.test(call) ? <Button testID="push-call-fallback" title={t('push.call')} icon="phone" onPress={() => Linking.openURL(`tel:${call}`)} className="mb-3" /> : null}
       <Card className="p-4 mb-4 flex-row items-center gap-3">
         <View className="flex-1"><Txt className="font-bold text-[14px]">{t('admin.req.autoSend')}</Txt><Txt className="text-muted text-[12px] leading-[20px] mt-2">{t('admin.req.autoSendNote')}</Txt></View>
         <Toggle testID="req-auto" label={t('admin.req.autoSend')} value={auto} onValueChange={(v) => patch({ autoSendWhatsApp: v })} />

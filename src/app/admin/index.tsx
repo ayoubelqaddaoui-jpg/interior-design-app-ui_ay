@@ -1,3 +1,4 @@
+import { PushNotifications } from '@/components/admin/PushNotifications';
 import { useViewState } from '@/hooks/useViewState';
 import React, { useMemo } from 'react';
 import { Pressable, View } from 'react-native';
@@ -94,6 +95,7 @@ export default function Dashboard() {
     <AdminPage title={t('admin.dash.hello')} max={1200}>
       <Txt className="text-muted text-[14px] -mt-3 mb-4">{t('admin.dash.subtitle')}</Txt>
 
+      <PushNotifications />
       {/* Attention banner */}
       {k.pending > 0 ? (
         <Pressable testID="dash-attention" onPress={() => go('/admin/requests')} className="flex-row items-center gap-3 rounded-2xl p-4 mb-4 bg-primary">

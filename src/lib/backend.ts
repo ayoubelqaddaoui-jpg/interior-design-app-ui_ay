@@ -11,7 +11,7 @@ export async function clientToken() {
   const saved = await storage.read<string>('demand-client-token');
   if (saved) return deviceToken = saved;
   // Expo crypto uses the native secure RNG; browsers use crypto.getRandomValues.
-  const random = Platform.OS === 'web' ? crypto.getRandomValues(new Uint8Array(32)) : (await import('expo-crypto')).getRandomBytes(32);
+  const random = Platform.OS === 'web' ? crypto.getRandomValues(new Uint8Array(32)) : await (await import('expo-crypto')).getRandomBytesAsync(32);
   deviceToken = Array.from(random, byte => byte.toString(16).padStart(2, '0')).join('');
   await storage.write('demand-client-token', deviceToken);
   return deviceToken;
