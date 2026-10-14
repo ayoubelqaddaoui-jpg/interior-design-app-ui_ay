@@ -52,6 +52,8 @@ async function main() {
     await client.getByTestId('wizard-continue').click();
     await client.locator('[data-testid^="style-style_"]').first().click();
     await client.getByTestId('wizard-continue').click();
+    await client.waitForTimeout(300);
+    if (await client.getByTestId('wizard-continue').count()) await client.getByTestId('wizard-continue').click();
     await client.getByTestId('lead-name').fill(`  Chrome ${lang} Test  `);
     await client.getByTestId('lead-phone').fill('+212612345678');
     await client.getByTestId('lead-submit').click();
