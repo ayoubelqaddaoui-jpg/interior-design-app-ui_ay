@@ -43,3 +43,17 @@ yarn-error.*
 .playwright/
 
 .npm-cache/
+
+# Local audits, backend data and credentials
+.font-tools/
+.baseline/
+*.log
+debug-dialog.png
+*-navigation.json
+*-performance.json
+server/data/
+server/.env
+server/.env.*
+!server/.env.example
+google-services.json
+GoogleService-Info.plist

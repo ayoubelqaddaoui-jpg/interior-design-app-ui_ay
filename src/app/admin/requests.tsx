@@ -78,6 +78,7 @@ function Detail({ id, onClose }: { id: string | null; onClose: () => void }) {
       </View>
       <View className="mt-4"><ImageField label={t('admin.req.uploadFinal')} value={final} onChange={setFinal} /></View>
       <Button title={t('common.save')} variant="soft" size="sm" onPress={saveFinal} className="self-start mb-4" />
+      <Button testID="req-call" icon="phone" title={t('push.call')} variant="soft" onPress={() => Linking.openURL(`tel:${r.whatsapp.replace(/[^\d+]/g, '')}`)} className="mb-3" />
       <Button testID="req-wa" icon="whatsapp" title={t('admin.req.openWa')} variant="ink" onPress={open} className="mb-3" />
       <View className="flex-row gap-3">
         <Button testID="req-processing" title={t('admin.req.markProcessing')} variant="soft" className="flex-1" disabled={r.status === 'processing'} onPress={() => set('processing')} />
@@ -97,8 +98,9 @@ export default function Requests() {
   useFocusEffect(React.useCallback(() => {
     if (backendEnabled) void useStore.getState().reload('requests');
   }, []));
+  const openedNotification = React.useRef('');
   React.useEffect(() => {
-    if (requestedOpen && s.requests.some(row => row.id === requestedOpen)) setOpen(requestedOpen);
+    if (requestedOpen && openedNotification.current !== requestedOpen && s.requests.some(row => row.id === requestedOpen)) { openedNotification.current = requestedOpen; setOpen(requestedOpen); }
   }, [requestedOpen, s.requests, setOpen]);
   const rows = [...s.requests].sort((a, b) => b.createdAt - a.createdAt).filter((r) => r.id === target || filter === 'all' || r.status === filter);
   const { draft: settings, patch } = useDraftDoc('settings');

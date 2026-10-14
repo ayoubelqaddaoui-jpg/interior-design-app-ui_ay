@@ -8,7 +8,7 @@ import { Icon } from '@/components/ui/Icon';
 import { Txt } from '@/components/ui/Txt';
 import { useBp } from '@/hooks/useBp';
 import { useT } from '@/i18n';
-import { backendLogout } from '@/lib/backend';
+import { backendEnabled, backendLogout } from '@/lib/backend';
 import { useLocal } from '@/store/useLocal';
 import { useStore } from '@/store/useStore';
 import { RememberScroll, SearchTarget, useViewState } from '@/hooks/useViewState';
@@ -37,6 +37,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
   const { t } = useT();
   const router = useRouter();
   const pathname = usePathname();
+  useEffect(() => { if (backendEnabled) void useStore.getState().reload('requests'); }, []);
   const { target, focus } = useGlobalSearchParams<{ target?: string; focus?: string }>();
   const insets = useSafeAreaInsets();
   const active = useActive();
