@@ -64,16 +64,29 @@ function WebVideo({ uri, poster, fit }: { uri: string; poster?: string; fit: 'co
 export function MediaView({ media, uri, className = '', style, fit = 'cover', children, onAspectRatio }: {
   media?: Media; uri?: string; className?: string; style?: StyleProp<ViewStyle>; fit?: 'cover' | 'contain'; children?: React.ReactNode; onAspectRatio?: (ratio: number) => void;
 }) {
-  const [loaded, setLoaded] = useState(false);
+  const [loadedUri, setLoadedUri] = useState('');
+  const [nearby, setNearby] = useState(Platform.OS !== 'web');
+  const container = useRef<View>(null);
   const m: Media | undefined = media ?? (uri ? { type: 'image', uri } : undefined);
+  useEffect(() => {
+    if (Platform.OS !== 'web') return;
+    const element = container.current as unknown as Element;
+    if (!element || typeof IntersectionObserver === 'undefined') return;
+    const observer = new IntersectionObserver(([entry]) => {
+      if (entry.isIntersecting) { setNearby(true); observer.disconnect(); }
+    }, { rootMargin: '300px' });
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, []);
+  const active = nearby || Platform.OS !== 'web' || (Platform.OS === 'web' && typeof IntersectionObserver === 'undefined');
   return (
-    <View className={`overflow-hidden bg-surface2 ${className}`} style={style}>
-      {!m?.uri ? null : m.type === 'video' ? (
+    <View ref={container} className={`overflow-hidden bg-surface2 ${className}`} style={style}>
+      {!m?.uri ? null : !active ? <View style={StyleSheet.absoluteFill} /> : m.type === 'video' ? (
         Platform.OS === 'web' ? <WebVideo key={m.uri} uri={m.uri} poster={m.poster} fit={fit} /> : <Video key={m.uri} uri={m.uri} poster={m.poster} fit={fit} />
       ) : (
         <>
-          {!loaded ? <Skeleton fill r={0} /> : null}
-          <Image source={{ uri: m.uri }} style={StyleSheet.absoluteFill} contentFit={fit} transition={Platform.OS === 'web' ? 0 : 250} onLoad={(e) => { setLoaded(true); if (e.source.width && e.source.height) onAspectRatio?.(e.source.width / e.source.height); }} onError={() => setLoaded(true)} />
+          {loadedUri !== m.uri ? <Skeleton fill r={0} /> : null}
+          <Image source={{ uri: m.uri }} style={StyleSheet.absoluteFill} contentFit={fit} cachePolicy="memory-disk" recyclingKey={m.uri} transition={Platform.OS === 'web' ? 0 : 250} onLoad={(e) => { setLoadedUri(m.uri); if (e.source.width && e.source.height) onAspectRatio?.(e.source.width / e.source.height); }} onError={() => setLoadedUri(m.uri)} />
         </>
       )}
       {children}

@@ -1,7 +1,14 @@
 import { SearchTarget, useViewState } from '@/hooks/useViewState';
 import React from 'react';
 import { Linking, Pressable, View } from 'react-native';
-import { Button, Card, EmptyState, Icon, MediaView, Sheet, Toggle, Txt } from '@/components/ui';
+import { Button } from '@/components/ui/Button';
+import { Card } from '@/components/ui/Card';
+import { EmptyState } from '@/components/ui/EmptyState';
+import { Icon } from '@/components/ui/Icon';
+import { MediaView } from '@/components/ui/MediaView';
+import { Sheet } from '@/components/ui/Sheet';
+import { Toggle } from '@/components/ui/Toggle';
+import { Txt } from '@/components/ui/Txt';
 import { AdminPage } from '@/components/admin/AdminShell';
 import { ImageField } from '@/components/admin/ImageField';
 import { useBp } from '@/hooks/useBp';
@@ -11,7 +18,9 @@ import { toast } from '@/store/useToast';
 import { waLink } from '@/lib/share';
 import { useDraftDoc } from '@/hooks/useDraftDoc';
 import { requestLeave, useLeaveGuard } from '@/hooks/useLeaveGuard';
-import { useLocalSearchParams } from 'expo-router';
+import { useFocusEffect, useLocalSearchParams } from 'expo-router';
+import { PushNotifications } from '@/components/admin/PushNotifications';
+import { backendEnabled } from '@/lib/backend';
 import type { RenderRequest, RequestStatus } from '@/data/types';
 
 const STATUSES: RequestStatus[] = ['pending', 'processing', 'delivered'];
@@ -46,7 +55,7 @@ function Detail({ id, onClose }: { id: string | null; onClose: () => void }) {
   React.useEffect(() => { if (record.current !== id) { record.current = id; setFinal(r?.finalResult ?? ''); } }, [id, r?.finalResult, setFinal]);
   const dirty = !!r && final !== (r.finalResult ?? '');
   const saveDraft = async () => { if (r) await s.update('requests', r.id, { finalResult: final }); };
-  useLeaveGuard(dirty, saveDraft, () => { setFinal(r?.finalResult ?? ''); onClose(); });
+  useLeaveGuard(dirty, saveDraft, () => { setFinal(r?.finalResult ?? ''); onClose(); }, { before: { finalResult: r?.finalResult ?? '' }, after: { finalResult: final }, labels: { finalResult: t('admin.f.finalResult') } });
   const close = () => requestLeave(onClose);
   if (!r) return <Sheet visible={false} onClose={onClose}><View /></Sheet>;
   const set = async (status: RequestStatus, extra: Partial<RenderRequest> = {}) => {
@@ -69,6 +78,7 @@ function Detail({ id, onClose }: { id: string | null; onClose: () => void }) {
       </View>
       <View className="mt-4"><ImageField label={t('admin.req.uploadFinal')} value={final} onChange={setFinal} /></View>
       <Button title={t('common.save')} variant="soft" size="sm" onPress={saveFinal} className="self-start mb-4" />
+      <Button testID="req-call" icon="phone" title={t('push.call')} variant="soft" onPress={() => Linking.openURL(`tel:${r.whatsapp.replace(/[^\d+]/g, '')}`)} className="mb-3" />
       <Button testID="req-wa" icon="whatsapp" title={t('admin.req.openWa')} variant="ink" onPress={open} className="mb-3" />
       <View className="flex-row gap-3">
         <Button testID="req-processing" title={t('admin.req.markProcessing')} variant="soft" className="flex-1" disabled={r.status === 'processing'} onPress={() => set('processing')} />
@@ -84,12 +94,21 @@ export default function Requests() {
   const s = useStore();
   const [open, setOpen] = useViewState<string | null>('open', null);
   const [filter, setFilter] = useViewState<RequestStatus | 'all'>('filter', 'all');
-  const { target } = useLocalSearchParams<{ target?: string }>();
+  const { target, open: requestedOpen, call } = useLocalSearchParams<{ target?: string; open?: string; call?: string }>();
+  useFocusEffect(React.useCallback(() => {
+    if (backendEnabled) void useStore.getState().reload('requests');
+  }, []));
+  const openedNotification = React.useRef('');
+  React.useEffect(() => {
+    if (requestedOpen && openedNotification.current !== requestedOpen && s.requests.some(row => row.id === requestedOpen)) { openedNotification.current = requestedOpen; setOpen(requestedOpen); }
+  }, [requestedOpen, s.requests, setOpen]);
   const rows = [...s.requests].sort((a, b) => b.createdAt - a.createdAt).filter((r) => r.id === target || filter === 'all' || r.status === filter);
   const { draft: settings, patch } = useDraftDoc('settings');
   const auto = settings.autoSendWhatsApp;
   return (
     <AdminPage title={t('admin.req.title')}>
+      <PushNotifications />
+      {typeof call === 'string' && /^\+?\d{6,20}$/.test(call) ? <Button testID="push-call-fallback" title={t('push.call')} icon="phone" onPress={() => Linking.openURL(`tel:${call}`)} className="mb-3" /> : null}
       <Card className="p-4 mb-4 flex-row items-center gap-3">
         <View className="flex-1"><Txt className="font-bold text-[14px]">{t('admin.req.autoSend')}</Txt><Txt className="text-muted text-[12px] leading-[20px] mt-2">{t('admin.req.autoSendNote')}</Txt></View>
         <Toggle testID="req-auto" label={t('admin.req.autoSend')} value={auto} onValueChange={(v) => patch({ autoSendWhatsApp: v })} />

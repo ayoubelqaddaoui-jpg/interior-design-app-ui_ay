@@ -5,7 +5,10 @@ import { router } from '@/hooks/useLeaveGuard';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { tArr, useT } from '@/i18n';
-import { Button, Icon, Screen, Txt } from '@/components/ui';
+import { Button } from '@/components/ui/Button';
+import { Icon } from '@/components/ui/Icon';
+import { Screen } from '@/components/ui/Screen';
+import { Txt } from '@/components/ui/Txt';
 import { toast } from '@/store/useToast';
 import { useMe } from '@/store/useStore';
 

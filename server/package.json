@@ -1,0 +1,17 @@
+{
+  "name": "dwira-notification-backend",
+  "version": "1.0.0",
+  "private": true,
+  "type": "commonjs",
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "start": "node index.js",
+    "test": "node --test ../scripts/check-push-server.js",
+    "keys": "web-push generate-vapid-keys --json",
+    "password": "node password.js"
+  },
+  "dependencies": {
+    "web-push": "^3.6.7",
+    "firebase-admin": "^13.6.0"
+  }
+}

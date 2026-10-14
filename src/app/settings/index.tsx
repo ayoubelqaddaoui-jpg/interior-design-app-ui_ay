@@ -5,7 +5,13 @@ import Constants from 'expo-constants';
 import { useLang, LANGS, useT } from '@/i18n';
 import { useLocal } from '@/store/useLocal';
 import { useMe, useStore } from '@/store/useStore';
-import { Card, Icon, PageHeader, Screen, Sheet, Toggle, Txt } from '@/components/ui';
+import { Card } from '@/components/ui/Card';
+import { Icon } from '@/components/ui/Icon';
+import { PageHeader } from '@/components/ui/StepHeader';
+import { Screen } from '@/components/ui/Screen';
+import { Sheet } from '@/components/ui/Sheet';
+import { Toggle } from '@/components/ui/Toggle';
+import { Txt } from '@/components/ui/Txt';
 import { toast } from '@/store/useToast';
 
 function Row({ icon, title, sub, right, onPress, testID }: { icon: string; title: string; sub?: string; right?: React.ReactNode; onPress?: () => void; testID?: string }) {

@@ -4,7 +4,13 @@ import { router } from '@/hooks/useLeaveGuard';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { sorted, useStore } from '@/store/useStore';
 import { useL, useT } from '@/i18n';
-import { Card, CreditsBadge, Icon, MediaView, PressableScale, Screen, Txt } from '@/components/ui';
+import { Card } from '@/components/ui/Card';
+import { CreditsBadge } from '@/components/ui/CreditsBadge';
+import { Icon } from '@/components/ui/Icon';
+import { MediaView } from '@/components/ui/MediaView';
+import { PressableScale } from '@/components/ui/PressableScale';
+import { Screen } from '@/components/ui/Screen';
+import { Txt } from '@/components/ui/Txt';
 import { Carousel } from '@/components/ui/Carousel';
 import { useBp } from '@/hooks/useBp';
 

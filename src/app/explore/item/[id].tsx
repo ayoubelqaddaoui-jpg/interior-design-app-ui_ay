@@ -8,7 +8,9 @@ import { useStore } from '@/store/useStore';
 import { useWizard } from '@/store/useWizard';
 import { useL, useT } from '@/i18n';
 import { useBp } from '@/hooks/useBp';
-import { Button, Icon, Txt } from '@/components/ui';
+import { Button } from '@/components/ui/Button';
+import { Icon } from '@/components/ui/Icon';
+import { Txt } from '@/components/ui/Txt';
 
 /** Full-screen image viewer + "Use this style". */
 export default function ItemViewer() {

@@ -5,7 +5,12 @@ import { router } from '@/hooks/useLeaveGuard';
 import { sorted, useStore } from '@/store/useStore';
 import { useL, useT } from '@/i18n';
 import { Carousel } from '@/components/ui/Carousel';
-import { EmptyState, Icon, MediaView, PageHeader, Screen, Txt } from '@/components/ui';
+import { EmptyState } from '@/components/ui/EmptyState';
+import { Icon } from '@/components/ui/Icon';
+import { MediaView } from '@/components/ui/MediaView';
+import { PageHeader } from '@/components/ui/StepHeader';
+import { Screen } from '@/components/ui/Screen';
+import { Txt } from '@/components/ui/Txt';
 
 export default function SectionPage() {
   const { id } = useLocalSearchParams<{ id: string }>();

@@ -26,15 +26,49 @@
       },
       "predictiveBackGestureEnabled": false
     },
-    "web": { "bundler": "metro", "output": "single", "favicon": "./assets/favicon.png" },
+    "web": {
+      "bundler": "metro",
+      "output": "single",
+      "favicon": "./assets/favicon.png"
+    },
     "plugins": [
-      "expo-router",
+      [
+        "expo-router",
+        {
+          "asyncRoutes": {
+            "web": true,
+            "default": false
+          }
+        }
+      ],
       "expo-font",
       "expo-localization",
-      ["expo-image-picker", { "cameraPermission": "Dwira needs the camera to photograph your room.", "photosPermission": "Dwira needs your photos to redesign your room." }],
+      [
+        "expo-image-picker",
+        {
+          "cameraPermission": "Dwira needs the camera to photograph your room.",
+          "photosPermission": "Dwira needs your photos to redesign your room."
+        }
+      ],
       "expo-video",
-      ["expo-splash-screen", { "backgroundColor": "#FBDD2D", "image": "./assets/icon.png", "imageWidth": 140 }]
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#FBDD2D",
+          "image": "./assets/icon.png",
+          "imageWidth": 140
+        }
+      ],
+      "expo-secure-store",
+      [
+        "expo-notifications",
+        {
+          "defaultChannel": "demands"
+        }
+      ]
     ],
-    "experiments": { "typedRoutes": false }
+    "experiments": {
+      "typedRoutes": false
+    }
   }
 }

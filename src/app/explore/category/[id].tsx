@@ -3,7 +3,9 @@ import { useLocalSearchParams } from 'expo-router';
 import { router } from '@/hooks/useLeaveGuard';
 import { sorted, useStore } from '@/store/useStore';
 import { useL, useT } from '@/i18n';
-import { EmptyState, PageHeader, Screen } from '@/components/ui';
+import { EmptyState } from '@/components/ui/EmptyState';
+import { PageHeader } from '@/components/ui/StepHeader';
+import { Screen } from '@/components/ui/Screen';
 
 import { InspirationGallery } from '@/components/ui/InspirationGallery';
 

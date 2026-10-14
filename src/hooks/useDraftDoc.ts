@@ -8,8 +8,7 @@ import { useBackCheckpoint, useLeaveGuard, router } from './useLeaveGuard';
 const baselines = new Map<DocName, DocMap[DocName]>();
 /** Repository data is untouched until Submit. The shared store is the live preview. */
 export function useDraftDoc<K extends DocName>(name: K) {
-  const documentState = useStore((s) => s.doc);
-  const draft = documentState[name];
+  const draft = useStore((s) => s.doc[name]);
   const saved = (baselines.get(name) ?? draft) as DocMap[K];
   const dirty = JSON.stringify(draft) !== JSON.stringify(saved);
   const set = (value: DocMap[K] | ((old: DocMap[K]) => DocMap[K])) => {
@@ -22,7 +21,7 @@ export function useDraftDoc<K extends DocName>(name: K) {
     try {
       await useStore.getState().patchDoc(name, useStore.getState().doc[name]);
       baselines.delete(name);
-      useStore.setState((s) => ({ doc: { ...s.doc } }));
+      useStore.setState((s) => ({ doc: { ...s.doc, [name]: { ...s.doc[name] } } }));
       return true;
     } catch { toast(String(i18n.t('improve.saveError'))); return false; }
   };
@@ -31,7 +30,7 @@ export function useDraftDoc<K extends DocName>(name: K) {
     baselines.delete(name);
     if (baseline) useStore.setState((s) => ({ doc: { ...s.doc, [name]: baseline } }));
   };
-  useLeaveGuard(dirty, save, discard);
+  useLeaveGuard(dirty, save, discard, { before: saved, after: draft });
   useBackCheckpoint(dirty, () => router.back());
   return { draft, saved, set, patch, save, discard, dirty };
 }
@@ -74,7 +73,7 @@ export function useCollectionDraft<K extends CollName>(name: K) {
       useStore.setState({ [name]: saved } as any);
     }
   };
-  useLeaveGuard(dirty, save, discard);
+  useLeaveGuard(dirty, save, discard, { before: baseline && Object.fromEntries(baseline.map(row => [row.id, row])), after: Object.fromEntries(list.map(row => [row.id, row])) });
   useBackCheckpoint(dirty, () => router.back());
   const forget = (ids: string[]) => {
     const saved = collectionBaselines.get(name);

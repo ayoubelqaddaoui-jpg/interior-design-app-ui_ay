@@ -27,6 +27,7 @@ const empty: Colls = {
   tabs: [], tools: [], roomTypes: [], styles: [], palettes: [], sections: [], categories: [],
   inspirations: [], models: [], users: [], requests: [], history: [], conversations: [],
 };
+let initializing: Promise<void> | null = null;
 const COLLS = Object.keys(empty) as CollName[];
 
 /** One shared store: user app and admin panel read/write the same state, so changes appear instantly. */
@@ -36,6 +37,11 @@ export const useStore = create<State>((set, get) => ({
   ready: false,
   async init() {
     if (get().ready) return;
+    if (initializing) return initializing;
+    initializing = (async () => {
+    // Start independent reads together rather than serializing startup behind migration.
+    const listsPromise = Promise.all(COLLS.map((c) => repos[c].list()));
+    const docsPromise = Promise.all([docs.branding.get(), docs.theme.get(), docs.assistant.get(), docs.settings.get()]);
     // One-time upgrade: preserve existing edits/order and never resurrect deleted presets.
     if (!await storage.read<boolean>('migration:curated-palettes-v2')) {
       const palettes = await repos.palettes.list();
@@ -44,11 +50,15 @@ export const useStore = create<State>((set, get) => ({
       for (const palette of curated) if (!palettes.some((p) => p.id === palette.id)) await repos.palettes.create({ ...palette, order: order++ });
       await storage.write('migration:curated-palettes-v2', true);
     }
-    const lists = await Promise.all(COLLS.map((c) => repos[c].list()));
-    const [branding, theme, assistant, settings] = await Promise.all([docs.branding.get(), docs.theme.get(), docs.assistant.get(), docs.settings.get()]);
+    const lists = await listsPromise;
+    // Include newly migrated palettes without re-reading unrelated collections.
+    lists[COLLS.indexOf('palettes')] = await repos.palettes.list();
+    const [branding, theme, assistant, settings] = await docsPromise;
     const patch: Record<string, unknown> = {};
     COLLS.forEach((c, i) => (patch[c] = lists[i]));
     set({ ...(patch as Colls), doc: { branding, theme, assistant, settings }, ready: true });
+    })().finally(() => { initializing = null; });
+    return initializing;
   },
   async reload(name) {
     set({ [name]: await repos[name].list() } as Partial<State>);

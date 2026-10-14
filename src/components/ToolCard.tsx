@@ -4,7 +4,9 @@ import { LinearGradient } from 'expo-linear-gradient';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { SearchTarget } from '@/hooks/useViewState';
 import type { Tool } from '@/data/types';
-import { MediaView, PressableScale, Txt } from '@/components/ui';
+import { MediaView } from '@/components/ui/MediaView';
+import { PressableScale } from '@/components/ui/PressableScale';
+import { Txt } from '@/components/ui/Txt';
 import { useL, useT } from '@/i18n';
 
 /** Home tool card: media (image or autoplay video) + title/subtitle + Try button. */

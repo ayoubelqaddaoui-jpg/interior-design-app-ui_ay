@@ -1,7 +1,10 @@
 import { useViewState } from '@/hooks/useViewState';
 import React, { useState } from 'react';
 import { Pressable, View } from 'react-native';
-import { Button, Card, Input, Txt } from '@/components/ui';
+import { Button } from '@/components/ui/Button';
+import { Card } from '@/components/ui/Card';
+import { Input } from '@/components/ui/Field';
+import { Txt } from '@/components/ui/Txt';
 import { AdminPage } from '@/components/admin/AdminShell';
 import { useT } from '@/i18n';
 import { useStore } from '@/store/useStore';
@@ -17,7 +20,7 @@ export default function Credits() {
   const [amt, setAmt] = useViewState('credit-amount', '1');
   const saveDef = async () => { await s.patchDoc('settings', { defaultFreeCredits: Math.max(0, parseInt(def, 10) || 0) }); toast(t('admin.crud.saved')); };
   const dirty = def !== String(s.doc.settings.defaultFreeCredits);
-  useLeaveGuard(dirty, saveDef, () => setDef(String(s.doc.settings.defaultFreeCredits)));
+  useLeaveGuard(dirty, saveDef, () => setDef(String(s.doc.settings.defaultFreeCredits)), { before: { defaultFreeCredits: String(s.doc.settings.defaultFreeCredits) }, after: { defaultFreeCredits: def } });
   useBackCheckpoint(dirty, () => router.back());
   const grant = async () => {
     const u = s.users.find((x) => x.id === uid); const n = parseInt(amt, 10) || 0;

@@ -4,7 +4,10 @@ import { router } from '@/hooks/useLeaveGuard';
 import Animated, { Easing, FadeInDown, useAnimatedStyle, useSharedValue, withDelay, withSpring, withTiming } from 'react-native-reanimated';
 import { useWizard } from '@/store/useWizard';
 import { useT } from '@/i18n';
-import { Button, Icon, Screen, Txt } from '@/components/ui';
+import { Button } from '@/components/ui/Button';
+import { Icon } from '@/components/ui/Icon';
+import { Screen } from '@/components/ui/Screen';
+import { Txt } from '@/components/ui/Txt';
 
 export default function LeadSuccess() {
   const { t } = useT();

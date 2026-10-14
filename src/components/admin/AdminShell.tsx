@@ -3,49 +3,21 @@ import { Pressable, View } from 'react-native';
 import { Href, useGlobalSearchParams, usePathname } from 'expo-router';
 import { useRouter, requestLeave, useBackCheckpoint, useNativeOverlayBack } from '@/hooks/useLeaveGuard';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Button, Icon, Txt } from '@/components/ui';
+import { Button } from '@/components/ui/Button';
+import { Icon } from '@/components/ui/Icon';
+import { Txt } from '@/components/ui/Txt';
 import { useBp } from '@/hooks/useBp';
 import { useT } from '@/i18n';
+import { backendEnabled, backendLogout } from '@/lib/backend';
 import { useLocal } from '@/store/useLocal';
 import { useStore } from '@/store/useStore';
 import { RememberScroll, SearchTarget, useViewState } from '@/hooks/useViewState';
+import { useSearchObstacle } from '@/hooks/useSearchInset';
 import { useDraftDoc } from '@/hooks/useDraftDoc';
 import type { AdminNavMode } from '@/data/types';
 
-type NavItem = { key: string; icon: string; href: string };
-type NavGroup = { key: 'overview' | 'content' | 'creation' | 'ai' | 'appearance'; items: NavItem[] };
-
-/** Menu items grouped by topic so related screens sit together. */
-export const ADMIN_GROUPS: NavGroup[] = [
-  { key: 'overview', items: [
-    { key: 'dashboard', icon: 'view-dashboard-outline', href: '/admin' },
-    { key: 'requests', icon: 'inbox-full-outline', href: '/admin/requests' },
-    { key: 'users', icon: 'account-group-outline', href: '/admin/users' },
-    { key: 'credits', icon: 'star-circle-outline', href: '/admin/credits' },
-  ] },
-  { key: 'content', items: [
-    { key: 'tabs', icon: 'tab', href: '/admin/tabs' },
-    { key: 'tools', icon: 'toolbox-outline', href: '/admin/tools' },
-    { key: 'sections', icon: 'view-carousel-outline', href: '/admin/sections' },
-    { key: 'categories', icon: 'view-grid-outline', href: '/admin/categories' },
-    { key: 'inspirations', icon: 'image-multiple-outline', href: '/admin/inspirations' },
-  ] },
-  { key: 'creation', items: [
-    { key: 'styles', icon: 'palette-swatch-outline', href: '/admin/styles' },
-    { key: 'roomTypes', icon: 'door-open', href: '/admin/roomTypes' },
-    { key: 'palettes', icon: 'invert-colors', href: '/admin/palettes' },
-  ] },
-  { key: 'ai', items: [
-    { key: 'models', icon: 'robot-outline', href: '/admin/models' },
-    { key: 'assistant', icon: 'message-text-outline', href: '/admin/assistant' },
-  ] },
-  { key: 'appearance', items: [
-    { key: 'branding', icon: 'flag-outline', href: '/admin/branding' },
-    { key: 'theme', icon: 'palette-outline', href: '/admin/theme' },
-    { key: 'interface', icon: 'page-layout-footer', href: '/admin/interface' },
-  ] },
-];
-export const ADMIN_NAV = ADMIN_GROUPS.flatMap((g) => g.items);
+import { ADMIN_GROUPS, type NavItem } from '@/lib/adminNav';
+export { ADMIN_NAV } from '@/lib/adminNav';
 
 const MODES: AdminNavMode[] = ['drawer', 'rail', 'top'];
 const MODE_ICON: Record<AdminNavMode, string> = { drawer: 'menu', rail: 'dock-left', top: 'page-layout-header' };
@@ -65,6 +37,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
   const { t } = useT();
   const router = useRouter();
   const pathname = usePathname();
+  useEffect(() => { if (backendEnabled) void useStore.getState().reload('requests'); }, []);
   const { target, focus } = useGlobalSearchParams<{ target?: string; focus?: string }>();
   const insets = useSafeAreaInsets();
   const active = useActive();
@@ -81,10 +54,11 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
   useBackCheckpoint(open, () => setOpen(false), 1);
   useNativeOverlayBack(open, () => setOpen(false));
   const settingsDraft = useDraftDoc('settings');
+  const measureDraft = useSearchObstacle(settingsDraft.dirty);
 
   const go = (href: string) => router.push(href as Href);
-  const logout = () => requestLeave(() => { useLocal.getState().set({ adminSession: false }); });
-  const draftBar = settingsDraft.dirty ? <View testID="admin-draft-bar" className="bg-soft border-t border-line p-2 flex-row items-center gap-2"><Txt className="flex-1 text-[12px] font-semibold">{t('improve.previewLabel')}</Txt><Button size="sm" variant="soft" title={t('improve.discard')} onPress={settingsDraft.discard} /><Button testID="admin-draft-submit" size="sm" title={t('improve.submit')} onPress={settingsDraft.save} /></View> : null;
+  const logout = () => requestLeave(() => { void backendLogout().catch(() => {}); useLocal.getState().set({ adminSession: false }); });
+  const draftBar = settingsDraft.dirty ? <View onLayout={measureDraft} testID="admin-draft-bar" className="bg-soft border-t border-line p-2 flex-row items-center gap-2"><Txt className="flex-1 text-[12px] font-semibold">{t('improve.previewLabel')}</Txt><Button size="sm" variant="soft" title={t('improve.discard')} onPress={settingsDraft.discard} /><Button testID="admin-draft-submit" size="sm" title={t('improve.submit')} onPress={settingsDraft.save} /></View> : null;
   const nextMode = () => settingsDraft.patch( { adminNavMode: MODES[(MODES.indexOf(mode) + 1) % MODES.length] });
   const label = (k: string) => t(`admin.nav.${k}`);
 
@@ -266,6 +240,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
 /** Standard admin page: title row + scrollable, width-limited body. */
 export function AdminPage({ title, right, children, max = 1100, floating }: { title: string; right?: React.ReactNode; children: React.ReactNode; max?: number; floating?: React.ReactNode }) {
   const { tablet } = useBp();
+  const measureFloating = useSearchObstacle(!!floating, 20);
   const router = useRouter();
   const { t } = useT();
   return (
@@ -278,6 +253,6 @@ export function AdminPage({ title, right, children, max = 1100, floating }: { ti
         </View>
         {children}
       </View>
-    </RememberScroll>{floating ? <View style={{ position: 'absolute', bottom: 20, left: 12, right: 12, maxWidth: 700, alignSelf: 'center', marginHorizontal: 'auto', zIndex: 10 } as any}>{floating}</View> : null}</View>
+    </RememberScroll>{floating ? <View onLayout={measureFloating} style={{ position: 'absolute', bottom: 20, left: 12, right: 12, maxWidth: 700, alignSelf: 'center', marginHorizontal: 'auto', zIndex: 10 } as any}>{floating}</View> : null}</View>
   );
 }

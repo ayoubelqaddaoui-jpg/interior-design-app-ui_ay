@@ -1,16 +1,17 @@
+import { PushNotifications } from '@/components/admin/PushNotifications';
 import { useViewState } from '@/hooks/useViewState';
 import React, { useMemo } from 'react';
-import { Pressable, TextInput, View } from 'react-native';
+import { Pressable, View } from 'react-native';
 import { Href } from 'expo-router';
 import { useRouter } from '@/hooks/useLeaveGuard';
-import { Card, Icon, Txt } from '@/components/ui';
-import { ADMIN_NAV, AdminPage } from '@/components/admin/AdminShell';
+import { Card } from '@/components/ui/Card';
+import { Icon } from '@/components/ui/Icon';
+import { Txt } from '@/components/ui/Txt';
+import { AdminPage } from '@/components/admin/AdminShell';
 import { BarChart, RankBars } from '@/components/admin/dashboard/Charts';
 import { useBp } from '@/hooks/useBp';
 import { useL, useT } from '@/i18n';
 import { useStore } from '@/store/useStore';
-import { useAppFont } from '@/components/ui/Txt';
-import { useTheme } from '@/theme/ThemeProvider';
 import { ago, kpis, recentEvents, series, topUsage, type EventKind, type Metric, type Range } from '@/lib/stats';
 
 const RANGES: Range[] = [7, 30, 90];
@@ -57,12 +58,9 @@ export default function Dashboard() {
   const L = useL();
   const { desktop, tablet } = useBp();
   const router = useRouter();
-  const { colors } = useTheme();
-  const fontFamily = useAppFont();
   const s = useStore();
   const [range, setRange] = useViewState<Range>('range', 30);
   const [metric, setMetric] = useViewState<Metric>('metric', 'designs');
-  const [q, setQ] = useViewState('q', '');
   const go = (h: string) => router.push(h as Href);
 
   const inp = useMemo(() => ({ requests: s.requests, history: s.history, users: s.users }), [s.requests, s.history, s.users]);
@@ -82,30 +80,6 @@ export default function Dashboard() {
   const [topTab, setTopTab] = useViewState<'tools' | 'styles' | 'rooms' | 'models'>('topTab', 'tools');
   const best = tops.tools[0];
 
-  const needle = q.trim().toLowerCase();
-  const results = useMemo(() => {
-    if (needle.length < 2) return null;
-    const has = (x?: string) => !!x && x.toLocaleLowerCase().includes(needle);
-    const matchTitle = (x: any) => Object.values(x.title ?? {}).some((title) => has(String(title)));
-    return {
-      requests: s.requests.filter((r) => has(r.name) || has(r.whatsapp) || has(L(s.tools.find((x) => x.id === r.draft.toolId)?.title))).slice(0, 4)
-        .map((r) => ({ id: r.id, title: r.name, sub: L(s.tools.find((x) => x.id === r.draft.toolId)?.title), href: '/admin/requests', icon: 'inbox-full-outline' })),
-      users: s.users.filter((u) => u.role === 'user' && (has(u.name) || has(u.whatsapp))).slice(0, 4)
-        .map((u) => ({ id: u.id, title: u.name, sub: u.whatsapp, href: '/admin/users', icon: 'account-outline' })),
-      content: [
-        ...s.tools.filter(matchTitle).map((x) => ({ id: x.id, title: L(x.title), sub: t('admin.nav.tools'), href: '/admin/tools', icon: 'toolbox-outline' })),
-        ...s.styles.filter(matchTitle).map((x) => ({ id: x.id, title: L(x.title), sub: t('admin.nav.styles'), href: '/admin/styles', icon: 'palette-swatch-outline' })),
-        ...s.roomTypes.filter(matchTitle).map((x) => ({ id: x.id, title: L(x.title), sub: t('admin.nav.roomTypes'), href: '/admin/roomTypes', icon: 'door-open' })),
-        ...(['sections', 'categories', 'palettes'] as const).flatMap((name) => s[name].filter(matchTitle).map((x) => ({ id: x.id, title: L(x.title), sub: t(`admin.nav.${name}`), href: `/admin/${name}`, icon: 'view-grid-outline' }))),
-        ...s.inspirations.filter((x) => has(x.id) || matchTitle(s.categories.find((c) => c.id === x.categoryId) ?? {}) || matchTitle(s.styles.find((c) => c.id === x.styleId) ?? {})).map((x) => ({ id: x.id, title: L(s.categories.find((c) => c.id === x.categoryId)?.title), sub: t('admin.nav.inspirations'), href: '/admin/inspirations', icon: 'image-outline' })),
-        ...s.models.filter((x) => has(x.name) || has(x.provider)).map((x) => ({ id: x.id, title: x.name, sub: t('admin.nav.models'), href: '/admin/models', icon: 'robot-outline' })),
-        ...ADMIN_NAV.filter((x) => has(t(`admin.nav.${x.key}`))).map((x) => ({ id: `menu-${x.key}`, title: t(`admin.nav.${x.key}`), sub: t('admin.title'), href: x.href, icon: x.icon })),
-      ].slice(0, 30),
-    };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [needle, s.requests, s.users, s.tools, s.styles, s.roomTypes, s.sections, s.categories, s.palettes, s.inspirations, s.models, lang]);
-  const none = results && !results.requests.length && !results.users.length && !results.content.length;
-
   const dayLabel = (b: { start: number }) => new Date(b.start).toLocaleDateString(lang === 'fr' ? 'fr-FR' : 'en-GB', { day: 'numeric', month: 'short' });
   const evText = (e: ReturnType<typeof recentEvents>[number]) => {
     const name = e.name || t('admin.dash.anonymous');
@@ -121,34 +95,7 @@ export default function Dashboard() {
     <AdminPage title={t('admin.dash.hello')} max={1200}>
       <Txt className="text-muted text-[14px] -mt-3 mb-4">{t('admin.dash.subtitle')}</Txt>
 
-      {/* Search */}
-      <View className="relative mb-4" style={{ zIndex: 5 }}>
-        <View className="flex-row items-center bg-surface border border-line rounded-2xl px-4 h-12 gap-2">
-          <Icon name="magnify" size={20} tone="muted" />
-          <TextInput testID="dash-search" value={q} onChangeText={setQ} placeholder={t('admin.dash.searchPh')} placeholderTextColor={colors.muted}
-            style={{ flex: 1, fontFamily, color: colors.fg, fontSize: 15, outlineStyle: 'none' } as any} />
-          {q ? <Pressable onPress={() => setQ('')} accessibilityLabel={t('common.close')}><Icon name="close-circle" size={18} tone="muted" /></Pressable> : null}
-        </View>
-        {results ? (
-          <Card className="mt-2 p-2" testID="dash-results">
-            {none ? <Txt className="text-muted text-[14px] p-3">{t('common.noResults')}</Txt> : (
-              [['secRequests', results.requests], ['secUsers', results.users], ['secContent', results.content]] as const
-            ).filter(([, r]) => r.length).map(([key, rows]) => (
-              <View key={key} className="mb-1">
-                <Txt className="text-muted text-[11px] font-bold uppercase tracking-wide px-3 pt-2 pb-1">{t(`admin.dash.${key}`)}</Txt>
-                {rows.map((r) => (
-                  <Pressable key={r.id} testID={`search-result-${r.id}`} onPress={() => go(`${r.href}?target=${encodeURIComponent(r.id)}&focus=${Date.now()}`)} className="flex-row items-center gap-3 px-3 h-12 rounded-xl active:bg-surface2">
-                    <Icon name={r.icon} size={19} />
-                    <Txt numberOfLines={1} className="font-semibold text-[14px] flex-1">{r.title}</Txt>
-                    <Txt numberOfLines={1} className="text-muted text-[12px] max-w-[45%]">{r.sub}</Txt>
-                  </Pressable>
-                ))}
-              </View>
-            ))}
-          </Card>
-        ) : null}
-      </View>
-
+      <PushNotifications />
       {/* Attention banner */}
       {k.pending > 0 ? (
         <Pressable testID="dash-attention" onPress={() => go('/admin/requests')} className="flex-row items-center gap-3 rounded-2xl p-4 mb-4 bg-primary">

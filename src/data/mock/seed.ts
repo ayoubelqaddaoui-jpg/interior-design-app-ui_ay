@@ -199,4 +199,4 @@ export const defaultAssistant = (): T.AssistantConfig => ({
   whatsappNumber: '+212600000000',
   welcome: L('مرحبا! أنا مساعد ديال التصميم الداخلي، كيفاش نقدر نعاونك؟', 'مرحبًا! كيف يمكنني مساعدتك في تصميم منزلك؟', 'Bonjour ! Comment puis-je vous aider pour votre déco ?'),
 });
-export const defaultSettings = (): T.AppSettings => ({ defaultFreeCredits: 1, autoSendWhatsApp: false, homeShowAll: true, homeTabsVisible: true, userNavStyle: 'floating', adminNavMode: 'drawer', bulkPanels: ['tabs', 'tools', 'sections', 'categories', 'inspirations', 'styles', 'roomTypes', 'palettes', 'models'] });
+export const defaultSettings = (): T.AppSettings => ({ appSearchEnabled: true, adminSearchEnabled: true, exitConfirmationEnabled: true, defaultFreeCredits: 1, autoSendWhatsApp: false, homeShowAll: true, homeTabsVisible: true, userNavStyle: 'floating', adminNavMode: 'drawer', bulkPanels: ['tabs', 'tools', 'sections', 'categories', 'inspirations', 'styles', 'roomTypes', 'palettes', 'models'] });

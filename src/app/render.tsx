@@ -6,7 +6,8 @@ import { useStore, useMe } from '@/store/useStore';
 import { useWizard } from '@/store/useWizard';
 import { services, ME } from '@/data/repositories';
 import { useT } from '@/i18n';
-import { Button, Screen } from '@/components/ui';
+import { Button } from '@/components/ui/Button';
+import { Screen } from '@/components/ui/Screen';
 import { RenderingView } from '@/components/result/RenderingView';
 import { toast } from '@/store/useToast';
 

@@ -7,7 +7,10 @@ import { useStore, sorted } from '@/store/useStore';
 import { useWizard } from '@/store/useWizard';
 import { useL, useT } from '@/i18n';
 import { useBp } from '@/hooks/useBp';
-import { CreditsBadge, EmptyState, Screen, Txt } from '@/components/ui';
+import { CreditsBadge } from '@/components/ui/CreditsBadge';
+import { EmptyState } from '@/components/ui/EmptyState';
+import { Screen } from '@/components/ui/Screen';
+import { Txt } from '@/components/ui/Txt';
 import { BrandHeader } from '@/components/BrandHeader';
 import { ToolCard } from '@/components/ToolCard';
 

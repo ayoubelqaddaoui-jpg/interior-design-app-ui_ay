@@ -1,27 +1,28 @@
 import '../global.css';
 import '@/lib/interop';
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, ActivityIndicator } from 'react-native';
-import { Stack } from 'expo-router';
+import { Stack, usePathname } from 'expo-router';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { useFonts } from 'expo-font';
+import { ensureFont } from '@/lib/fonts';
+import { loadIcons } from '@/components/ui/Icon';
 import * as SplashScreen from 'expo-splash-screen';
 import { useStore } from '@/store/useStore';
 import { useLocal } from '@/store/useLocal';
 import { initLang, useLang, isRtl } from '@/i18n';
 import { ThemeProvider } from '@/theme/ThemeProvider';
 import { UnsavedChangesHost } from '@/hooks/useLeaveGuard';
+import { AppExitHost } from '@/components/AppExitHost';
+import { PushNavigationHost } from '@/components/PushNavigationHost';
 import { GlobalSearch } from '@/components/GlobalSearch';
-import { ToastHost } from '@/components/ui';
+import { ToastHost } from '@/components/ui/Toast';
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
 export default function RootLayout() {
-  const [fontsLoaded, fontError] = useFonts({
-    Tajawal: require('../../assets/fonts/Tajawal.ttf'),
-    Inter: require('../../assets/fonts/Inter.ttf'),
-  });
+  const initialPath = usePathname();
+  const [booted, setBooted] = useState(false);
   const ready = useStore((s) => s.ready);
   const loaded = useLocal((s) => s.loaded);
   const lang = useLang((s) => s.lang);
@@ -29,11 +30,18 @@ export default function RootLayout() {
   useEffect(() => {
     (async () => {
       await Promise.all([initLang(), useLocal.getState().load(), useStore.getState().init()]);
+      const { settings, branding } = useStore.getState().doc;
+      const family = useLang.getState().lang === 'fr' ? settings.frenchFont || 'Inter' : settings.arabicFont || 'Tajawal';
+      // Resolve actual persisted fonts once, before text mounts: no fallback/swap layout shift.
+      await Promise.allSettled([ensureFont(family), ensureFont(branding.logoFont || 'Inter'), loadIcons(), ...(initialPath.startsWith('/admin') ? [ensureFont(settings.arabicFont || 'Tajawal'), ensureFont(settings.frenchFont || 'Inter')] : [])]);
+      setBooted(true);
       SplashScreen.hideAsync().catch(() => {});
     })();
+  // Startup route is captured once; later navigation must never restart initialization.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const ok = ready && loaded && (fontsLoaded || !!fontError);
+  const ok = ready && loaded && booted;
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
@@ -42,11 +50,13 @@ export default function RootLayout() {
           <View style={{ flex: 1, direction: isRtl(lang) ? 'rtl' : 'ltr' } as any}>
             {ok ? (
               <>
-              <GlobalSearch />
               <Stack screenOptions={{ headerShown: false, animation: 'slide_from_right', contentStyle: { backgroundColor: 'transparent' } }}>
                 <Stack.Screen name="(tabs)" />
                 <Stack.Screen name="pro" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
               </Stack>
+              <GlobalSearch />
+              <AppExitHost />
+              <PushNavigationHost />
               </>
             ) : (
               <View className="flex-1 items-center justify-center bg-bg"><ActivityIndicator /></View>

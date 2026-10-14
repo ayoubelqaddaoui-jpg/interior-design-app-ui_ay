@@ -1,6 +1,7 @@
 import React from 'react';
 import { Pressable, View } from 'react-native';
-import { Input, Txt } from '@/components/ui';
+import { Input } from '@/components/ui/Field';
+import { Txt } from '@/components/ui/Txt';
 import { AdminPage } from '@/components/admin/AdminShell';
 import { CrudTable } from '@/components/admin/CrudTable';
 import { useT } from '@/i18n';

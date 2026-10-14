@@ -4,7 +4,9 @@ import { Tabs } from 'expo-router/js-tabs';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useT } from '@/i18n';
 import { useBp } from '@/hooks/useBp';
-import { CreditsBadge, Icon, Txt } from '@/components/ui';
+import { CreditsBadge } from '@/components/ui/CreditsBadge';
+import { Icon } from '@/components/ui/Icon';
+import { Txt } from '@/components/ui/Txt';
 import { useStore } from '@/store/useStore';
 import { BrandHeader } from '@/components/BrandHeader';
 

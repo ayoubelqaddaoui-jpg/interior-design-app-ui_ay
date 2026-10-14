@@ -1,14 +1,16 @@
+/* eslint-disable @typescript-eslint/no-require-imports -- Static Metro font assets. */
 import { useEffect, useSyncExternalStore } from 'react';
+import { Platform } from 'react-native';
 import * as Font from 'expo-font';
 
 /** Assets stay bundled for offline/native use, but only requested families are loaded. */
 const sources: Record<string, number> = {
-  Inter: require('../../assets/fonts/Inter.ttf'), Tajawal: require('../../assets/fonts/Tajawal.ttf'),
-  Roboto: require('../../assets/fonts/Roboto.ttf'), Poppins: require('../../assets/fonts/Poppins.ttf'),
-  Montserrat: require('../../assets/fonts/Montserrat.ttf'), Lato: require('../../assets/fonts/Lato.ttf'),
-  Cairo: require('../../assets/fonts/Cairo.ttf'), 'IBM Plex Sans Arabic': require('../../assets/fonts/IBMPlexSansArabic.ttf'),
-  'Noto Sans Arabic': require('../../assets/fonts/NotoSansArabic.ttf'), Alexandria: require('../../assets/fonts/Alexandria.ttf'),
-  Lora: require('../../assets/fonts/Lora.ttf'), NotoNaskhArabic: require('../../assets/fonts/NotoNaskhArabic.ttf'),
+  Inter: Platform.OS === 'web' ? require('../../assets/fonts/web/Inter.woff2') : require('../../assets/fonts/Inter.ttf'), Tajawal: Platform.OS === 'web' ? require('../../assets/fonts/web/Tajawal.woff2') : require('../../assets/fonts/Tajawal.ttf'),
+  Roboto: Platform.OS === 'web' ? require('../../assets/fonts/web/Roboto.woff2') : require('../../assets/fonts/Roboto.ttf'), Poppins: Platform.OS === 'web' ? require('../../assets/fonts/web/Poppins.woff2') : require('../../assets/fonts/Poppins.ttf'),
+  Montserrat: Platform.OS === 'web' ? require('../../assets/fonts/web/Montserrat.woff2') : require('../../assets/fonts/Montserrat.ttf'), Lato: Platform.OS === 'web' ? require('../../assets/fonts/web/Lato.woff2') : require('../../assets/fonts/Lato.ttf'),
+  Cairo: Platform.OS === 'web' ? require('../../assets/fonts/web/Cairo.woff2') : require('../../assets/fonts/Cairo.ttf'), 'IBM Plex Sans Arabic': Platform.OS === 'web' ? require('../../assets/fonts/web/IBMPlexSansArabic.woff2') : require('../../assets/fonts/IBMPlexSansArabic.ttf'),
+  'Noto Sans Arabic': Platform.OS === 'web' ? require('../../assets/fonts/web/NotoSansArabic.woff2') : require('../../assets/fonts/NotoSansArabic.ttf'), Alexandria: Platform.OS === 'web' ? require('../../assets/fonts/web/Alexandria.woff2') : require('../../assets/fonts/Alexandria.ttf'),
+  Lora: Platform.OS === 'web' ? require('../../assets/fonts/web/Lora.woff2') : require('../../assets/fonts/Lora.ttf'), NotoNaskhArabic: Platform.OS === 'web' ? require('../../assets/fonts/web/NotoNaskhArabic.woff2') : require('../../assets/fonts/NotoNaskhArabic.ttf'),
 };
 const pending = new Map<string, Promise<void>>();
 const listeners = new Set<() => void>();

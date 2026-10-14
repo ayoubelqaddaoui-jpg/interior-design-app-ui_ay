@@ -4,7 +4,7 @@ import { useLocalSearchParams } from 'expo-router';
 import { router } from '@/hooks/useLeaveGuard';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ChatView } from '@/components/ChatView';
-import { PageHeader } from '@/components/ui';
+import { PageHeader } from '@/components/ui/StepHeader';
 import { useStore } from '@/store/useStore';
 
 export default function ChatPage() {

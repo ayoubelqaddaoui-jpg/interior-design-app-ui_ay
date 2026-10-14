@@ -3,7 +3,9 @@ import { Pressable, View } from 'react-native';
 import { Image } from 'expo-image';
 import { sorted, useStore } from '@/store/useStore';
 import { useL, useT } from '@/i18n';
-import { GridSelector, Icon, Txt } from '@/components/ui';
+import { GridSelector } from '@/components/ui/GridSelector';
+import { Icon } from '@/components/ui/Icon';
+import { Txt } from '@/components/ui/Txt';
 import type { Group } from '@/data/types';
 
 /** Room type grid: icon OR image, per the admin's `displayMode`. Supports the NEW ribbon. */

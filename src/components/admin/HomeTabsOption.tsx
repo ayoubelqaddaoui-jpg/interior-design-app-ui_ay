@@ -1,6 +1,9 @@
 import React from 'react';
 import { View } from 'react-native';
-import { Card, Icon, Toggle, Txt } from '@/components/ui';
+import { Card } from '@/components/ui/Card';
+import { Icon } from '@/components/ui/Icon';
+import { Toggle } from '@/components/ui/Toggle';
+import { Txt } from '@/components/ui/Txt';
 import { useT } from '@/i18n';
 import { useStore } from '@/store/useStore';
 import { useDraftDoc } from '@/hooks/useDraftDoc';

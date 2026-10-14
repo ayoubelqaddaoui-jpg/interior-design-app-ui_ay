@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Pressable, View } from 'react-native';
-import { Icon, Txt } from '@/components/ui';
+import { Icon } from '@/components/ui/Icon';
+import { Txt } from '@/components/ui/Txt';
 import { useT } from '@/i18n';
 import { useTheme } from '@/theme/ThemeProvider';
 import type { GalleryLayout } from '@/data/types';

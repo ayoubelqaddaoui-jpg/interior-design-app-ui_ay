@@ -5,8 +5,11 @@
 import type { DocRepositories, Repositories, Services } from './types';
 import { createMockCollection, createMockDoc } from '../mock/collection';
 import * as S from '../mock/seed';
+import { backendEnabled, backendLogin } from '@/lib/backend';
+import { remoteRequests } from './remoteRequests';
 import { mockServices } from '../mock/services';
 
+const localRequests = createMockCollection('requests', S.seedRequests);
 export const repos: Repositories = {
   tabs: createMockCollection('tabs', S.seedTabs),
   tools: createMockCollection('tools', S.seedTools),
@@ -18,7 +21,7 @@ export const repos: Repositories = {
   inspirations: createMockCollection('inspirations', S.seedInspirations),
   models: createMockCollection('models', S.seedModels),
   users: createMockCollection('users', () => S.seedUsers(S.defaultSettings().defaultFreeCredits)),
-  requests: createMockCollection('requests', S.seedRequests),
+  requests: backendEnabled ? remoteRequests(localRequests) : localRequests,
   history: createMockCollection('history', () => []),
   conversations: createMockCollection('conversations', () => []),
 };
@@ -30,6 +33,6 @@ export const docs: DocRepositories = {
   settings: createMockDoc('settings', S.defaultSettings),
 };
 
-export const services: Services = mockServices;
+export const services: Services = backendEnabled ? { ...mockServices, auth: { loginAdmin: backendLogin } } : mockServices;
 export { ME } from '../mock/seed';
 export type * from './types';
