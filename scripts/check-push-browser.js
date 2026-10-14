@@ -48,13 +48,13 @@ async function main() {
     await client.getByTestId('pick-gallery').click();
     await (await chooser).setFiles('assets/favicon.png');
     await client.getByTestId('remove-photo').waitFor();
-    await client.getByTestId('wizard-continue').click();
+    await client.getByTestId('wizard-continue').last().click();
     await client.locator('[data-testid^="room-"]').first().click();
-    await client.getByTestId('wizard-continue').click();
+    await client.getByTestId('wizard-continue').last().click();
     await client.locator('[data-testid^="style-"]').first().click();
-    await client.getByTestId('wizard-continue').click();
+    await client.getByTestId('wizard-continue').last().click();
     await client.waitForTimeout(300);
-    if (await client.getByTestId('wizard-continue').count()) await client.getByTestId('wizard-continue').click();
+    if (new URL(client.url()).pathname.startsWith('/tool/')) await client.getByTestId('wizard-continue').last().click();
     await client.getByTestId('lead-name').fill(`  Chrome ${lang} Test  `);
     await client.getByTestId('lead-phone').fill('+212612345678');
     await client.getByTestId('lead-submit').click();
