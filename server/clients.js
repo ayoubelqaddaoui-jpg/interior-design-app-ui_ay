@@ -18,7 +18,13 @@ function createClients(file) {
   // Adapt without overriding connection.prepare: Bun query() calls it internally.
   const db = process.versions.bun ? {
     exec: connection.exec.bind(connection),
-    prepare: connection.query.bind(connection),
+    // Explicitly finalize even failed/partially stepped queries. Bun 1.3 may leave
+    // evicted cached statements alive, which prevents a deterministic SQLite close.
+    prepare: sql => Object.fromEntries(['get', 'all', 'run'].map(method => [method, (...args) => {
+      const statement = connection.prepare(sql);
+      try { return statement[method](...args); }
+      finally { statement.finalize(); }
+    }])),
     get isTransaction() { return connection.inTransaction; },
     close: () => connection.close(true),
   } : connection;
