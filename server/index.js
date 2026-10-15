@@ -88,7 +88,10 @@ function createBackend({ env = process.env, store = createStore(path.resolve(env
       await ready;
       const url = new URL(req.url, 'http://localhost');
       if (url.pathname.startsWith('/api/')) {
-        if (origin && !allowedOrigins.includes(origin)) throw fail(403, 'Origin not allowed');
+        // A single-host deployment needs no APP_ORIGINS build/runtime plumbing.
+        // Separate origins still require an explicit allowlist; forwarded headers are not trusted.
+        const sameOrigin = origin && /^https?:\/\//.test(origin) && new URL(origin).host === req.headers.host;
+        if (origin && !sameOrigin && !allowedOrigins.includes(origin)) throw fail(403, 'Origin not allowed');
         if (origin) { res.setHeader('Access-Control-Allow-Origin', origin); res.setHeader('Access-Control-Allow-Credentials', 'true'); res.setHeader('Vary', 'Origin'); }
         res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Demand-Token, X-Dwira-Native, X-User-Token, X-Device-ID');
         res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PATCH, DELETE, OPTIONS');
@@ -101,6 +104,7 @@ function createBackend({ env = process.env, store = createStore(path.resolve(env
         if (bucket.until < now) { bucket.count = 0; bucket.until = now + 15 * 60000; }
         bucket.count++; buckets.set(key, bucket);
         if (bucket.count > (url.pathname === '/api/admin/login' ? 20 : apiLimit)) throw fail(429, 'Too many requests');
+        if (url.pathname === '/api/health' && req.method === 'GET') return json(200, { ok: true, runtime: process.versions.bun ? 'bun' : 'node', adminConfigured: !!(env.ADMIN_EMAIL && env.ADMIN_PASSWORD_HASH) });
         const rawCookie = req.headers.cookie?.split(';').map(value => value.trim()).find(value => value.startsWith('dwira_admin='))?.slice(12);
         const sessionToken = req.headers.authorization?.replace(/^Bearer /, '') || rawCookie;
         const session = sessionToken && (await store.read()).sessions.find(row => row.tokenHash === hash(sessionToken) && row.expiresAt > now);
@@ -292,6 +296,8 @@ function createBackend({ env = process.env, store = createStore(path.resolve(env
 }
 if (require.main === module) {
   const backend = createBackend();
-  backend.server.listen(Number(process.env.PORT || 8080), '0.0.0.0', () => { console.log('Demand backend listening'); backend.pump(); });
+  if (!process.env.ADMIN_EMAIL || !process.env.ADMIN_PASSWORD_HASH) console.warn('Admin credentials are not configured: set ADMIN_EMAIL and ADMIN_PASSWORD_HASH.');
+  backend.server.listen(Number(process.env.PORT || 8080), '0.0.0.0', () => { console.log(`Dwira backend listening on port ${process.env.PORT || 8080} (${process.versions.bun ? 'Bun' : 'Node.js'})`); backend.pump(); });
+  for (const signal of ['SIGINT', 'SIGTERM']) process.once(signal, () => backend.server.close());
 }
 module.exports = { createBackend, passwordMatches };

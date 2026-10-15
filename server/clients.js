@@ -1,4 +1,5 @@
-const { DatabaseSync } = require('node:sqlite');
+// Keep the same SQLite schema and SQL on both runtimes; no service rewrite or data copy.
+const DatabaseSync = process.versions.bun ? require('bun:sqlite').Database : require('node:sqlite').DatabaseSync;
 const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
@@ -13,7 +14,20 @@ const fail = (status, code) => Object.assign(new Error(code), { status });
 /** Separate from the existing admin/request store. Signals never contain image bytes. */
 function createClients(file) {
   if (file !== ':memory:') fs.mkdirSync(path.dirname(file), { recursive: true, mode: 0o700 });
-  const db = new DatabaseSync(file);
+  const connection = new DatabaseSync(file);
+  // Adapt without overriding connection.prepare: Bun query() calls it internally.
+  const db = process.versions.bun ? {
+    exec: connection.exec.bind(connection),
+    // Explicitly finalize even failed/partially stepped queries. Bun 1.3 may leave
+    // evicted cached statements alive, which prevents a deterministic SQLite close.
+    prepare: sql => Object.fromEntries(['get', 'all', 'run'].map(method => [method, (...args) => {
+      const statement = connection.prepare(sql);
+      try { return statement[method](...args); }
+      finally { statement.finalize(); }
+    }])),
+    get isTransaction() { return connection.inTransaction; },
+    close: () => connection.close(true),
+  } : connection;
   if (file !== ':memory:') fs.chmodSync(file, 0o600);
   db.exec(`PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON; PRAGMA busy_timeout=5000;
     CREATE TABLE IF NOT EXISTS clients (

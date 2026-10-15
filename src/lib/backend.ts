@@ -2,9 +2,12 @@ import { Platform } from 'react-native';
 import { storage } from '@/data/mock/storage';
 
 // This is a public URL, never an admin credential or VAPID private key.
-const BASE = (process.env.EXPO_PUBLIC_API_URL || '').replace(/\/$/, '');
-export const backendEnabled = !!BASE;
+// Web deployments use the backend on the same host without build-time configuration.
+// Native builds still need an absolute URL. Demo mode must be explicitly requested.
+const BASE = (process.env.EXPO_PUBLIC_API_URL?.trim() || (Platform.OS === 'web' ? '/api' : '')).replace(/\/+$/, '');
+export const backendEnabled = process.env.EXPO_PUBLIC_BACKEND_MODE !== 'demo' && !!BASE;
 export class BackendError extends Error { constructor(public status: number, public code = '') { super(code || `Backend HTTP ${status}`); } }
+export const isBackendUnavailable = (error: unknown) => error instanceof BackendError && (error.code === 'BACKEND_UNAVAILABLE' || error.status >= 500);
 let deviceToken: string | null = null;
 export async function clientToken() {
   if (deviceToken) return deviceToken;
@@ -17,7 +20,7 @@ export async function clientToken() {
   return deviceToken;
 }
 export async function api<T>(path: string, options: { method?: string; body?: unknown; client?: boolean; raw?: Blob; headers?: Record<string, string> } = {}): Promise<T> {
-  if (!backendEnabled) throw new Error('Backend is not configured');
+  if (!backendEnabled) throw new BackendError(503, 'BACKEND_UNAVAILABLE');
   const headers: Record<string, string> = { 'Content-Type': 'application/json', ...options.headers };
   if (options.client) headers['X-Demand-Token'] = await clientToken();
   if (Platform.OS !== 'web') {
@@ -33,8 +36,15 @@ export async function api<T>(path: string, options: { method?: string; body?: un
   try {
     const transport = Platform.OS === 'web' ? fetch : (await import('expo/fetch')).fetch;
     const response = await transport(`${BASE}${path}`, { method: options.method || 'GET', headers, credentials: 'include', body: options.raw ?? (options.body == null ? undefined : JSON.stringify(options.body)), signal: controller.signal });
-    if (!response.ok) { const body = await response.json().catch(() => ({})); throw new BackendError(response.status, body.error); }
-    return await response.json();
+    // Static SPA rewrites often return index.html with HTTP 200 for missing API routes.
+    // Never mistake that response for a working backend or silently fall back to mocks.
+    if (!response.headers.get('content-type')?.toLowerCase().includes('application/json')) throw new BackendError(503, 'BACKEND_UNAVAILABLE');
+    const body = await response.json().catch(() => { throw new BackendError(502, 'BACKEND_UNAVAILABLE'); });
+    if (!response.ok) throw new BackendError(response.status, body.error);
+    return body as T;
+  } catch (error) {
+    if (error instanceof BackendError) throw error;
+    throw new BackendError(503, 'BACKEND_UNAVAILABLE');
   } finally { clearTimeout(timeout); }
 }
 export async function backendLogin(email: string, password: string) {

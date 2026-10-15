@@ -9,6 +9,7 @@ const types = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/cs
 http.createServer((req, res) => {
   let url;
   try { url = decodeURIComponent(req.url.split('?')[0]); } catch { res.writeHead(400); return res.end('Invalid URL'); }
+  if (/^\/api(?:\/|$)/.test(url)) { res.writeHead(503, { 'Content-Type': 'application/json' }); return res.end(JSON.stringify({ error: 'BACKEND_UNAVAILABLE' })); }
   let file = path.join(root, path.normalize(url));
   if (file !== root && !file.startsWith(root + path.sep)) { res.writeHead(403); return res.end(); }
   if (/node_modules/.test(url)) { res.writeHead(404); return res.end('blocked (mimics Vercel)'); }

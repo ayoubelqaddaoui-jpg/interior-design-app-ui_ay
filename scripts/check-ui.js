@@ -41,7 +41,7 @@ async function main() {
   await page.getByTestId('layout-masonry').click();
   assert.deepEqual(await saved('doc:settings'), originalSettings, 'Preview wrote to storage');
   await page.getByTestId('nav-tools').click();
-  assert.equal(await page.getByTestId('unsaved-message').innerText(), 'Vous avez des modifications non enregistrées. Enregistrer ou abandonner ?');
+  assert.equal(await page.getByTestId('unsaved-message').innerText(), 'Voulez-vous quitter ? Vous perdrez les étapes que vous avez effectuées.');
   await page.getByTestId('unsaved-cancel').click();
   assert.match(page.url(), /\/admin\/interface$/);
   assert.equal(await page.getByTestId('layout-masonry').getAttribute('aria-checked'), 'true');
