@@ -93,6 +93,13 @@ async function main() {
         await visible(page, 'lead-name').fill(`Test ${lang} ${size} ${theme}`);
         const phone = `+2127${runId}${String(count).padStart(2, '0')}`;
         await visible(page, 'lead-phone').fill(phone);
+        // A static host may answer API writes with HTML. Preserve the draft and allow a deliberate retry.
+        await page.route('**/api/user/login', route => route.fulfill({ status: 200, contentType: 'text/html', body: '<html>SPA fallback</html>' }));
+        await visible(page, 'lead-submit').click();
+        await page.getByText(dictionaries[lang].account.unavailable, { exact: true }).waitFor();
+        await expect(visible(page, 'lead-phone')).toHaveValue(phone);
+        assert.equal((await context.request.get(base + '/api/user/session')).status(), 401);
+        await page.unroute('**/api/user/login');
         await visible(page, 'lead-submit').click();
         await page.waitForURL('**/lead-success', { timeout: 25000 });
         assert.equal(await page.getByTestId('pro-cta').count(), 0, 'first generation must not show Pro');
@@ -105,6 +112,7 @@ async function main() {
         await wizard(page);
         await visible(page, 'pro-cta').waitFor();
         assert.equal(await page.getByTestId('lead-name').count(), 0, 'persistent login on second generation');
+        await visible(page, `returning-primary-${lang}`).click();
         await visible(page, 'pro-close').click();
         await page.getByTestId('unsaved-cancel').click();
         await visible(page, 'pro-close').click();
@@ -117,7 +125,12 @@ async function main() {
         await visible(page, 'admin-email').fill('preview@example.com');
         await visible(page, 'admin-password').fill('preview-password-only');
         await visible(page, 'admin-signin').click();
+        await page.route('**/api/admin/spam?*', route => route.fulfill({ status: 200, contentType: 'text/html', body: '<html>SPA fallback</html>' }));
         await navigateAdmin(page, 'spam');
+        await expect(visible(page, 'spam-error')).toHaveText(dictionaries[lang].spam.unavailable);
+        assert.equal(await visible(page, 'spam-rate').count(), 0, 'failed API must not display fabricated zero metrics');
+        await page.unroute('**/api/admin/spam?*');
+        await visible(page, 'spam-retry').click();
         await visible(page, 'spam-rate').waitFor();
         assert.equal(await visible(page, 'spam-block').getAttribute('aria-checked'), 'false');
         await visible(page, 'spam-block').click();
@@ -161,6 +174,7 @@ async function main() {
         assert.equal(restored.id, user.id); assert.equal(restored.freeUsed, 1);
         assert.equal((await (await context.request.get(base + '/api/user/history')).json())[0].id, space[0].id);
         // The same upload/device/IP with a NEW phone is blocked only while the switch is ON.
+        await visible(page, `returning-primary-${lang}`).click();
         await visible(page, 'pro-close').click();
         await page.getByTestId('unsaved-discard').click();
         await page.waitForTimeout(300);
