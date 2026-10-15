@@ -15,7 +15,11 @@ const fail = (status, code) => Object.assign(new Error(code), { status });
 function createClients(file) {
   if (file !== ':memory:') fs.mkdirSync(path.dirname(file), { recursive: true, mode: 0o700 });
   const db = new DatabaseSync(file);
-  if (process.versions.bun) Object.defineProperty(db, 'isTransaction', { get: () => db.inTransaction });
+  if (process.versions.bun) {
+    Object.defineProperty(db, 'isTransaction', { get: () => db.inTransaction });
+    // Bun's cached statements are finalized on close; unmanaged prepare() handles are not.
+    db.prepare = db.query.bind(db);
+  }
   if (file !== ':memory:') fs.chmodSync(file, 0o600);
   db.exec(`PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON; PRAGMA busy_timeout=5000;
     CREATE TABLE IF NOT EXISTS clients (
