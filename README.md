@@ -85,7 +85,7 @@ For a separately hosted API, set `EXPO_PUBLIC_API_URL=https://api-host/api` **be
 npm run typecheck
 npm run lint
 node --test scripts/check-backend-config.js scripts/check-push-server.js scripts/check-client-server.js scripts/check-returning-server.js
-bun test scripts/check-push-server.js scripts/check-client-server.js scripts/check-returning-server.js
+bun test ./scripts/check-push-server.js ./scripts/check-client-server.js ./scripts/check-returning-server.js
 ```
 
 A/B “purchases” remain existing demo Pro confirmations, not verified payments. Phone-only login also remains the existing behavior (no OTP verification); do not treat knowledge of a phone number as production-grade proof of identity.

@@ -138,3 +138,19 @@ test('HTTP user/admin session isolation, backend ownership, request validation a
     assert.equal(restored.body.user.id, login.body.user.id); assert.equal(restored.body.user.freeUsed, 1);
   } finally { backend.server.emit('close'); fs.rmSync(directory, { recursive: true, force: true }); }
 });
+
+
+test('health identifies the live runtime; same-origin deployments work without an origin allowlist', async () => {
+  const directory = fs.mkdtempSync(path.join(root, 'health-http-'));
+  const backend = createBackend({ env: { DATA_FILE: path.join(directory, 'state.json'), COOKIE_SECURE: 'false' } });
+  try {
+    const health = await call(backend, '/api/health', { headers: { origin: 'https://dwira.example', host: 'dwira.example' } });
+    assert.equal(health.status, 200);
+    assert.equal(health.body.ok, true);
+    assert.equal(health.body.runtime, process.versions.bun ? 'bun' : 'node');
+    assert.equal(health.body.adminConfigured, false);
+    assert.equal(health.headers['access-control-allow-origin'], 'https://dwira.example');
+    assert.equal((await call(backend, '/api/health', { headers: { origin: 'https://evil.example', host: 'dwira.example' } })).status, 403);
+    assert.equal((await call(backend, '/api/admin/spam', { headers: { origin: 'https://dwira.example', host: 'dwira.example' } })).status, 401, 'same origin does not bypass admin authentication');
+  } finally { backend.server.emit('close'); fs.rmSync(directory, { recursive: true, force: true }); }
+});
