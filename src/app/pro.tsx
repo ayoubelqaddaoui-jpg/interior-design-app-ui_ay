@@ -1,5 +1,8 @@
 import { useViewState } from '@/hooks/useViewState';
-import React from 'react';
+import React, { useCallback, useRef, useState } from 'react';
+import { ReturningPopup } from '@/components/ReturningMessage';
+import { returningRepo } from '@/lib/returning';
+import { backendEnabled } from '@/lib/backend';
 import { useLocalSearchParams } from 'expo-router';
 import { useWizardGuard } from '@/hooks/useWizardGuard';
 import { useWizard } from '@/store/useWizard';
@@ -29,8 +32,27 @@ export default function Pro() {
   const { generation } = useLocalSearchParams<{ generation?: string }>();
   const canContinue = generation === '1' && !!useWizard.getState().photoUri && (me?.credits ?? 0) > 0;
   const [plan, setPlan] = useViewState<string>('plan', 'monthly');
-  return (
-    <Screen max={520} padded={false} footer={<View className="px-4"><Button testID="pro-cta" title={t(canContinue ? 'wizard.generate' : 'pro.cta')} size="lg" full onPress={() => { if (canContinue) { useWizard.setState({ proSeen: true }); router.replace('/render'); } else toast(t('pro.thanks')); }} /><Txt className="text-muted text-[11px] text-center mt-2">{t('pro.demoNote')}</Txt></View>}>
+  const [dismissed, setDismissed] = useState(false);
+  const [assigned, setAssigned] = useState<string | null>(null);
+  const [confirming, setConfirming] = useState(false);
+  const confirmation = useRef(false);
+  const continueToPlans = useCallback(() => setDismissed(true), []);
+  const later = useCallback(() => router.replace('/'), []);
+  const returning = !dismissed && (!!me?.freeUsed || (!backendEnabled && generation === '1'));
+  const confirmUpgrade = async () => {
+    if (canContinue) { useWizard.setState({ proSeen: true }); router.replace('/render'); return; }
+    if (confirmation.current) return;
+    confirmation.current = true; setConfirming(true);
+    // Existing demo upgrade-confirmation event: pro-cta -> pro.thanks toast.
+    // No real payment or credits are claimed; the admin report labels this explicitly.
+    toast(t('pro.thanks'));
+    try { if (me?.freeUsed) await returningRepo.event(assigned, 'upgrade_confirmation'); }
+    catch { toast(t('returning.tracking')); }
+    finally { confirmation.current = false; setConfirming(false); }
+  };
+  return (<>
+    {returning ? <ReturningPopup onContinue={continueToPlans} onLater={later} onAssigned={setAssigned} /> : null}
+    <Screen max={520} padded={false} footer={<View className="px-4"><Button testID="pro-cta" title={t(canContinue ? 'wizard.generate' : 'pro.cta')} size="lg" full loading={confirming} onPress={() => { void confirmUpgrade(); }} /><Txt className="text-muted text-[11px] text-center mt-2">{t('pro.demoNote')}</Txt></View>}>
       <LinearGradient colors={['#FBDD2D', '#F7B500']} style={{ paddingTop: 20, paddingBottom: 36, paddingHorizontal: 20, borderBottomLeftRadius: 32, borderBottomRightRadius: 32 }}>
         <View className="flex-row justify-between items-center">
           <Pressable testID="pro-close" onPress={() => router.back()} className="w-10 h-10 rounded-full bg-black/10 items-center justify-center"><Icon name="close" size={22} color="#111" /></Pressable>
@@ -65,5 +87,5 @@ export default function Pro() {
         <Pressable onPress={() => toast(t('pro.demoNote'))} className="mt-4 items-center"><Txt className="text-muted text-[13px] underline">{t('pro.restore')}</Txt></Pressable>
       </View>
     </Screen>
-  );
+  </>);
 }
