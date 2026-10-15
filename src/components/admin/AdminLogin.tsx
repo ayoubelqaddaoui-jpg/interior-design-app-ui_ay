@@ -28,6 +28,7 @@ export function AdminLogin({ forbidden }: { forbidden?: boolean }) {
     if (!r.ok) return setErr(t('admin.invalid'));
     if (!hasAdmin) return setErr(t('admin.forbidden'));
     useLocal.getState().set({ adminSession: true });
+    if (backendEnabled) await Promise.all(['users', 'requests'].map(name => useStore.getState().reload(name as 'users' | 'requests')));
   };
   return (
     <View className="flex-1 bg-bg items-center justify-center p-5">

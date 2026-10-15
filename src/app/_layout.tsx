@@ -9,6 +9,7 @@ import { ensureFont } from '@/lib/fonts';
 import { loadIcons } from '@/components/ui/Icon';
 import * as SplashScreen from 'expo-splash-screen';
 import { useStore } from '@/store/useStore';
+import { useUserSession } from '@/store/useUserSession';
 import { useLocal } from '@/store/useLocal';
 import { initLang, useLang, isRtl } from '@/i18n';
 import { ThemeProvider } from '@/theme/ThemeProvider';
@@ -29,7 +30,7 @@ export default function RootLayout() {
 
   useEffect(() => {
     (async () => {
-      await Promise.all([initLang(), useLocal.getState().load(), useStore.getState().init()]);
+      await Promise.all([initLang(), useLocal.getState().load(), useUserSession.getState().refresh().then(() => useStore.getState().init())]);
       const { settings, branding } = useStore.getState().doc;
       const family = useLang.getState().lang === 'fr' ? settings.frenchFont || 'Inter' : settings.arabicFont || 'Tajawal';
       // Resolve actual persisted fonts once, before text mounts: no fallback/swap layout shift.

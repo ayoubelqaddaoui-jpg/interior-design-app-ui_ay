@@ -28,7 +28,7 @@ test('durable save, real web-push encryption, isolated failures/410 cleanup, aut
   const store = createStore(file);
   const vapid = webpush.generateVAPIDKeys();
   const salt = 'test-salt', password = 'local-test-password-only';
-  const env = { VAPID_PUBLIC_KEY: vapid.publicKey, VAPID_PRIVATE_KEY: vapid.privateKey, VAPID_SUBJECT: 'mailto:testing@example.com', ADMIN_EMAIL: 'test@example.com', ADMIN_PASSWORD_HASH: `${salt}:${crypto.scryptSync(password, salt, 64).toString('hex')}`, COOKIE_SECURE: 'false', FCM_SERVICE_ACCOUNT_JSON: '{}' };
+  const env = { VAPID_PUBLIC_KEY: vapid.publicKey, VAPID_PRIVATE_KEY: vapid.privateKey, VAPID_SUBJECT: 'mailto:testing@example.com', ADMIN_EMAIL: 'test@example.com', ADMIN_PASSWORD_HASH: `${salt}:${crypto.scryptSync(password, salt, 64).toString('hex')}`, DATA_FILE: file, COOKIE_SECURE: 'false', FCM_SERVICE_ACCOUNT_JSON: '{}' };
   const sent = [], fcm = [];
   let failure = false;
   const backend = createBackend({ env, store, senders: {
@@ -58,7 +58,11 @@ test('durable save, real web-push encryption, isolated failures/410 cleanup, aut
     assert.equal((await store.read()).subscriptions.length, 5);
     assert.equal((await call(backend, '/api/push/subscriptions', { method: 'POST', headers: auth, body: { ...subscription('bad'), subscription: { endpoint: 'https://127.0.0.1/private', keys: arabic.subscription.keys } } })).status, 400);
     const demand = { id: 'stable-demand-1234', name: '  Test Client  ', whatsapp: ' +212 612345678 ', photoUri: 'data:image/png;base64,dGVzdA==', draft: { toolId: 'tool_interior' } };
-    const client = { 'x-demand-token': 'a'.repeat(64) };
+    const user = backend.clients.login(demand.name.trim(), demand.whatsapp);
+    const uploadReq = Readable.from([Buffer.from('test')]);
+    uploadReq.headers = { 'content-type': 'image/png' }; uploadReq.socket = { remoteAddress: 'test-client' };
+    demand.uploadId = (await backend.clients.upload(uploadReq, user.user, 'a'.repeat(64))).uploadId;
+    const client = { 'x-demand-token': 'a'.repeat(64), 'x-user-token': user.token };
     failure = true;
     const created = await call(backend, '/api/requests', { method: 'POST', headers: client, body: demand });
     assert.equal(created.status, 201);

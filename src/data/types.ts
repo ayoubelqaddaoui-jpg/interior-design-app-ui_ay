@@ -74,6 +74,7 @@ export interface AiModel {
 }
 
 export interface AppUser {
+  freeUsed?: number;
   id: Id;
   name: string;
   whatsapp: string;
@@ -95,6 +96,7 @@ export interface Draft {
 export interface WizardDraft extends Draft { photoUri: string }
 
 export interface HistoryItem {
+  claimId?: string;
   requestId?: Id;
   id: Id;
   userId: Id;
@@ -107,6 +109,7 @@ export interface HistoryItem {
 
 export type RequestStatus = 'pending' | 'processing' | 'delivered';
 export interface RenderRequest {
+  uploadId?: string;
   id: Id;
   userId: Id;
   name: string;

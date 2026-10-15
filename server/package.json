@@ -3,10 +3,10 @@
   "version": "1.0.0",
   "private": true,
   "type": "commonjs",
-  "engines": { "node": ">=20" },
+  "engines": { "node": ">=22.13" },
   "scripts": {
     "start": "node index.js",
-    "test": "node --test ../scripts/check-push-server.js",
+    "test": "cd .. && node --test scripts/check-push-server.js scripts/check-client-server.js",
     "keys": "web-push generate-vapid-keys --json",
     "password": "node password.js"
   },

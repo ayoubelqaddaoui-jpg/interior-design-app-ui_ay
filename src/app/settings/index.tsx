@@ -1,10 +1,12 @@
 import React, { useState } from 'react';
 import { Pressable, View } from 'react-native';
+import { useUserSession } from '@/store/useUserSession';
+import { useWizard } from '@/store/useWizard';
 import { router } from '@/hooks/useLeaveGuard';
 import Constants from 'expo-constants';
 import { useLang, LANGS, useT } from '@/i18n';
 import { useLocal } from '@/store/useLocal';
-import { useMe, useStore } from '@/store/useStore';
+import { reloadUserSpace, useMe, useStore } from '@/store/useStore';
 import { Card } from '@/components/ui/Card';
 import { Icon } from '@/components/ui/Icon';
 import { PageHeader } from '@/components/ui/StepHeader';
@@ -30,6 +32,14 @@ export default function Settings() {
   const setLang = useLang((s) => s.set);
   const { notifications, set } = useLocal();
   const me = useMe();
+  const user = useUserSession(s => s.user);
+  const [loggingOut, setLoggingOut] = useState(false);
+  const logout = async () => {
+    if (loggingOut) return;
+    setLoggingOut(true);
+    try { await useUserSession.getState().logout(); useWizard.getState().clear(); useStore.setState({ history: [], conversations: [], requests: [] }); await reloadUserSpace(); router.replace('/'); }
+    catch { toast(t('account.logoutError')); } finally { setLoggingOut(false); }
+  };
   const branding = useStore((s) => s.doc.branding);
   const [doc, setDoc] = useState<'about' | 'privacy' | null>(null);
   const ver = Constants.expoConfig?.version ?? '1.0.0';
@@ -60,6 +70,7 @@ export default function Settings() {
         <View className="h-px bg-line mx-4" />
         <Row icon="cog-box" title={t('settings.admin')} onPress={() => router.push('/admin')} testID="row-admin" />
       </Card>
+      {user ? <Card className="overflow-hidden mb-5"><Row icon="logout" title={t('account.logout')} sub={user.whatsapp} onPress={() => { void logout(); }} testID="user-logout" /></Card> : null}
       <Txt className="text-muted text-center text-[12px]">{branding.appName} · {t('settings.version')} {ver}</Txt>
 
       <Sheet visible={doc !== null} onClose={() => setDoc(null)} title={doc ? t(`settings.${doc}`) : ''}>

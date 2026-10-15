@@ -62,7 +62,7 @@ function Detail({ id, onClose }: { id: string | null; onClose: () => void }) {
     await s.update('requests', r.id, { status, ...extra });
     if (status === 'delivered') {
       const out = extra.finalResult ?? r.finalResult ?? r.aiResult;
-      if (r.historyId && out) await s.update('history', r.historyId, { after: out, status: 'done' });
+      if (r.historyId && out && !(backendEnabled && /^[a-f0-9]{8}-/.test(r.id))) await s.update('history', r.historyId, { after: out, status: 'done' });
       toast(t('admin.req.deliveredToast'));
     }
   };

@@ -13,7 +13,7 @@ import { Icon } from '@/components/ui/Icon';
 import { MediaView } from '@/components/ui/MediaView';
 import { Screen } from '@/components/ui/Screen';
 import { Txt } from '@/components/ui/Txt';
-import { ME } from '@/data/repositories';
+import { useUserSession } from '@/store/useUserSession';
 import { toast } from '@/store/useToast';
 import { useBp } from '@/hooks/useBp';
 
@@ -21,8 +21,9 @@ export default function History() {
   const { t } = useT();
   const { desktop } = useBp();
   const me = useMe();
-  const history = useStore((s) => s.history).filter((h) => h.userId === ME).sort((a, b) => b.createdAt - a.createdAt);
-  const chats = useStore((s) => s.conversations).filter((c) => c.userId === ME).sort((a, b) => b.updatedAt - a.updatedAt);
+  const userId = useUserSession(s => s.user?.id);
+  const history = useStore((s) => s.history).filter((h) => h.userId === userId).sort((a, b) => b.createdAt - a.createdAt);
+  const chats = useStore((s) => s.conversations).filter((c) => c.userId === (userId || 'usr_me')).sort((a, b) => b.updatedAt - a.updatedAt);
   const tools = useStore((s) => s.tools);
   const { notifications, bannerDismissed, set } = useLocal();
   const [tab, setTab] = useViewState<'designs' | 'chats'>('tab', 'designs');

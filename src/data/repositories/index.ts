@@ -6,6 +6,7 @@ import type { DocRepositories, Repositories, Services } from './types';
 import { createMockCollection, createMockDoc } from '../mock/collection';
 import * as S from '../mock/seed';
 import { backendEnabled, backendLogin } from '@/lib/backend';
+import { remoteSpace, remoteUsers } from './remoteSpace';
 import { remoteRequests } from './remoteRequests';
 import { mockServices } from '../mock/services';
 
@@ -20,10 +21,10 @@ export const repos: Repositories = {
   categories: createMockCollection('categories', S.seedCategories),
   inspirations: createMockCollection('inspirations', S.seedInspirations),
   models: createMockCollection('models', S.seedModels),
-  users: createMockCollection('users', () => S.seedUsers(S.defaultSettings().defaultFreeCredits)),
+  users: backendEnabled ? remoteUsers(createMockCollection('users', () => S.seedUsers(S.defaultSettings().defaultFreeCredits))) : createMockCollection('users', () => S.seedUsers(S.defaultSettings().defaultFreeCredits)),
   requests: backendEnabled ? remoteRequests(localRequests) : localRequests,
-  history: createMockCollection('history', () => []),
-  conversations: createMockCollection('conversations', () => []),
+  history: backendEnabled ? remoteSpace('history', createMockCollection('history', () => [])) : createMockCollection('history', () => []),
+  conversations: backendEnabled ? remoteSpace('conversations', createMockCollection('conversations', () => [])) : createMockCollection('conversations', () => []),
 };
 
 export const docs: DocRepositories = {
