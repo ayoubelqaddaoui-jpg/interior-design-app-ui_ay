@@ -1,5 +1,8 @@
 import { useViewState } from '@/hooks/useViewState';
 import React from 'react';
+import { useLocalSearchParams } from 'expo-router';
+import { useWizardGuard } from '@/hooks/useWizardGuard';
+import { useWizard } from '@/store/useWizard';
 import { Pressable, View } from 'react-native';
 import { router } from '@/hooks/useLeaveGuard';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -21,10 +24,13 @@ const PLANS = [
 /** Paywall UI only: no real payment. */
 export default function Pro() {
   const { t } = useT();
+  useWizardGuard();
   const me = useMe();
+  const { generation } = useLocalSearchParams<{ generation?: string }>();
+  const canContinue = generation === '1' && !!useWizard.getState().photoUri && (me?.credits ?? 0) > 0;
   const [plan, setPlan] = useViewState<string>('plan', 'monthly');
   return (
-    <Screen max={520} padded={false} footer={<View className="px-4"><Button testID="pro-cta" title={t('pro.cta')} size="lg" full onPress={() => toast(t('pro.thanks'))} /><Txt className="text-muted text-[11px] text-center mt-2">{t('pro.demoNote')}</Txt></View>}>
+    <Screen max={520} padded={false} footer={<View className="px-4"><Button testID="pro-cta" title={t(canContinue ? 'wizard.generate' : 'pro.cta')} size="lg" full onPress={() => { if (canContinue) { useWizard.setState({ proSeen: true }); router.replace('/render'); } else toast(t('pro.thanks')); }} /><Txt className="text-muted text-[11px] text-center mt-2">{t('pro.demoNote')}</Txt></View>}>
       <LinearGradient colors={['#FBDD2D', '#F7B500']} style={{ paddingTop: 20, paddingBottom: 36, paddingHorizontal: 20, borderBottomLeftRadius: 32, borderBottomRightRadius: 32 }}>
         <View className="flex-row justify-between items-center">
           <Pressable testID="pro-close" onPress={() => router.back()} className="w-10 h-10 rounded-full bg-black/10 items-center justify-center"><Icon name="close" size={22} color="#111" /></Pressable>

@@ -10,21 +10,28 @@ import i18n, { useT } from '@/i18n';
 import { changes, type Change } from '@/lib/changes';
 import { toast } from '@/store/useToast';
 
-type Guard = { save: () => Promise<boolean | void>; discard: () => void; changes?: () => Change[] };
+type Guard = { save: () => Promise<boolean | void>; discard: () => void; changes?: () => Change[]; allow?: (destination?: string) => boolean };
 export type DraftDetails = { before: unknown; after: unknown; labels?: Record<string, string>; secrets?: string[] };
 let exitHandler: ((action: () => void) => void) | null = null;
 export function registerAppExit(handler: typeof exitHandler) { exitHandler = handler; return () => { if (exitHandler === handler) exitHandler = null; }; }
 export function requestAppExit(action: () => void) { if (exitHandler) exitHandler(action); else action(); }
+const destinationOf = (href: unknown) => {
+  if (typeof href === 'string') return href;
+  const value = href as { pathname?: string; params?: Record<string, string> };
+  if (value.pathname === '/tool/[id]') return `/tool/${value.params?.id}?forward=${value.params?.forward || '0'}`;
+  if (value.pathname === '/pro' && value.params?.generation === '1') return '/pro?generation=1';
+  return value.pathname;
+};
 const exitAware = (href: unknown, action: () => void) => {
   const value = typeof href === 'string' ? href : (href as { pathname?: string })?.pathname;
   if (value?.startsWith('/admin') || /^(https?:|mailto:|tel:)/.test(value ?? '')) requestAppExit(action); else action();
 };
 const guards = new Map<symbol, Guard>();
-const dialog = create<{ pending: (() => void) | null }>(() => ({ pending: null }));
+const dialog = create<{ pending: (() => void) | null; resolving: boolean }>(() => ({ pending: null, resolving: false }));
 let bypass = false;
 /** All app navigation goes through the same guard, including non-route actions (logout). */
-export function requestLeave(action: () => void) {
-  if (bypass || !guards.size) {
+export function requestLeave(action: () => void, destination?: string) {
+  if (bypass || !guards.size || [...guards.values()].every(guard => guard.allow?.(destination))) {
     if (Platform.OS === 'web') window.dispatchEvent(new Event('dwira:before-navigation'));
     action();
   }
@@ -44,11 +51,20 @@ function navigate(action: () => void) {
     window.history.back();
   } else action();
 }
+let nativeDestination: string | undefined;
+function navigateTo(href: unknown, action: () => void) {
+  const destination = destinationOf(href);
+  requestLeave(() => navigate(() => {
+    nativeDestination = destination;
+    action();
+    setTimeout(() => { nativeDestination = undefined; }, 250);
+  }), destination);
+}
 export const router = {
   ...expoRouter,
-  navigate: (...args: Parameters<typeof expoRouter.navigate>) => requestLeave(() => navigate(() => exitAware(args[0], () => expoRouter.navigate(...args)))),
-  push: (...args: Parameters<typeof expoRouter.push>) => requestLeave(() => navigate(() => exitAware(args[0], () => expoRouter.push(...args)))),
-  replace: (...args: Parameters<typeof expoRouter.replace>) => requestLeave(() => navigate(() => exitAware(args[0], () => expoRouter.replace(...args)))),
+  navigate: (...args: Parameters<typeof expoRouter.navigate>) => navigateTo(args[0], () => exitAware(args[0], () => expoRouter.navigate(...args))),
+  push: (...args: Parameters<typeof expoRouter.push>) => navigateTo(args[0], () => exitAware(args[0], () => expoRouter.push(...args))),
+  replace: (...args: Parameters<typeof expoRouter.replace>) => navigateTo(args[0], () => exitAware(args[0], () => expoRouter.replace(...args))),
   back: () => {
     if (dialog.getState().pending) { dialog.setState({ pending: null }); return; }
     const overlay = topCheckpoint();
@@ -67,29 +83,36 @@ export function useNativeOverlayBack(active: boolean, onBack: () => void) {
   usePreventRemove(active && focused && Platform.OS !== 'web', () => onBack());
 }
 
-export function useLeaveGuard(dirty: boolean, save: Guard['save'], discard: Guard['discard'], details?: DraftDetails) {
+export function useLeaveGuard(dirty: boolean, save: Guard['save'], discard: Guard['discard'], details?: DraftDetails, allow?: Guard['allow']) {
+  const resolving = dialog(s => s.resolving);
   const focused = useIsFocused();
   const navigation = useNavigation();
-  const ref = useRef({ save, discard, details });
-  useLayoutEffect(() => { ref.current = { save, discard, details }; });
+  const ref = useRef({ save, discard, details, allow });
+  useLayoutEffect(() => { ref.current = { save, discard, details, allow }; });
   useEffect(() => {
     if (!dirty || !focused) return;
     const id = Symbol('draft');
-    guards.set(id, { save: () => ref.current.save(), discard: () => ref.current.discard(), changes: () => {
+    guards.set(id, { allow: destination => ref.current.allow?.(destination) ?? false, save: () => ref.current.save(), discard: () => ref.current.discard(), changes: () => {
       const value = ref.current.details;
       return value ? changes(value.before, value.after).map(change => ({ ...change, label: value.labels?.[change.path] ?? value.labels?.[change.path.split('.')[0]], secret: value.secrets?.some(key => change.path === key || change.path.startsWith(`${key}.`)) })) : [];
     } });
     return () => { guards.delete(id); };
   }, [dirty, focused]);
-  usePreventRemove(dirty && focused && Platform.OS !== 'web', ({ data }) => {
-    requestLeave(() => navigation.dispatch(data.action));
+  usePreventRemove(dirty && focused && !resolving && Platform.OS !== 'web', ({ data }) => {
+    const destination = ['REPLACE', 'PUSH', 'NAVIGATE'].includes(data.action.type) ? nativeDestination : undefined;
+    nativeDestination = undefined;
+    requestLeave(() => {
+      // Native remove guards must observe the released state before replay.
+      dialog.setState({ resolving: true });
+      setTimeout(() => { navigation.dispatch(data.action); setTimeout(() => dialog.setState({ resolving: false }), 100); }, 80);
+    }, destination);
   });
   useEffect(() => {
-    if (!dirty || !focused || Platform.OS !== 'web') return;
+    if (!dirty || !focused || resolving || Platform.OS !== 'web') return;
     const unload = (event: BeforeUnloadEvent) => { event.preventDefault(); event.returnValue = ''; };
     window.addEventListener('beforeunload', unload);
     return () => window.removeEventListener('beforeunload', unload);
-  }, [dirty, focused]);
+  }, [dirty, focused, resolving]);
 }
 
 /** A history checkpoint prevents browser Back from unmounting a dirty screen.
@@ -154,15 +177,17 @@ export function UnsavedChangesHost() {
         if (save) { if (await guard.save() === false) return; }
         else guard.discard();
       }
-      dialog.setState({ pending: null });
+      // Synchronously release all dirty guards before replaying navigation.
+      guards.clear();
+      dialog.setState({ pending: null, resolving: true });
       // Let guard/checkpoint cleanup run before replaying the requested action.
-      setTimeout(() => { bypass = true; try { pending?.(); } finally { bypass = false; } }, 80);
+      setTimeout(() => { bypass = true; try { pending?.(); } finally { bypass = false; setTimeout(() => dialog.setState({ resolving: false }), 100); } }, 80);
     } catch { toast(t('improve.saveError')); }
     finally { setBusy(false); }
   };
   if (!pending) return null;
-  return <Sheet visible={!!pending} history={false} onClose={() => { if (!busy) dialog.setState({ pending: null }); }} title={t('improve.unsavedTitle')}>
-    <Txt testID="unsaved-message" className="font-bold text-[17px] mb-4">{t('improve.unsaved')}</Txt>
+  return <Sheet visible={!!pending} history={false} onClose={() => { if (!busy) dialog.setState({ pending: null }); }} title={t('leaveConfirm.title')}>
+    <Txt testID="unsaved-message" className="font-bold text-[17px] mb-4">{t('leaveConfirm.message')}</Txt>
     <View testID="unsaved-differences" className="gap-3 mb-4">
       {[...new Map([...guards.values()].flatMap(guard => guard.changes?.() ?? []).map(change => [JSON.stringify([change.path, change.before, change.after]), change])).values()].map((change, index) => {
         const label = change.label ?? change.path.split('.').map(key => {
@@ -184,9 +209,9 @@ export function UnsavedChangesHost() {
       })}
     </View>
     <View className="gap-2">
-      <Button testID="unsaved-save" title={t('improve.saveChanges')} loading={busy} onPress={() => resolve(true)} />
-      <Button testID="unsaved-discard" title={t('improve.discard')} variant="soft" disabled={busy} onPress={() => resolve(false)} />
-      <Button testID="unsaved-cancel" title={t('common.cancel')} variant="ghost" disabled={busy} onPress={() => dialog.setState({ pending: null })} />
+      {[...guards.values()].some(guard => guard.changes?.().length) ? <Button testID="unsaved-save" title={t('improve.saveChanges')} loading={busy} onPress={() => resolve(true)} /> : null}
+      <Button testID="unsaved-discard" title={t('leaveConfirm.yes')} variant="soft" disabled={busy} onPress={() => resolve(false)} />
+      <Button testID="unsaved-cancel" title={t('leaveConfirm.no')} variant="ghost" disabled={busy} onPress={() => dialog.setState({ pending: null })} />
     </View>
   </Sheet>;
 }

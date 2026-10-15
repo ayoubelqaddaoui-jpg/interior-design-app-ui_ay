@@ -1,3 +1,4 @@
+import { useUserSession } from './useUserSession';
 import { create } from 'zustand';
 import type { CollMap, CollName, DocMap, DocName, AppUser } from '@/data/types';
 import { repos, docs, ME } from '@/data/repositories';
@@ -101,5 +102,12 @@ export const sorted = <T extends { order: number }>(a: T[]) => [...a].sort((x, y
 export const nextOrder = (a: { order: number }[]) => (a.length ? Math.max(...a.map((x) => x.order)) + 1 : 0);
 
 /** Current (single, device-local) end user. */
-export const useMe = (): AppUser | undefined => useStore((s) => s.users.find((u) => u.id === ME));
+export const useMe = (): AppUser | undefined => {
+  const user = useUserSession(s => s.user);
+  const guest = useStore(s => s.users.find(u => u.id === ME));
+  return user ?? guest;
+};
+export async function reloadUserSpace() {
+  await Promise.all(['history', 'conversations', 'requests'].map(name => useStore.getState().reload(name as CollName)));
+}
 export { uid };

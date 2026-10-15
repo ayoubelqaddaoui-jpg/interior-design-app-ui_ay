@@ -5,10 +5,11 @@ import { Redirect } from 'expo-router';
 import { router } from '@/hooks/useLeaveGuard';
 import Animated, { FadeInDown, ZoomIn } from 'react-native-reanimated';
 import { toast } from '@/store/useToast';
-import { uid } from '@/lib/uid';
-import { useStore, useMe } from '@/store/useStore';
+import { useUserSession } from '@/store/useUserSession';
+import { backendEnabled, BackendError } from '@/lib/backend';
+import { useWizardGuard } from '@/hooks/useWizardGuard';
+import { reloadUserSpace } from '@/store/useStore';
 import { useWizard } from '@/store/useWizard';
-import { ME } from '@/data/repositories';
 import { useT } from '@/i18n';
 import { Button } from '@/components/ui/Button';
 import { Icon } from '@/components/ui/Icon';
@@ -21,9 +22,9 @@ import { cleanPhone, validPhone } from '@/lib/share';
 /** First free render: ask for Name + WhatsApp. Creates a Render Request for the admin. */
 export default function Lead() {
   const { t } = useT();
-  const me = useMe();
+  const me = useUserSession(s => s.user);
+  useWizardGuard();
   const w = useWizard();
-  const [requestId] = useViewState('requestId', () => uid('req'));
   const [name, setName] = useViewState('name', me?.name ?? '');
   const [phone, setPhone] = useViewState('phone', me?.whatsapp ?? '');
   const [err, setErr] = useState<{ n?: string; p?: string }>({});
@@ -38,14 +39,15 @@ export default function Lead() {
     setErr(e);
     if (e.n || e.p) return;
     setBusy(true);
-    const st = useStore.getState();
     const whatsapp = cleanPhone(phone);
     try {
-      const request = await st.create('requests', { id: requestId, userId: ME, name: name.trim(), whatsapp, photoUri: w.photoUri, draft: w.draft, status: 'pending', createdAt: Date.now() });
-      await st.update('users', ME, { name: request.name, whatsapp: request.whatsapp, leadDone: true });
-      w.setLead({ name: request.name, whatsapp: request.whatsapp });
-      router.replace('/render');
-    } catch { toast(t('push.demandError')); }
+      if (!backendEnabled) { toast(t('account.unavailable')); return; }
+      const user = await useUserSession.getState().login(name.trim(), whatsapp);
+      await reloadUserSpace();
+      if (!user.freeUsed) w.setLead({ name: user.name, whatsapp: user.whatsapp });
+      if (user.freeUsed) router.replace({ pathname: '/pro', params: { generation: '1' } });
+      else router.replace('/render');
+    } catch (error) { toast(t(error instanceof BackendError && error.code === 'SPAM_BLOCKED' ? 'account.blocked' : 'account.loginError')); }
     finally { setBusy(false); }
   };
 

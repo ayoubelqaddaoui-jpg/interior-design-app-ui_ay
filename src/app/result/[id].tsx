@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Pressable, View } from 'react-native';
 import { Redirect, useLocalSearchParams } from 'expo-router';
+import { useUserSession } from '@/store/useUserSession';
 import { router } from '@/hooks/useLeaveGuard';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { useMe, useStore } from '@/store/useStore';
@@ -21,7 +22,8 @@ export default function Result() {
   const { t } = useT();
   const L = useL();
   const { desktop } = useBp();
-  const item = useStore((s) => s.history.find((x) => x.id === id));
+  const user = useUserSession(s => s.user);
+  const item = useStore((s) => s.history.find((x) => x.id === id && x.userId === user?.id));
   const tool = useStore((s) => s.tools.find((x) => x.id === item?.draft.toolId));
   const me = useMe();
   const [hold, setHold] = useState(false);
@@ -34,7 +36,7 @@ export default function Result() {
     const w = useWizard.getState();
     w.start(item.draft.toolId, item.draft);
     w.setPhoto(item.before);
-    router.replace('/render');
+    router.replace({ pathname: '/pro', params: { generation: '1' } });
   };
   const newDesign = () => {
     const toolId = item.draft.toolId;

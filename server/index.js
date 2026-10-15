@@ -1,8 +1,10 @@
 const http = require('node:http');
 const fs = require('node:fs');
 const path = require('node:path');
+const { isIP } = require('node:net');
 const crypto = require('node:crypto');
 const { createStore } = require('./store');
+const { createClients } = require('./clients');
 const { createNotifier, validateSubscription, trim, phone } = require('./notifications');
 const hash = value => crypto.createHash('sha256').update(value).digest('hex');
 const fail = (status, message) => Object.assign(new Error(message), { status });
@@ -37,7 +39,17 @@ function validateDemand(value) {
 }
 function createBackend({ env = process.env, store = createStore(path.resolve(env.DATA_FILE || path.join(__dirname, 'data', 'state.json'))), senders } = {}) {
   const notifier = createNotifier(store, env, senders);
+  const clients = createClients(path.resolve(env.CLIENT_DB || path.join(path.dirname(env.DATA_FILE || path.join(__dirname, 'data', 'state.json')), 'clients.sqlite')));
+  // Migrate only trusted existing backend demands, never browser-supplied free counters.
+  const ready = store.read().then(state => state.requests.some(row => !clients.user(row.userId)) ? store.mutate(state => clients.importRequests(state.requests)) : undefined);
+  const trustedProxies = new Set(String(env.TRUSTED_PROXY_IPS || '').split(',').map(value => value.trim()).filter(Boolean));
+  const address = req => {
+    const remote = req.socket.remoteAddress || 'unknown';
+    const forwarded = req.headers['x-real-ip'];
+    return trustedProxies.has(remote) && typeof forwarded === 'string' && isIP(forwarded) ? forwarded : remote;
+  };
   const allowedOrigins = String(env.APP_ORIGINS || 'http://localhost:4173,http://localhost:8080').split(',').map(value => value.trim());
+  const apiLimit = Math.max(300, Math.min(5000, Number(env.API_RATE_LIMIT) || 300));
   const buckets = new Map();
   let pumping = false;
   async function pump() {
@@ -71,21 +83,22 @@ function createBackend({ env = process.env, store = createStore(path.resolve(env
     res.setHeader('Referrer-Policy', 'no-referrer');
     const json = (status, value) => { res.writeHead(status, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }); res.end(JSON.stringify(value)); };
     try {
+      await ready;
       const url = new URL(req.url, 'http://localhost');
       if (url.pathname.startsWith('/api/')) {
         if (origin && !allowedOrigins.includes(origin)) throw fail(403, 'Origin not allowed');
         if (origin) { res.setHeader('Access-Control-Allow-Origin', origin); res.setHeader('Access-Control-Allow-Credentials', 'true'); res.setHeader('Vary', 'Origin'); }
-        res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Demand-Token, X-Dwira-Native');
+        res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Demand-Token, X-Dwira-Native, X-User-Token, X-Device-ID');
         res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PATCH, DELETE, OPTIONS');
         if (req.method === 'OPTIONS') { res.writeHead(204); return res.end(); }
         // Memory-bound rate limits; do not trust spoofable X-Forwarded-For headers.
-        const key = `${req.socket.remoteAddress}:${url.pathname === '/api/admin/login' ? 'login' : 'api'}`;
+        const key = `${address(req)}:${url.pathname === '/api/admin/login' ? 'login' : 'api'}`;
         const now = Date.now();
         if (buckets.size > 10000) for (const [id, bucket] of buckets) if (bucket.until < now) buckets.delete(id);
         const bucket = buckets.get(key) || { count: 0, until: now + 15 * 60000 };
         if (bucket.until < now) { bucket.count = 0; bucket.until = now + 15 * 60000; }
         bucket.count++; buckets.set(key, bucket);
-        if (bucket.count > (url.pathname === '/api/admin/login' ? 20 : 300)) throw fail(429, 'Too many requests');
+        if (bucket.count > (url.pathname === '/api/admin/login' ? 20 : apiLimit)) throw fail(429, 'Too many requests');
         const rawCookie = req.headers.cookie?.split(';').map(value => value.trim()).find(value => value.startsWith('dwira_admin='))?.slice(12);
         const sessionToken = req.headers.authorization?.replace(/^Bearer /, '') || rawCookie;
         const session = sessionToken && (await store.read()).sessions.find(row => row.tokenHash === hash(sessionToken) && row.expiresAt > now);
@@ -93,6 +106,81 @@ function createBackend({ env = process.env, store = createStore(path.resolve(env
         const clientToken = req.headers['x-demand-token'];
         const clientHash = typeof clientToken === 'string' && /^[a-f0-9]{64}$/.test(clientToken) ? hash(clientToken) : null;
         const publicRow = ({ clientHash: ignored, clientRequestId: ignored2, ...row }) => row;
+        const userCookie = req.headers.cookie?.split(';').map(value => value.trim()).find(value => value.startsWith('dwira_user='))?.slice(11);
+        const userToken = req.headers['x-user-token'] || userCookie;
+        const client = clients.authenticate(userToken);
+        const requireUser = () => { if (!client) throw fail(401, 'USER_LOGIN_REQUIRED'); return client; };
+        const userCookieHeader = (token, age) => `dwira_user=${token}; HttpOnly; SameSite=Strict; Path=/api; Max-Age=${age}${env.COOKIE_SECURE === 'false' ? '' : '; Secure'}`;
+        if (url.pathname === '/api/user/login' && req.method === 'POST') {
+          const body = await readBody(req);
+          const result = clients.login(body.name, body.phone);
+          res.setHeader('Set-Cookie', userCookieHeader(result.token, 365 * 86400));
+          return json(200, { user: result.user, ...(req.headers['x-dwira-native'] === '1' ? { token: result.token } : {}) });
+        }
+        if (url.pathname === '/api/user/session' && req.method === 'GET') return json(200, { user: requireUser() });
+        if (url.pathname === '/api/user/logout' && req.method === 'POST') {
+          clients.logout(userToken);
+          res.setHeader('Set-Cookie', userCookieHeader('', 0));
+          return json(200, { ok: true });
+        }
+        if (url.pathname === '/api/user/image' && req.method === 'POST') return json(201, await clients.upload(req, requireUser(), req.headers['x-device-id'], address(req)));
+        if (url.pathname === '/api/user/claim' && req.method === 'POST') {
+          const body = await readBody(req);
+          return json(200, { user: clients.claim(requireUser(), body.id, body.uploadId) });
+        }
+        if (url.pathname === '/api/user/requests' && req.method === 'GET') {
+          requireUser();
+          return json(200, (await store.read()).requests.filter(row => row.userId === client.id).map(publicRow));
+        }
+        const space = url.pathname.match(/^\/api\/user\/(history|conversations)(?:\/([A-Za-z0-9_-]{1,100}))?$/);
+        if (space) {
+          requireUser();
+          const kind = space[1], id = space[2];
+          if (req.method === 'GET') {
+            const rows = clients.listSpace(client, kind);
+            if (!id) return json(200, rows);
+            const row = rows.find(row => row.id === id);
+            if (!row) throw fail(404, 'NOT_FOUND');
+            return json(200, row);
+          }
+          if (req.method === 'DELETE' && id) { clients.removeSpace(client, kind, id); return json(200, { ok: true }); }
+          if (req.method === 'POST' || req.method === 'PATCH' && id) {
+            const body = await readBody(req);
+            const existing = id && clients.listSpace(client, kind).find(row => row.id === id);
+            if (id && !existing) throw fail(404, 'NOT_FOUND');
+            if (req.method === 'POST' && kind === 'history' && !clients.db.prepare('SELECT id FROM claims WHERE id=? AND client_id=?').get(body.claimId, client.id)) throw fail(403, 'CLAIM_REQUIRED');
+            const value = { ...existing, ...body };
+            if (kind === 'history' && (!value.draft?.toolId || typeof value.before !== 'string' || !['pending', 'done'].includes(value.status))) throw fail(400, 'INVALID_HISTORY');
+            if (kind === 'conversations' && (!Array.isArray(value.messages) || value.messages.length > 1000 || typeof value.title !== 'string')) throw fail(400, 'INVALID_CONVERSATION');
+            return json(200, clients.putSpace(client, kind, value, id || (kind === 'history' ? body.claimId : crypto.randomUUID())));
+          }
+          throw fail(405, 'Method not allowed');
+        }
+        if (url.pathname === '/api/admin/spam') {
+          admin();
+          if (req.method === 'PATCH') {
+            const body = await readBody(req);
+            if (typeof body.block !== 'boolean') throw fail(400, 'Invalid switch');
+            clients.setBlock(body.block);
+            return json(200, { ok: true });
+          }
+          if (req.method !== 'GET') throw fail(405, 'Method not allowed');
+          const date = (key, fallback, end = false) => {
+            const value = url.searchParams.get(key);
+            if (!value) return fallback;
+            if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) throw fail(400, 'Invalid date');
+            const n = Date.parse(value + (end ? 'T23:59:59.999Z' : 'T00:00:00.000Z'));
+            if (!Number.isFinite(n)) throw fail(400, 'Invalid date');
+            return n;
+          };
+          const from = date('from', 0), to = date('to', Number.MAX_SAFE_INTEGER, true);
+          const page = Number(url.searchParams.get('page') || 1);
+          if (from > to || !Number.isInteger(page) || page < 1 || page > 100000) throw fail(400, 'Invalid filter');
+          return json(200, clients.monitor(from, to, page));
+        }
+        if (url.pathname === '/api/admin/clients' && req.method === 'GET') { admin(); return json(200, clients.users()); }
+        const creditClient = url.pathname.match(/^\/api\/admin\/clients\/([a-f0-9-]+)$/);
+        if (creditClient && req.method === 'PATCH') { admin(); const body = await readBody(req); return json(200, clients.grant(creditClient[1], body.credits)); }
         if (req.method === 'GET' && url.pathname === '/api/push/config') return json(200, notifier.publicConfig);
         if (req.method === 'POST' && url.pathname === '/api/admin/login') {
           const body = await readBody(req);
@@ -122,10 +210,12 @@ function createBackend({ env = process.env, store = createStore(path.resolve(env
         }
         if (url.pathname === '/api/requests' && req.method === 'POST') {
           if (!clientHash) throw fail(400, 'Client token required');
-          const body = await readBody(req), input = validateDemand(body);
+          requireUser();
+          const body = await readBody(req), input = validateDemand({ ...body, userId: client.id, name: client.name, whatsapp: client.whatsapp });
           if (typeof body.id !== 'string' || !/^[A-Za-z0-9_-]{8,100}$/.test(body.id)) throw fail(400, 'Stable request ID required');
+          clients.claim(client, body.id, body.uploadId);
           const result = await store.mutate(data => {
-            const existing = data.requests.find(row => row.clientHash === clientHash && row.clientRequestId === body.id);
+            const existing = data.requests.find(row => row.userId === client.id && row.clientRequestId === body.id);
             if (existing) return existing;
             const request = { ...input, id: crypto.randomUUID(), clientHash, clientRequestId: body.id };
             data.requests.push(request);
@@ -140,7 +230,7 @@ function createBackend({ env = process.env, store = createStore(path.resolve(env
         const match = url.pathname.match(/^\/api\/requests\/([A-Za-z0-9_-]+)$/);
         if (match) {
           const request = (await store.read()).requests.find(row => row.id === match[1]);
-          if (!request || (!session && (!clientHash || request.clientHash !== clientHash))) throw fail(404, 'Not found');
+          if (!request || (!session && (!client || request.userId !== client.id))) throw fail(404, 'Not found');
           if (req.method === 'GET') return json(200, publicRow(request));
           if (req.method === 'DELETE') { admin(); await store.mutate(data => { data.requests = data.requests.filter(row => row.id !== request.id); data.outbox = data.outbox.filter(row => row.requestId !== request.id); }); return json(200, { ok: true }); }
           if (req.method === 'PATCH') {
@@ -154,6 +244,11 @@ function createBackend({ env = process.env, store = createStore(path.resolve(env
             // Existing client auto-send workflow can only mark its own completed render.
             if (!session && body.status === 'delivered' && body.autoSent === true && body.aiResult) { patch.status = 'delivered'; patch.autoSent = true; }
             const result = await store.mutate(data => { const row = data.requests.find(row => row.id === request.id); Object.assign(row, patch); return row; });
+            if (result.status === 'delivered' && result.historyId && (result.finalResult || result.aiResult)) {
+              const owner = clients.user(result.userId);
+              const item = owner && clients.listSpace(owner, 'history').find(row => row.id === result.historyId);
+              if (item) clients.putSpace(owner, 'history', { ...item, after: result.finalResult || result.aiResult, status: 'done' }, item.id);
+            }
             return json(200, publicRow(result));
           }
         }
@@ -174,8 +269,8 @@ function createBackend({ env = process.env, store = createStore(path.resolve(env
     } catch (error) { if (!res.headersSent) json(error.status || 500, { error: error.status ? error.message : 'Server error' }); else res.end(); }
   });
   server.requestTimeout = 15000;
-  server.on('close', () => clearInterval(timer));
-  return { server, pump, store };
+  server.on('close', () => { clearInterval(timer); clients.close(); });
+  return { server, pump, store, clients };
 }
 if (require.main === module) {
   const backend = createBackend();

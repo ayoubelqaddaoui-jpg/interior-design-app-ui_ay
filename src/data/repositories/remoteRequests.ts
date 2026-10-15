@@ -2,6 +2,7 @@ import type { CollectionRepo } from './types';
 import type { RenderRequest } from '@/data/types';
 import { api, BackendError } from '@/lib/backend';
 import { useLocal } from '@/store/useLocal';
+import { useUserSession } from '@/store/useUserSession';
 import { uid } from '@/lib/uid';
 
 /** Only demands opt into the backend; every other repository remains unchanged. */
@@ -17,7 +18,7 @@ export function remoteRequests(local: CollectionRepo<RenderRequest>): Collection
   return {
     async list() {
       const cached = await local.list();
-      if (!useLocal.getState().adminSession) return cached;
+      if (!useLocal.getState().adminSession) return useUserSession.getState().user ? api<RenderRequest[]>('/user/requests') : cached.filter(row => !isRemote(row.id));
       try {
         const rows = await api<RenderRequest[]>('/requests');
         rows.forEach(row => remoteIds.add(row.id));

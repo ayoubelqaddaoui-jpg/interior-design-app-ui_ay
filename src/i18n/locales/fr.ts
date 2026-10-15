@@ -1,4 +1,7 @@
 const fr = {
+  account: {"logout": "Déconnexion utilisateur", "logoutError": "Impossible de vous déconnecter. Vérifiez votre connexion puis réessayez.", "blocked": "Une utilisation répétée de la génération gratuite a été détectée. Cette demande gratuite est bloquée. Contactez notre équipe pour obtenir de l’aide.", "unavailable": "Connectez le serveur pour vous identifier et conserver votre espace.", "loginError": "Impossible de vous connecter. Vérifiez le numéro avec son indicatif international et réessayez."},
+  leaveConfirm: {"title": "Quitter ?", "message": "Voulez-vous quitter ? Vous perdrez les étapes que vous avez effectuées.", "no": "Non", "yes": "Oui"},
+  spam: {"title": "Suivi du spam", "block": "Bloquer le spam", "note": "Désactivé : collecte uniquement. Activé : bloque uniquement les nouvelles demandes gratuites des clients signalés.", "from": "Du (AAAA-MM-JJ)", "to": "Au (AAAA-MM-JJ)", "apply": "Appliquer", "phone": "Téléphone", "device": "Appareil", "ip": "IP", "hash": "Empreinte de l’image", "accounts": "Comptes liés", "freeUsed": "Générations gratuites utilisées", "date": "Date", "rate": "Clients signalés : {{flagged}} / {{total}} ({{percentage}} %)", "page": "Page {{page}} / {{pages}}", "previous": "Précédent", "next": "Suivant", "error": "Impossible de charger les données. Vérifiez le serveur et les dates.", "unavailable": "Le suivi du spam nécessite le serveur configuré.", "empty": "Aucun client signalé."},
   lang: { dar: 'Darija marocaine', ar: 'العربية', fr: 'Français' },
   common: {
     save: 'Enregistrer',
@@ -266,6 +269,7 @@ const fr = {
     welcome: 'Tableau de bord',
     stats: { requests: 'Demandes', pending: 'En attente', users: 'Utilisateurs', tools: 'Outils' },
     nav: {
+      spam: 'Suivi du spam',
       dashboard: 'Tableau de bord',
       requests: 'Demandes de rendu',
       users: 'Utilisateurs',

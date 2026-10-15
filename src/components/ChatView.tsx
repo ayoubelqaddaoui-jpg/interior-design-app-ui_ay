@@ -6,6 +6,7 @@ import Animated, { FadeInDown, useAnimatedStyle, useSharedValue, withDelay, with
 import { useFocusEffect } from 'expo-router';
 import { useViewState } from '@/hooks/useViewState';
 import { useStore } from '@/store/useStore';
+import { useUserSession } from '@/store/useUserSession';
 import { services, ME } from '@/data/repositories';
 import { useL, useT } from '@/i18n';
 import { Icon } from '@/components/ui/Icon';
@@ -30,7 +31,8 @@ export function ChatView({ conversationId, onCreated, header }: { conversationId
   const { colors } = useTheme();
   const fontFamily = useAppFont();
   const config = useStore((s) => s.doc.assistant);
-  const conv = useStore((s) => s.conversations.find((c) => c.id === conversationId));
+  const userId = useUserSession(s => s.user?.id) || ME;
+  const conv = useStore((s) => s.conversations.find((c) => c.id === conversationId && c.userId === userId));
   const [text, setText] = useViewState(`chat:${conversationId ?? 'new'}:text`, '');
   const [image, setImage] = useViewState(`chat:${conversationId ?? 'new'}:image`, '');
   const [busy, setBusy] = useState(false);
@@ -77,7 +79,7 @@ export function ChatView({ conversationId, onCreated, header }: { conversationId
     const base = c?.messages ?? [];
     const next = [...base, um];
     if (!c) {
-      c = await st.create('conversations', { userId: ME, title: msg.slice(0, 40) || t('history.newChat'), messages: next, updatedAt: Date.now() });
+      c = await st.create('conversations', { userId, title: msg.slice(0, 40) || t('history.newChat'), messages: next, updatedAt: Date.now() });
       onCreated?.(c.id);
     } else await st.update('conversations', c.id, { messages: next, updatedAt: Date.now() });
     setLocal(next);
