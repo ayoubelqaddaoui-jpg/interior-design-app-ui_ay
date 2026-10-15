@@ -1,4 +1,5 @@
-const { DatabaseSync } = require('node:sqlite');
+// Keep the same SQLite schema and SQL on both runtimes; no service rewrite or data copy.
+const DatabaseSync = process.versions.bun ? require('bun:sqlite').Database : require('node:sqlite').DatabaseSync;
 const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
@@ -14,6 +15,7 @@ const fail = (status, code) => Object.assign(new Error(code), { status });
 function createClients(file) {
   if (file !== ':memory:') fs.mkdirSync(path.dirname(file), { recursive: true, mode: 0o700 });
   const db = new DatabaseSync(file);
+  if (process.versions.bun) Object.defineProperty(db, 'isTransaction', { get: () => db.inTransaction });
   if (file !== ':memory:') fs.chmodSync(file, 0o600);
   db.exec(`PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON; PRAGMA busy_timeout=5000;
     CREATE TABLE IF NOT EXISTS clients (
@@ -153,6 +155,6 @@ function createClients(file) {
     grant: (id, credits) => { if (!byId(id)) throw fail(404, 'NOT_FOUND'); if (!Number.isSafeInteger(credits) || credits < 0 || credits > 1000000) throw fail(400, 'INVALID_CREDITS'); db.prepare('UPDATE clients SET credits=? WHERE id=?').run(Math.max(0, credits - (byId(id).free_used ? 0 : 1)), id); return user(byId(id)); },
     listSpace, putSpace,
     removeSpace: (client, kind, id) => db.prepare('DELETE FROM space WHERE id=? AND client_id=? AND kind=?').run(id, client.id, kind),
-    close: () => db.close(), db };
+    close: () => process.versions.bun ? db.close(true) : db.close(), db };
 }
 module.exports = { createClients };

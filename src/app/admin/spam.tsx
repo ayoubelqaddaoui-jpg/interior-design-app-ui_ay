@@ -7,8 +7,9 @@ import { Card } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Field';
 import { Toggle } from '@/components/ui/Toggle';
 import { Txt } from '@/components/ui/Txt';
-import { api, backendEnabled } from '@/lib/backend';
+import { api, backendEnabled, BackendError, isBackendUnavailable } from '@/lib/backend';
 import { useT } from '@/i18n';
+import { useLocal } from '@/store/useLocal';
 
 type SpamRow = { phone: string; device: string; ip: string; imageHash: string; accounts: number; freeUsed: number; date: number };
 type Report = { rows: SpamRow[]; total: number; flagged: number; percentage: number; page: number; pageSize: number; block: boolean };
@@ -20,30 +21,31 @@ export default function SpamMonitor() {
   const [filters, setFilters] = useState({ from: '', to: '', page: 1 });
   const [report, setReport] = useState<Report | null>(null);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const request = useRef(0);
+  const errorKey = (error: unknown) => isBackendUnavailable(error) ? 'spam.unavailable' : error instanceof BackendError && error.status === 401 ? 'spam.sessionExpired' : 'spam.error';
   const load = useCallback(async () => {
     if (!backendEnabled) return;
     const sequence = ++request.current;
-    setBusy(true); setError(false);
+    setBusy(true); setError(null);
     try {
       const query = new URLSearchParams({ ...filters, page: String(filters.page) });
       const value = await api<Report>(`/admin/spam?${query}`);
       if (sequence === request.current) setReport(value);
-    } catch { if (sequence === request.current) setError(true); }
+    } catch (error) { if (sequence === request.current) { setReport(null); setError(errorKey(error)); } }
     finally { if (sequence === request.current) setBusy(false); }
   }, [filters]);
   useEffect(() => { const timer = setTimeout(() => { void load(); }, 0); return () => { clearTimeout(timer); }; }, [load]);
   const toggle = async (block: boolean) => {
     if (busy) return;
-    setBusy(true); setError(false);
+    setBusy(true); setError(null);
     try { await api('/admin/spam', { method: 'PATCH', body: { block } }); await load(); }
-    catch { setError(true); setBusy(false); }
+    catch (error) { setError(errorKey(error)); setBusy(false); }
   };
   const pages = Math.max(1, Math.ceil((report?.flagged || 0) / 20));
   const text = (value: string | number) => <Txt className="text-[12px]" selectable numberOfLines={2}>{String(value)}</Txt>;
   return <AdminPage title={t('spam.title')}>
-    {!backendEnabled ? <Txt testID="spam-unavailable">{t('spam.unavailable')}</Txt> : <>
+    {!backendEnabled ? <Card className="p-4 gap-3"><Txt testID="spam-unavailable">{t('spam.unavailable')}</Txt><Txt selectable className="text-muted">EXPO_PUBLIC_API_URL=https://your-api-host/api</Txt></Card> : <>
       <Card className="p-4 mb-4 gap-3">
         <View className="flex-row items-center justify-between gap-3">
           <Txt className="font-bold flex-1">{t('spam.block')}</Txt>
@@ -57,7 +59,7 @@ export default function SpamMonitor() {
         <View style={{ flexGrow: 1, minWidth: 145 }}><Input testID="spam-to" label={t('spam.to')} value={to} onChangeText={setTo} placeholder="2026-12-31" /></View>
         <Button testID="spam-filter" title={t('spam.apply')} disabled={busy} onPress={() => setFilters({ from, to, page: 1 })} />
       </View>
-      {error ? <View className="mb-3 gap-2"><Txt testID="spam-error" className="text-danger">{t('spam.error')}</Txt><Button title={t('common.retry')} onPress={() => { void load(); }} /></View> : null}
+      {error ? <View className="mb-3 gap-2"><Txt testID="spam-error" className="text-danger">{t(error)}</Txt><Button testID="spam-retry" title={t(error === 'spam.sessionExpired' ? 'admin.signIn' : 'common.retry')} onPress={() => { if (error === 'spam.sessionExpired') useLocal.getState().set({ adminSession: false }); else void load(); }} /></View> : null}
       {busy ? <Txt>{t('common.loading')}</Txt> : null}
       {report?.rows.length ? <CrudTable rowTestID="spam-client" rows={report.rows.map(row => ({ ...row, id: row.phone }))} cols={[
         { label: t('spam.phone'), render: row => text(row.phone), flex: 1.3 },
