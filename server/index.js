@@ -5,6 +5,7 @@ const { isIP } = require('node:net');
 const crypto = require('node:crypto');
 const { createStore } = require('./store');
 const { createClients } = require('./clients');
+const { createReturning } = require('./returning');
 const { createNotifier, validateSubscription, trim, phone } = require('./notifications');
 const hash = value => crypto.createHash('sha256').update(value).digest('hex');
 const fail = (status, message) => Object.assign(new Error(message), { status });
@@ -40,6 +41,7 @@ function validateDemand(value) {
 function createBackend({ env = process.env, store = createStore(path.resolve(env.DATA_FILE || path.join(__dirname, 'data', 'state.json'))), senders } = {}) {
   const notifier = createNotifier(store, env, senders);
   const clients = createClients(path.resolve(env.CLIENT_DB || path.join(path.dirname(env.DATA_FILE || path.join(__dirname, 'data', 'state.json')), 'clients.sqlite')));
+  const returning = createReturning(clients.db);
   // Migrate only trusted existing backend demands, never browser-supplied free counters.
   const ready = store.read().then(state => state.requests.some(row => !clients.user(row.userId)) ? store.mutate(state => clients.importRequests(state.requests)) : undefined);
   const trustedProxies = new Set(String(env.TRUSTED_PROXY_IPS || '').split(',').map(value => value.trim()).filter(Boolean));
@@ -155,6 +157,22 @@ function createBackend({ env = process.env, store = createStore(path.resolve(env
             return json(200, clients.putSpace(client, kind, value, id || (kind === 'history' ? body.claimId : crypto.randomUUID())));
           }
           throw fail(405, 'Method not allowed');
+        }
+        if (url.pathname === '/api/admin/returning') {
+          admin();
+          if (req.method === 'GET') return json(200, returning.versions());
+          if (req.method === 'PATCH') return json(200, returning.save((await readBody(req)).versions));
+          throw fail(405, 'Method not allowed');
+        }
+        if (url.pathname === '/api/admin/returning/results' && req.method === 'GET') {
+          admin();
+          return json(200, returning.results(url.searchParams.get('from') || undefined, url.searchParams.get('to') || undefined));
+        }
+        if (url.pathname === '/api/user/returning' && req.method === 'GET') return json(200, returning.message(requireUser()));
+        if (url.pathname === '/api/user/returning/event' && req.method === 'POST') {
+          const owner = requireUser(), body = await readBody(req);
+          returning.event(owner, body.versionId, body.kind);
+          return json(200, { ok: true });
         }
         if (url.pathname === '/api/admin/spam') {
           admin();
