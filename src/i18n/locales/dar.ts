@@ -263,7 +263,7 @@ const dar: Dict = {
     password: 'الكلمة السرية',
     signIn: 'دخل',
     invalid: 'المعلومات غالطة',
-    demoHint: 'تجربة: admin@dwira.app / admin123',
+    demoHint: 'تجربة: admin / admin',
     logout: 'خروج',
     openApp: 'حل التطبيق',
     forbidden: 'غير للأدمين',

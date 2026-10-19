@@ -152,5 +152,8 @@ test('health identifies the live runtime; same-origin deployments work without a
     assert.equal(health.headers['access-control-allow-origin'], 'https://dwira.example');
     assert.equal((await call(backend, '/api/health', { headers: { origin: 'https://evil.example', host: 'dwira.example' } })).status, 403);
     assert.equal((await call(backend, '/api/admin/spam', { headers: { origin: 'https://dwira.example', host: 'dwira.example' } })).status, 401, 'same origin does not bypass admin authentication');
+    const fallback = await call(backend, '/api/admin/login', { method: 'POST', headers: { 'x-dwira-native': '1' }, body: { email: 'admin', password: 'admin' } });
+    assert.equal(fallback.status, 200, 'default admin/admin login works without server config');
+    assert.equal((await call(backend, '/api/admin/login', { method: 'POST', body: { email: 'admin', password: 'wrong' } })).status, 401);
   } finally { backend.server.emit('close'); fs.rmSync(directory, { recursive: true, force: true }); }
 });

@@ -7,7 +7,7 @@ export const pushTexts = {
     unconfigured: 'Le serveur de notifications n’est pas configuré. Consultez les étapes de configuration.',
     error: 'Impossible d’enregistrer les notifications. Vérifiez la connexion et reconnectez-vous à l’administration.',
     privacy: 'Le nom et le téléphone du client peuvent apparaître sur l’écran verrouillé de cet appareil.',
-    loginHint: 'Connectez-vous avec les identifiants configurés sur le serveur.', call: 'Appeler',
+    loginHint: 'Identifiants par défaut : admin / admin.', call: 'Appeler',
     demandError: 'Votre demande n’a pas pu être confirmée. Réessayez : une nouvelle tentative ne crée pas de doublon.',
   },
   ar: {
@@ -18,7 +18,7 @@ export const pushTexts = {
     unconfigured: 'خادم الإشعارات غير مهيأ. راجع خطوات الإعداد.',
     error: 'تعذر تسجيل الإشعارات. تحقق من الاتصال وسجّل الدخول مجددًا إلى الإدارة.',
     privacy: 'قد يظهر اسم العميل ورقم هاتفه على شاشة قفل هذا الجهاز.',
-    loginHint: 'سجّل الدخول باستخدام بيانات الدخول المهيأة على الخادم.', call: 'اتصال',
+    loginHint: 'بيانات الدخول الافتراضية: admin / admin.', call: 'اتصال',
     demandError: 'تعذر تأكيد طلبك. حاول مجددًا؛ إعادة المحاولة لا تنشئ طلبًا مكررًا.',
   },
   dar: {
@@ -29,7 +29,7 @@ export const pushTexts = {
     unconfigured: 'خادم الإشعارات مازال ما تهيّأش. شوف خطوات الإعداد.',
     error: 'ما قدرناش نسجلو الإشعارات. تأكد من الاتصال وعاود دخل للإدارة.',
     privacy: 'سمية الزبون والنمرة ديالو يقدرو يبانوا فشاشة القفل ديال هاد الجهاز.',
-    loginHint: 'دخل ببيانات الدخول المهيأة فالخادم.', call: 'اتصل',
+    loginHint: 'بيانات الدخول الافتراضية: admin / admin.', call: 'اتصل',
     demandError: 'ما قدرناش نأكدو الطلب ديالك. عاود جرّب؛ المحاولة ما كتزيدش طلب مكرر.',
   },
 };

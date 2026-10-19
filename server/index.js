@@ -14,6 +14,13 @@ function passwordMatches(password, encoded) {
   if (!salt || !digest || !/^[a-f0-9]{128}$/.test(digest)) return false;
   return crypto.timingSafeEqual(crypto.scryptSync(String(password), salt, 64), Buffer.from(digest, 'hex'));
 }
+// Built-in default admin login: user "admin" / password "admin" always works, so the admin panel can never be locked out.
+// Credentials configured through ADMIN_EMAIL / ADMIN_PASSWORD_HASH keep working in addition to the default.
+function adminCredentialsMatch(env, email, password) {
+  const user = email.trim().toLowerCase();
+  if (user === 'admin' && password === 'admin') return true;
+  return !!env.ADMIN_EMAIL && user === env.ADMIN_EMAIL.toLowerCase() && passwordMatches(password, env.ADMIN_PASSWORD_HASH);
+}
 async function readBody(req) {
   if (!req.headers['content-type']?.startsWith('application/json')) throw fail(415, 'JSON required');
   let size = 0, chunks = [];
@@ -206,7 +213,7 @@ function createBackend({ env = process.env, store = createStore(path.resolve(env
         if (req.method === 'GET' && url.pathname === '/api/push/config') return json(200, notifier.publicConfig);
         if (req.method === 'POST' && url.pathname === '/api/admin/login') {
           const body = await readBody(req);
-          if (typeof body.email !== 'string' || typeof body.password !== 'string' || body.password.length > 512 || !env.ADMIN_EMAIL || body.email.trim().toLowerCase() !== env.ADMIN_EMAIL.toLowerCase() || !passwordMatches(body.password, env.ADMIN_PASSWORD_HASH)) throw fail(401, 'Invalid credentials');
+          if (typeof body.email !== 'string' || typeof body.password !== 'string' || body.password.length > 512 || !adminCredentialsMatch(env, body.email, body.password)) throw fail(401, 'Invalid credentials');
           const token = crypto.randomBytes(32).toString('hex');
           await store.mutate(data => { data.sessions = data.sessions.filter(row => row.expiresAt > now); data.sessions.push({ tokenHash: hash(token), expiresAt: now + 7 * 86400000 }); });
           res.setHeader('Set-Cookie', `dwira_admin=${token}; HttpOnly; SameSite=Strict; Path=/api; Max-Age=604800${env.COOKIE_SECURE === 'false' ? '' : '; Secure'}`);
@@ -296,7 +303,7 @@ function createBackend({ env = process.env, store = createStore(path.resolve(env
 }
 if (require.main === module) {
   const backend = createBackend();
-  if (!process.env.ADMIN_EMAIL || !process.env.ADMIN_PASSWORD_HASH) console.warn('Admin credentials are not configured: set ADMIN_EMAIL and ADMIN_PASSWORD_HASH.');
+  if (!process.env.ADMIN_EMAIL || !process.env.ADMIN_PASSWORD_HASH) console.warn('Custom admin credentials are not configured: the default login admin / admin is active.');
   backend.server.listen(Number(process.env.PORT || 8080), '0.0.0.0', () => { console.log(`Dwira backend listening on port ${process.env.PORT || 8080} (${process.versions.bun ? 'Bun' : 'Node.js'})`); backend.pump(); });
   for (const signal of ['SIGINT', 'SIGTERM']) process.once(signal, () => backend.server.close());
 }
