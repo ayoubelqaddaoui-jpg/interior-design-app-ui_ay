@@ -1,5 +1,6 @@
 import { Platform } from 'react-native';
 import { storage } from '@/data/mock/storage';
+import { useLocal } from '@/store/useLocal';
 
 // This is a public URL, never an admin credential or VAPID private key.
 // Web deployments use the backend on the same host without build-time configuration.
@@ -47,6 +48,8 @@ export async function api<T>(path: string, options: { method?: string; body?: un
     throw new BackendError(503, 'BACKEND_UNAVAILABLE');
   } finally { clearTimeout(timeout); }
 }
+/** Built-in default admin login. It must always open the admin panel, even if the API is unreachable or outdated. */
+export const isDefaultAdmin = (email: string, password: string) => email.trim().toLowerCase() === 'admin' && password === 'admin';
 export async function backendLogin(email: string, password: string) {
   try {
     const result = await api<{ ok: true; user: { id: string; name: string }; token?: string }>('/admin/login', { method: 'POST', body: { email, password } });
@@ -54,10 +57,20 @@ export async function backendLogin(email: string, password: string) {
       const { setItemAsync } = await import('expo-secure-store');
       await setItemAsync('dwira-backend-session', result.token);
     }
+    useLocal.getState().set({ adminOffline: false });
     return { ok: true as const, user: result.user };
-  } catch { return { ok: false as const }; }
+  } catch {
+    // Server missing (static hosting, /api not proxied) or running an older build without the default login:
+    // still accept admin/admin locally. Server-protected data stays protected by the server itself.
+    if (isDefaultAdmin(email, password)) {
+      useLocal.getState().set({ adminOffline: true });
+      return { ok: true as const, user: { id: 'usr_admin', name: 'Admin' } };
+    }
+    return { ok: false as const };
+  }
 }
 export async function backendLogout() {
+  useLocal.getState().set({ adminOffline: false });
   if (!backendEnabled) return;
   try { await api('/admin/logout', { method: 'POST', body: {} }); }
   finally { if (Platform.OS !== 'web') await (await import('expo-secure-store')).deleteItemAsync('dwira-backend-session'); }

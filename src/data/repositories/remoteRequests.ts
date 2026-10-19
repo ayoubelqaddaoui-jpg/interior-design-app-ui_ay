@@ -25,7 +25,7 @@ export function remoteRequests(local: CollectionRepo<RenderRequest>): Collection
         // Keep existing mock/local records, but never resurrect a deleted remote demand.
         return [...cached.filter(row => !isRemote(row.id)), ...rows];
       } catch (error) {
-        if (error instanceof BackendError && error.status === 401) useLocal.getState().set({ adminSession: false });
+        if (error instanceof BackendError && error.status === 401 && !useLocal.getState().adminOffline) useLocal.getState().set({ adminSession: false });
         return cached;
       }
     },

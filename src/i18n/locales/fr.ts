@@ -262,7 +262,7 @@ const fr = {
     password: 'Mot de passe',
     signIn: 'Se connecter',
     invalid: 'Identifiants invalides',
-    demoHint: 'Démo : admin@dwira.app / admin123',
+    demoHint: 'Démo : admin / admin',
     logout: 'Déconnexion',
     openApp: 'Ouvrir l’app',
     forbidden: 'Accès réservé aux administrateurs',

@@ -13,7 +13,7 @@ npm run build:web     # static export to dist/ (+ Vercel-safe asset post-process
 npm run serve:web     # serve dist/ locally with the same SPA fallback as Vercel
 npm run check:themes  # WCAG contrast report for the 20 theme presets
 ```
-- User app: `/` · Admin panel: `/admin`. Real mode uses server credentials; demo login `admin@dwira.app` / `admin123` works only in explicitly selected demo mode.
+- User app: `/` · Admin panel: `/admin`. Default login everywhere (real and demo mode): user `admin` / password `admin`. Custom server credentials (`ADMIN_EMAIL` + `ADMIN_PASSWORD_HASH`) also work in addition.
 - Languages: Moroccan Darija (default, RTL), Arabic (RTL), French — Settings → Language.
 - Admin edits write to the same Zustand store the user app reads, so they apply instantly.
 

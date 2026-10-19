@@ -27,7 +27,7 @@ export function remoteUsers(local: CollectionRepo<AppUser>): CollectionRepo<AppU
       if (!useLocal.getState().adminSession) return rows;
       let clients: AppUser[];
       try { clients = await api<AppUser[]>('/admin/clients'); }
-      catch (error) { if (error instanceof BackendError && error.status === 401) { useLocal.getState().set({ adminSession: false }); return rows; } return rows; }
+      catch (error) { if (error instanceof BackendError && error.status === 401 && !useLocal.getState().adminOffline) { useLocal.getState().set({ adminSession: false }); return rows; } return rows; }
       clients.forEach(row => remote.add(row.id));
       return [...rows, ...clients];
     },

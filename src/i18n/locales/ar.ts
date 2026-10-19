@@ -263,7 +263,7 @@ const ar: Dict = {
     password: 'كلمة المرور',
     signIn: 'تسجيل الدخول',
     invalid: 'بيانات غير صحيحة',
-    demoHint: 'تجريبي: admin@dwira.app / admin123',
+    demoHint: 'تجريبي: admin / admin',
     logout: 'تسجيل الخروج',
     openApp: 'فتح التطبيق',
     forbidden: 'الدخول للمشرفين فقط',
