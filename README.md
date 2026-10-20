@@ -1,7 +1,7 @@
 # Dwira — AI interior design (Android · iOS · Web)
 
 One Expo codebase (SDK 57, Expo Router, TypeScript, NativeWind, Zustand, i18next, Reanimated).
-Hybrid app: content repositories retain their existing mock/local implementation. User sessions, credits, image spaces, requests and admin notifications use the Postgres-backed API in `server/` (served on Vercel through `api/[...path].js`).
+Hybrid app: content repositories retain their existing mock/local implementation. User sessions, credits, image spaces, requests and admin notifications use the Postgres-backed API in `server/` (served on Vercel through `api/index.js`).
 
 ## Run
 ```bash
@@ -35,7 +35,7 @@ Documents (`DocRepo<T>`): `branding`, `theme`, `assistant`, `settings`.
 Services (`Services`): `render` (AI image generation), `chat` (assistant LLM), `auth` (admin login), `upload` (file storage), `whatsapp` (send design).
 
 ## Deploy on Vercel (UI + API)
-`vercel.json` builds the static web export **and** exposes the backend as a Vercel Function (`api/[...path].js` -> `server/index.js`). The backend needs a Postgres database; without one every `/api/*` call answers `503 DATABASE_NOT_CONFIGURED` and `/lead` shows "service temporairement indisponible".
+`vercel.json` builds the static web export **and** exposes the backend as a Vercel Function (`api/index.js` -> `server/index.js`). The backend needs a Postgres database; without one every `/api/*` call answers `503 DATABASE_NOT_CONFIGURED` and `/lead` shows "service temporairement indisponible".
 1. Import the repo in Vercel (framework preset: **Other**); install/build/output are set in `vercel.json`.
 2. **Project -> Storage -> Create Database -> Neon (Postgres)** and connect it to the project (Production + Preview). Vercel injects `DATABASE_URL` / `POSTGRES_URL`; tables are created automatically on first request.
 3. Redeploy, then open `https://<your-domain>/api/health`: it must return `{"ok":true,"database":"pg",...}`. Then test `/lead`.
