@@ -19,6 +19,7 @@ export function StepPhoto({ photo, onChange }: { photo: string; onChange: (uri: 
     const r = await pickPhoto(src);
     if ('uri' in r) onChange(r.uri);
     else if (r.error === 'permission') toast(t('wizard.permission'));
+    else if (r.error === 'failed') toast(t('wizard.photoFailed'));
   };
 
   return (

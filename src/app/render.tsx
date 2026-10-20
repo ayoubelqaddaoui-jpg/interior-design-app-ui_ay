@@ -12,6 +12,7 @@ import { RenderingView } from '@/components/result/RenderingView';
 import { useUserSession } from '@/store/useUserSession';
 import { api, BackendError } from '@/lib/backend';
 import { useWizardGuard } from '@/hooks/useWizardGuard';
+import { freshUser, needsPro } from '@/lib/credits';
 import type { AppUser } from '@/data/types';
 
 /** Runs the (mock) render, then creates history/request entries and routes to the result or the WhatsApp success page. */
@@ -28,18 +29,24 @@ export default function RenderPage() {
   const run = async () => {
     const st = useStore.getState();
     const wiz = useWizard.getState();
-    const user = useUserSession.getState().user;
+    let user = useUserSession.getState().user;
     if (!user) { router.replace('/lead'); return; }
-    if (user.freeUsed && !wiz.proSeen && !wiz.requestId) { router.replace({ pathname: '/pro', params: { generation: '1' } }); return; }
+    // Only a user with no free design AND no credits left sees the paywall (balance re-read from the server).
+    if (user.freeUsed && !wiz.proSeen && !wiz.requestId) {
+      user = (await freshUser()) ?? user;
+      if (needsPro(user)) { router.replace({ pathname: '/pro', params: { generation: '1' } }); return; }
+    }
     setFailed(false);
     signal.current = { cancelled: false };
     try {
-      if (!user.freeUsed || wiz.lead) {
-        const request = await st.create('requests', { id: wiz.claimId, userId: user.id, name: user.name, whatsapp: user.whatsapp, photoUri: wiz.photoUri, draft: wiz.draft, status: 'pending', createdAt: Date.now() });
-        useWizard.setState({ requestId: request.id, lead: { name: user.name, whatsapp: user.whatsapp } });
+      if (!user!.freeUsed || wiz.lead) {
+        const request = await st.create('requests', { id: wiz.claimId, userId: user!.id, name: user!.name, whatsapp: user!.whatsapp, photoUri: wiz.photoUri, draft: wiz.draft, status: 'pending', createdAt: Date.now() });
+        useWizard.setState({ requestId: request.id, lead: { name: user!.name, whatsapp: user!.whatsapp } });
       } else {
         const result = await api<{ user: AppUser }>('/user/claim', { method: 'POST', body: { id: wiz.claimId } });
         useUserSession.setState({ user: result.user });
+        // The credit is spent: a retry of this same generation must never bounce to the paywall.
+        useWizard.setState({ proSeen: true });
       }
       if (signal.current.cancelled) return;
       await useUserSession.getState().refresh();
@@ -52,7 +59,7 @@ export default function RenderPage() {
         // First free render: deliver through WhatsApp (admin queue).
         const req = fresh.requests.find((r) => r.id === useWizard.getState().requestId);
         const auto = fresh.doc.settings.autoSendWhatsApp;
-        const hist = await fresh.create('history', { id: wiz.claimId, claimId: wiz.claimId, userId: user.id, before: wiz.photoUri, after: auto ? imageUri : undefined, status: auto ? 'done' : 'pending', draft: wiz.draft, createdAt: Date.now(), requestId: req?.id });
+        const hist = await fresh.create('history', { id: wiz.claimId, claimId: wiz.claimId, userId: user!.id, before: wiz.photoUri, after: auto ? imageUri : undefined, status: auto ? 'done' : 'pending', draft: wiz.draft, createdAt: Date.now(), requestId: req?.id });
         if (req) {
           let status: 'pending' | 'delivered' = 'pending';
           if (auto) { await services.whatsapp.sendDesign({ whatsapp: lead.whatsapp, name: lead.name, imageUri }); status = 'delivered'; }
@@ -63,7 +70,7 @@ export default function RenderPage() {
         router.replace('/lead-success');
         return;
       }
-      const hist = await fresh.create('history', { id: wiz.claimId, claimId: wiz.claimId, userId: user.id, before: wiz.photoUri, after: imageUri, status: 'done', draft: wiz.draft, createdAt: Date.now() });
+      const hist = await fresh.create('history', { id: wiz.claimId, claimId: wiz.claimId, userId: user!.id, before: wiz.photoUri, after: imageUri, status: 'done', draft: wiz.draft, createdAt: Date.now() });
       useWizard.setState({ dirty: false });
       router.replace({ pathname: '/result/[id]', params: { id: hist.id } });
     } catch (error) {

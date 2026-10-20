@@ -6,7 +6,7 @@ import { router } from '@/hooks/useLeaveGuard';
 import Animated, { FadeInDown, ZoomIn } from 'react-native-reanimated';
 import { toast } from '@/store/useToast';
 import { useUserSession } from '@/store/useUserSession';
-import { backendEnabled, isBackendUnavailable } from '@/lib/backend';
+import { backendEnabled, BackendError, isBackendUnavailable } from '@/lib/backend';
 import { useWizardGuard } from '@/hooks/useWizardGuard';
 import { reloadUserSpace } from '@/store/useStore';
 import { useWizard } from '@/store/useWizard';
@@ -18,6 +18,7 @@ import { PageHeader } from '@/components/ui/StepHeader';
 import { Screen } from '@/components/ui/Screen';
 import { Txt } from '@/components/ui/Txt';
 import { cleanPhone, validPhone } from '@/lib/share';
+import { needsPro } from '@/lib/credits';
 
 /** First free render: ask for Name + WhatsApp. Creates a Render Request for the admin. */
 export default function Lead() {
@@ -45,9 +46,9 @@ export default function Lead() {
       const user = await useUserSession.getState().login(name.trim(), whatsapp);
       await reloadUserSpace();
       if (!user.freeUsed) w.setLead({ name: user.name, whatsapp: user.whatsapp });
-      if (user.freeUsed) router.replace({ pathname: '/pro', params: { generation: '1' } });
+      if (needsPro(user)) router.replace({ pathname: '/pro', params: { generation: '1' } });
       else router.replace('/render');
-    } catch (error) { toast(t(isBackendUnavailable(error) ? 'account.unavailable' : 'account.loginError')); }
+    } catch (error) { toast(t(error instanceof BackendError && error.code === 'ACCOUNT_BLOCKED' ? 'account.blocked' : isBackendUnavailable(error) ? 'account.unavailable' : 'account.loginError')); }
     finally { setBusy(false); }
   };
 

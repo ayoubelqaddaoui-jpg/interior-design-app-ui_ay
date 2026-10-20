@@ -120,7 +120,7 @@ function createBackend({ env = process.env, db = createDb(env), senders } = {}) 
         const userCookie = req.headers.cookie?.split(';').map(value => value.trim()).find(value => value.startsWith('dwira_user='))?.slice(11);
         const userToken = req.headers['x-user-token'] || userCookie;
         const client = await clients.authenticate(userToken);
-        const requireUser = () => { if (!client) throw fail(401, 'USER_LOGIN_REQUIRED'); return client; };
+        const requireUser = () => { if (!client) throw fail(401, 'USER_LOGIN_REQUIRED'); if (client.blocked) throw fail(403, 'ACCOUNT_BLOCKED'); return client; };
         const cookie = (name, token, age) => `${name}=${token}; HttpOnly; SameSite=Strict; Path=/api; Max-Age=${age}${env.COOKIE_SECURE === 'false' ? '' : '; Secure'}`;
 
         // ---- Client accounts ----
@@ -171,8 +171,14 @@ function createBackend({ env = process.env, db = createDb(env), senders } = {}) 
 
         // ---- Admin ----
         if (url.pathname === '/api/admin/clients' && req.method === 'GET') { admin(); return json(200, await clients.users()); }
+        if (url.pathname === '/api/admin/clients/bulk' && req.method === 'POST') { admin(); return json(200, await clients.bulk(await readBody(req))); }
         const creditClient = url.pathname.match(/^\/api\/admin\/clients\/([a-f0-9-]+)$/);
-        if (creditClient && req.method === 'PATCH') { admin(); const body = await readBody(req); return json(200, await clients.grant(creditClient[1], body.credits)); }
+        if (creditClient && req.method === 'PATCH') {
+          admin();
+          const body = await readBody(req);
+          return json(200, await clients.update(creditClient[1], { credits: body.credits, blocked: body.blocked }));
+        }
+        if (creditClient && req.method === 'DELETE') { admin(); await clients.remove(creditClient[1]); return json(200, { ok: true }); }
         if (req.method === 'POST' && url.pathname === '/api/admin/login') {
           const body = await readBody(req);
           if (typeof body.email !== 'string' || typeof body.password !== 'string' || body.password.length > 512 || !adminCredentialsMatch(env, body.email, body.password)) throw fail(401, 'Invalid credentials');

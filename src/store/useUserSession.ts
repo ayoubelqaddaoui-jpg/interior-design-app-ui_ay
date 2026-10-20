@@ -1,7 +1,9 @@
 import { create } from 'zustand';
 import { Platform } from 'react-native';
 import type { AppUser } from '@/data/types';
+import { t } from 'i18next';
 import { api, backendEnabled, BackendError } from '@/lib/backend';
+import { toast } from '@/store/useToast';
 
 /** User authentication never touches useLocal.adminSession or its secure-store key. */
 export const useUserSession = create<{
@@ -14,7 +16,11 @@ export const useUserSession = create<{
   async refresh() {
     if (!backendEnabled) return;
     try { set({ user: (await api<{ user: AppUser }>('/user/session')).user }); }
-    catch (error) { if (error instanceof BackendError && error.status === 401) set({ user: null }); }
+    catch (error) {
+      if (error instanceof BackendError && error.status === 401) set({ user: null });
+      // The admin blocked this account: sign out locally so nothing keeps working with a dead session.
+      else if (error instanceof BackendError && error.code === 'ACCOUNT_BLOCKED') { set({ user: null }); toast(t('account.blocked')); }
+    }
   },
   async login(name, phone) {
     const result = await api<{ user: AppUser; token?: string }>('/user/login', { method: 'POST', body: { name, phone } });

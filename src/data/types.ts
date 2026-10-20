@@ -79,6 +79,8 @@ export interface AppUser {
   name: string;
   whatsapp: string;
   credits: number;
+  /** Set by an admin: a blocked client cannot sign in or generate. */
+  blocked?: boolean;
   /** true once the user went through the first-free-render WhatsApp flow. */
   leadDone: boolean;
   role: 'user' | 'admin';

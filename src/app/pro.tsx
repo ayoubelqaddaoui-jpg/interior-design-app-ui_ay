@@ -1,5 +1,5 @@
 import { useViewState } from '@/hooks/useViewState';
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useLocalSearchParams } from 'expo-router';
 import { useWizardGuard } from '@/hooks/useWizardGuard';
 import { useWizard } from '@/store/useWizard';
@@ -14,6 +14,7 @@ import { Screen } from '@/components/ui/Screen';
 import { Txt } from '@/components/ui/Txt';
 import { toast } from '@/store/useToast';
 import { useMe } from '@/store/useStore';
+import { freshUser, needsPro } from '@/lib/credits';
 
 const PLANS = [
   { k: 'weekly', price: '49 MAD', per: '/wk' },
@@ -28,6 +29,16 @@ export default function Pro() {
   const me = useMe();
   const { generation } = useLocalSearchParams<{ generation?: string }>();
   const canContinue = generation === '1' && !!useWizard.getState().photoUri && (me?.credits ?? 0) > 0;
+  // Credits may have been granted by the admin after this screen was reached: re-check and leave the paywall if so.
+  useEffect(() => {
+    let alive = true;
+    void freshUser().then((u) => {
+      if (!alive || !u || needsPro(u) || generation !== '1' || !useWizard.getState().photoUri) return;
+      useWizard.setState({ proSeen: true });
+      router.replace('/render');
+    });
+    return () => { alive = false; };
+  }, [generation]);
   const [plan, setPlan] = useViewState<string>('plan', 'monthly');
   const [confirming, setConfirming] = useState(false);
   const confirmation = useRef(false);

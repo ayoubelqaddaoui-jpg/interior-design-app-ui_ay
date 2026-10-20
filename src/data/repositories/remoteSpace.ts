@@ -17,9 +17,11 @@ export function remoteSpace<T extends HistoryItem | Conversation>(kind: 'history
   };
 }
 
-/** Keep seed/admin records and their existing logic, but route real client credit grants to the backend. */
+/** Server clients have UUID ids; seeded/demo users are `usr_*` and live in local storage only. */
+export const isClientId = (id: string) => /^[a-f0-9]{8}-[a-f0-9-]{27}$/i.test(id);
+
+/** Keep seed/admin records and their existing logic, but route real client edits (credits, block, delete) to the backend. */
 export function remoteUsers(local: CollectionRepo<AppUser>): CollectionRepo<AppUser> {
-  const remote = new Set<string>();
   return {
     ...local,
     async list() {
@@ -28,14 +30,27 @@ export function remoteUsers(local: CollectionRepo<AppUser>): CollectionRepo<AppU
       let clients: AppUser[];
       try { clients = await api<AppUser[]>('/admin/clients'); }
       catch (error) { if (error instanceof BackendError && error.status === 401 && !useLocal.getState().adminOffline) { useLocal.getState().set({ adminSession: false }); return rows; } return rows; }
-      clients.forEach(row => remote.add(row.id));
       return [...rows, ...clients];
     },
     async update(id, patch) {
-      if (!remote.has(id)) return local.update(id, patch);
-      const row = await api<AppUser>(`/admin/clients/${encodeURIComponent(id)}`, { method: 'PATCH', body: patch });
+      if (!isClientId(id)) return local.update(id, patch);
+      // Only the fields an admin may change are sent; the server validates them again.
+      const body: { credits?: number; blocked?: boolean } = {};
+      if (patch.credits !== undefined) body.credits = patch.credits;
+      if (patch.blocked !== undefined) body.blocked = patch.blocked;
+      const row = await api<AppUser>(`/admin/clients/${encodeURIComponent(id)}`, { method: 'PATCH', body });
       if (useUserSession.getState().user?.id === id) useUserSession.setState({ user: row });
       return row;
+    },
+    async remove(id) {
+      if (!isClientId(id)) return local.remove(id);
+      await api(`/admin/clients/${encodeURIComponent(id)}`, { method: 'DELETE' });
+    },
+    async removeMany(ids) {
+      const clients = ids.filter(isClientId);
+      if (clients.length) await api('/admin/clients/bulk', { method: 'POST', body: { ids: clients, action: 'delete' } });
+      const rest = ids.filter((id) => !isClientId(id));
+      if (rest.length) await local.removeMany(rest);
     },
   };
 }

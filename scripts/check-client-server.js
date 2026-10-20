@@ -142,3 +142,96 @@ test('on Vercel without a database the API answers a clear 503 JSON error instea
 });
 
 test.after(closeShared);
+
+test('admin credit grant ends the paywall: a client who used the free design and was granted credits can generate again', async () => {
+  const backend = createBackend({ env: { ...memory }, db: await freshDb() });
+  try {
+    const login = await backend.clients.login('Granted User', '+212600000010');
+    await backend.clients.claim(login.user, 'free-claim-0001');
+    const used = await backend.clients.user(login.user.id);
+    assert.equal(used.freeUsed, 1);
+    assert.equal(used.credits, 0, 'free design used and nothing granted: paywall');
+    const admin = await call(backend, '/api/admin/login', { method: 'POST', headers: native, body: { email: 'admin', password: 'admin' } });
+    const adminAuth = { authorization: `Bearer ${admin.body.token}` };
+    const granted = await call(backend, `/api/admin/clients/${login.user.id}`, { method: 'PATCH', headers: adminAuth, body: { credits: 2 } });
+    assert.equal(granted.body.credits, 2);
+    const session = await call(backend, '/api/user/session', { headers: { 'x-user-token': login.token } });
+    assert.equal(session.body.user.credits, 2, 'the session endpoint returns the granted credits');
+    assert.equal((await call(backend, '/api/user/claim', { method: 'POST', headers: { 'x-user-token': login.token }, body: { id: 'paid-claim-0010' } })).body.user.credits, 1);
+    // all granted credits spent -> paywall again
+    await backend.clients.claim(login.user, 'paid-claim-0011');
+    assert.equal((await call(backend, '/api/user/claim', { method: 'POST', headers: { 'x-user-token': login.token }, body: { id: 'paid-claim-0012' } })).body.error, 'PRO_REQUIRED');
+  } finally { backend.server.emit('close'); }
+});
+
+test('admin can edit credits, block, unblock and delete one client; blocked clients are locked out', async () => {
+  const backend = createBackend({ env: { ...memory }, db: await freshDb() });
+  try {
+    const login = await backend.clients.login('Blockable', '+212600000020');
+    const admin = await call(backend, '/api/admin/login', { method: 'POST', headers: native, body: { email: 'admin', password: 'admin' } });
+    const adminAuth = { authorization: `Bearer ${admin.body.token}` };
+    const auth = { 'x-user-token': login.token };
+    const id = login.user.id;
+    for (const bad of [{ credits: -1 }, { credits: 1.5 }, { credits: '5' }, { credits: 1e9 }, { blocked: 'yes' }]) {
+      assert.equal((await call(backend, `/api/admin/clients/${id}`, { method: 'PATCH', headers: adminAuth, body: bad })).status, 400, JSON.stringify(bad));
+    }
+    assert.equal((await call(backend, `/api/admin/clients/${id}`, { method: 'PATCH', headers: auth, body: { credits: 9 } })).status, 401, 'a client cannot edit credits');
+    const blocked = await call(backend, `/api/admin/clients/${id}`, { method: 'PATCH', headers: adminAuth, body: { blocked: true } });
+    assert.equal(blocked.body.blocked, true);
+    assert.equal(blocked.body.credits, 1, 'blocking never changes credits');
+    assert.equal((await call(backend, '/api/user/session', { headers: auth })).body.error, 'ACCOUNT_BLOCKED');
+    assert.equal((await call(backend, '/api/user/claim', { method: 'POST', headers: auth, body: { id: 'claim-blocked-01' } })).status, 403);
+    assert.equal((await call(backend, '/api/user/login', { method: 'POST', body: { name: 'Blockable', phone: '+212600000020' } })).body.error, 'ACCOUNT_BLOCKED');
+    const back = await call(backend, `/api/admin/clients/${id}`, { method: 'PATCH', headers: adminAuth, body: { blocked: false, credits: 7 } });
+    assert.equal(back.body.blocked, false);
+    assert.equal(back.body.credits, 7);
+    assert.equal((await call(backend, '/api/user/session', { headers: auth })).status, 200);
+    assert.equal((await call(backend, `/api/admin/clients/${id}`, { method: 'DELETE', headers: auth })).status, 401);
+    assert.equal((await call(backend, `/api/admin/clients/${id}`, { method: 'DELETE', headers: adminAuth })).status, 200);
+    assert.equal((await call(backend, `/api/admin/clients/${id}`, { method: 'DELETE', headers: adminAuth })).status, 404);
+    assert.equal((await call(backend, '/api/user/session', { headers: auth })).status, 401, 'deleted client sessions die with the account');
+  } finally { backend.server.emit('close'); }
+});
+
+test('bulk admin actions: add / subtract / set credits, block, unblock, delete on several clients, all-or-nothing', async () => {
+  const backend = createBackend({ env: { ...memory }, db: await freshDb() });
+  try {
+    const admin = await call(backend, '/api/admin/login', { method: 'POST', headers: native, body: { email: 'admin', password: 'admin' } });
+    const adminAuth = { authorization: `Bearer ${admin.body.token}` };
+    const a = (await backend.clients.login('Alpha', '+212600000031')).user;
+    const b = (await backend.clients.login('Bravo', '+212600000032')).user;
+    const c = (await backend.clients.login('Charlie', '+212600000033')).user;
+    await backend.clients.claim(b, 'bulk-claim-b-001'); // Bravo used the free design -> 0 shown
+    const bulk = (body, headers = adminAuth) => call(backend, '/api/admin/clients/bulk', { method: 'POST', headers, body });
+    const shown = async () => Object.fromEntries((await backend.clients.users()).map(u => [u.name, u.credits]));
+    assert.deepEqual(await shown(), { Alpha: 1, Bravo: 0, Charlie: 1 });
+
+    assert.equal((await bulk({ ids: [a.id], action: 'credits', mode: 'set', amount: 1 }, {})).status, 401);
+    assert.deepEqual((await bulk({ ids: [a.id, b.id, c.id], action: 'credits', mode: 'add', amount: 5 })).body.users.map(u => u.credits).sort(), [5, 6, 6]);
+    assert.deepEqual(await shown(), { Alpha: 6, Bravo: 5, Charlie: 6 });
+    await bulk({ ids: [a.id, b.id, c.id], action: 'credits', mode: 'subtract', amount: 100 });
+    assert.deepEqual(await shown(), { Alpha: 0, Bravo: 0, Charlie: 0 }, 'never below zero');
+    await bulk({ ids: [a.id, b.id], action: 'credits', mode: 'set', amount: 4 });
+    assert.deepEqual(await shown(), { Alpha: 4, Bravo: 4, Charlie: 0 });
+    // Bravo now truly has paid credits and can generate
+    assert.equal((await backend.clients.claim(b, 'bulk-claim-b-002')).credits, 3);
+
+    const blocked = await bulk({ ids: [a.id, b.id], action: 'block' });
+    assert.equal(blocked.body.affected, 2);
+    assert(blocked.body.users.every(u => u.blocked));
+    assert.equal((await backend.clients.users()).find(u => u.name === 'Charlie').blocked, false);
+    await bulk({ ids: [a.id, b.id], action: 'unblock' });
+    assert((await backend.clients.users()).every(u => !u.blocked));
+
+    // invalid input changes nothing
+    for (const bad of [{ ids: [], action: 'block' }, { ids: ['x'], action: 'block' }, { ids: [a.id], action: 'explode' }, { ids: [a.id], action: 'credits', mode: 'set', amount: -1 }, { ids: [a.id], action: 'credits', mode: 'mul', amount: 1 }, { ids: 'all', action: 'delete' }]) {
+      assert.equal((await bulk(bad)).status, 400, JSON.stringify(bad));
+    }
+    assert.deepEqual(await shown(), { Alpha: 4, Bravo: 3, Charlie: 0 });
+
+    // unknown ids are skipped, known ones deleted in one transaction (sessions/claims cascade)
+    const gone = await bulk({ ids: [a.id, b.id, '00000000-0000-0000-0000-000000000000'], action: 'delete' });
+    assert.equal(gone.body.affected, 2);
+    assert.deepEqual(await shown(), { Charlie: 0 });
+  } finally { backend.server.emit('close'); }
+});
