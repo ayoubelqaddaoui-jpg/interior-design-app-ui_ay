@@ -68,7 +68,7 @@
     "check:themes": "sucrase-node scripts/check-themes.ts",
     "lint": "expo lint",
     "test:ui": "node scripts/check-ui.js",
-    "test:server": "node --test --test-concurrency=1 scripts/check-backend-config.js scripts/check-push-server.js scripts/check-client-server.js",
+    "test:server": "node --test --test-concurrency=1 scripts/check-backend-config.js scripts/check-push-server.js scripts/check-client-server.js scripts/check-vercel-routing.js",
     "start:server": "node server/index.js"
   },
   "private": true,
