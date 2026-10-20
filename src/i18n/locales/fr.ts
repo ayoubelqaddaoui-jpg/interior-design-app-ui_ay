@@ -1,5 +1,5 @@
 const fr = {
-  account: {"logout": "Déconnexion utilisateur", "logoutError": "Impossible de vous déconnecter. Vérifiez votre connexion puis réessayez.", "unavailable": "Le service est temporairement indisponible. Votre saisie est conservée. Réessayez dans un instant.", "loginError": "Impossible de vous connecter. Vérifiez le numéro avec son indicatif international et réessayez."},
+  account: {"blocked": "Ce compte est bloqué. Contactez l’administration.", "logout": "Déconnexion utilisateur", "logoutError": "Impossible de vous déconnecter. Vérifiez votre connexion puis réessayez.", "unavailable": "Le service est temporairement indisponible. Votre saisie est conservée. Réessayez dans un instant.", "loginError": "Impossible de vous connecter. Vérifiez le numéro avec son indicatif international et réessayez."},
   leaveConfirm: {"title": "Quitter ?", "message": "Voulez-vous quitter ? Vous perdrez les étapes que vous avez effectuées.", "no": "Non", "yes": "Oui"},
   lang: { dar: 'Darija marocaine', ar: 'العربية', fr: 'Français' },
   common: {
@@ -58,6 +58,7 @@ const fr = {
     modelDefault: 'Par défaut',
     generate: 'Générer',
     permission: 'Autorisez l’accès à l’appareil photo ou aux photos dans les réglages.',
+    photoFailed: 'Impossible de charger cette photo. Essayez-en une autre.',
     noModels: 'Aucun modèle IA disponible pour cet outil.',
     pickPhotoFirst: 'Ajoutez une photo pour continuer.',
     leave: 'Quitter l’assistant ?',
@@ -397,6 +398,15 @@ const fr = {
       amount: 'Nombre de crédits',
       grantBtn: 'Offrir',
       granted: 'Crédits ajoutés',
+    },
+    um: {
+      search: 'Rechercher par nom ou numéro', active: 'Actifs', blocked: 'Bloqués', selected: 'sélectionnés', clear: 'Désélectionner', selectAll: 'Tout sélectionner',
+      credits: 'Crédits', editCredits: 'Modifier les crédits', editUser: 'Modifier l’utilisateur', block: 'Bloquer', unblock: 'Débloquer', blockAccount: 'Bloquer le compte',
+      blockHint: 'Un utilisateur bloqué ne peut plus se connecter ni générer de design.', modeAdd: 'Ajouter', modeSubtract: 'Retirer', modeSet: 'Définir', preview: 'Aperçu',
+      apply: 'Appliquer à {{count}}', more: 'Voir plus', none: 'Aucun utilisateur', saved: 'Modifications enregistrées', done: '{{count}} utilisateur(s) modifié(s)',
+      error: 'Opération impossible. Vérifiez votre connexion puis réessayez.',
+      confirm_block: 'Bloquer {{count}} utilisateur(s) ? Ils ne pourront plus se connecter.', confirm_unblock: 'Débloquer {{count}} utilisateur(s) ?',
+      confirm_delete: 'Supprimer définitivement {{count}} utilisateur(s) et tous leurs designs ?', skipAdmins: 'Les comptes admin ({{count}}) ne sont pas concernés.',
     },
     req: {
       title: 'Demandes de rendu',

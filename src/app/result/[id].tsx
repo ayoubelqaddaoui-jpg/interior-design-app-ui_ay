@@ -15,6 +15,7 @@ import { Txt } from '@/components/ui/Txt';
 import { BeforeAfter } from '@/components/result/BeforeAfter';
 import { saveImage, shareImage } from '@/lib/share';
 import { toast } from '@/store/useToast';
+import { freshUser } from '@/lib/credits';
 import { useBp } from '@/hooks/useBp';
 
 export default function Result() {
@@ -31,12 +32,14 @@ export default function Result() {
   if (!item || !item.after) return <Redirect href="/" />;
 
   const goBack = () => router.back();
-  const regenerate = () => {
-    if ((me?.credits ?? 0) <= 0) { toast(t('result.noCredits')); router.push('/pro'); return; }
+  const regenerate = async () => {
+    const current = (await freshUser()) ?? me;
+    if ((current?.credits ?? 0) <= 0) { toast(t('result.noCredits')); router.push('/pro'); return; }
     const w = useWizard.getState();
     w.start(item.draft.toolId, item.draft);
     w.setPhoto(item.before);
-    router.replace({ pathname: '/pro', params: { generation: '1' } });
+    // Credits available: go straight to the render, no paywall in between.
+    router.replace('/render');
   };
   const newDesign = () => {
     const toolId = item.draft.toolId;

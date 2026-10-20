@@ -5,8 +5,14 @@ const canonicalPhone = input => {
   if (/^0[5-7]\d{8}$/.test(phone)) phone = '212' + phone.slice(1);
   return '+' + phone.replace(/^\+/, '');
 };
+const MAX_CREDITS = 1000000;
+/**
+ * A client who has not used the free design is shown `credits + 1`. To make the balance an admin types equal the balance
+ * the user sees, a target of 0 also consumes the unused free design; any other target keeps it and stores the remainder.
+ */
+const balance = (row, shown) => (!row.free_used && shown <= 0 ? { credits: 0, freeUsed: 1 } : { credits: Math.max(0, shown - (row.free_used ? 0 : 1)), freeUsed: row.free_used });
 const fail = (status, code) => Object.assign(new Error(code), { status });
-const toUser = row => row && ({ id: row.id, name: row.name, whatsapp: row.phone, credits: row.credits + (row.free_used ? 0 : 1), freeUsed: row.free_used, leadDone: true, role: 'user', createdAt: row.created_at });
+const toUser = row => row && ({ id: row.id, name: row.name, whatsapp: row.phone, credits: row.credits + (row.free_used ? 0 : 1), freeUsed: row.free_used, leadDone: true, role: 'user', blocked: !!row.blocked, createdAt: row.created_at });
 
 /** Phone-based client profiles, sessions, free/paid entitlement claims and per-client history/chat space. */
 function createClients(db) {
@@ -17,6 +23,7 @@ function createClients(db) {
     // Atomic upsert: two simultaneous first logins for one phone cannot create two profiles.
     await db.query('INSERT INTO clients(id,phone,name,created_at) VALUES($1,$2,$3,$4) ON CONFLICT (phone) DO NOTHING', [crypto.randomUUID(), canonical, name.trim(), Date.now()]);
     const row = (await db.query('SELECT * FROM clients WHERE phone=$1', [canonical]))[0];
+    if (row.blocked) throw fail(403, 'ACCOUNT_BLOCKED');
     const token = crypto.randomBytes(32).toString('hex');
     await db.query('DELETE FROM user_sessions WHERE expires_at<=$1', [Date.now()]);
     await db.query('INSERT INTO user_sessions VALUES($1,$2,$3)', [digest(token), row.id, Date.now() + 365 * 86400000]);
@@ -35,6 +42,8 @@ function createClients(db) {
       const old = (await q('SELECT * FROM claims WHERE id=$1', [id]))[0];
       if (old) { if (old.client_id !== client.id) throw fail(409, 'INVALID_CLAIM'); return toUser(await byId(client.id, q)); }
       const row = await byId(client.id, q);
+      if (!row) throw fail(401, 'USER_LOGIN_REQUIRED');
+      if (row.blocked) throw fail(403, 'ACCOUNT_BLOCKED');
       const free = !row.free_used;
       if (!free && row.credits <= 0) throw fail(402, 'PRO_REQUIRED');
       await q(free ? 'UPDATE clients SET free_used=1 WHERE id=$1' : 'UPDATE clients SET credits=credits-1 WHERE id=$1', [client.id]);
@@ -59,9 +68,58 @@ function createClients(db) {
     grant: async (id, credits) => {
       const row = await byId(id);
       if (!row) throw fail(404, 'NOT_FOUND');
-      if (!Number.isSafeInteger(credits) || credits < 0 || credits > 1000000) throw fail(400, 'INVALID_CREDITS');
-      await db.query('UPDATE clients SET credits=$1 WHERE id=$2', [Math.max(0, credits - (row.free_used ? 0 : 1)), id]);
+      if (!Number.isSafeInteger(credits) || credits < 0 || credits > MAX_CREDITS) throw fail(400, 'INVALID_CREDITS');
+      const next = balance(row, credits);
+      await db.query('UPDATE clients SET credits=$1, free_used=$2 WHERE id=$3', [next.credits, next.freeUsed, id]);
       return toUser(await byId(id));
+    },
+    /** Admin edit of one client. Only whitelisted fields; credits are the displayed balance (free design included). */
+    update: async (id, patch) => {
+      if (patch.credits !== undefined && (!Number.isSafeInteger(patch.credits) || patch.credits < 0 || patch.credits > MAX_CREDITS)) throw fail(400, 'INVALID_CREDITS');
+      if (patch.blocked !== undefined && typeof patch.blocked !== 'boolean') throw fail(400, 'INVALID_BLOCKED');
+      return db.tx(async q => {
+        const row = (await q('SELECT * FROM clients WHERE id=$1 FOR UPDATE', [id]))[0];
+        if (!row) throw fail(404, 'NOT_FOUND');
+        if (patch.credits !== undefined) { const next = balance(row, patch.credits); await q('UPDATE clients SET credits=$1, free_used=$2 WHERE id=$3', [next.credits, next.freeUsed, id]); }
+        if (patch.blocked !== undefined) await q('UPDATE clients SET blocked=$1 WHERE id=$2', [patch.blocked ? 1 : 0, id]);
+        return toUser(await byId(id, q));
+      });
+    },
+    /**
+     * Admin bulk action on many clients in ONE transaction (all or nothing).
+     * action: block | unblock | delete | credits(mode: set | add | subtract, amount).
+     */
+    bulk: async ({ ids, action, mode, amount }) => {
+      if (!Array.isArray(ids) || !ids.length || ids.length > 500 || ids.some(id => typeof id !== 'string' || !/^[a-f0-9-]{8,64}$/.test(id))) throw fail(400, 'INVALID_IDS');
+      if (!['block', 'unblock', 'delete', 'credits'].includes(action)) throw fail(400, 'INVALID_ACTION');
+      if (action === 'credits') {
+        if (!['set', 'add', 'subtract'].includes(mode) || !Number.isSafeInteger(amount) || amount < 0 || amount > MAX_CREDITS) throw fail(400, 'INVALID_CREDITS');
+      }
+      const unique = [...new Set(ids)];
+      return db.tx(async q => {
+        const rows = [];
+        for (const id of unique.sort()) { // stable lock order avoids deadlocks between concurrent bulk calls
+          const row = (await q('SELECT * FROM clients WHERE id=$1 FOR UPDATE', [id]))[0];
+          if (row) rows.push(row);
+        }
+        for (const row of rows) {
+          if (action === 'delete') await q('DELETE FROM clients WHERE id=$1', [row.id]);
+          else if (action === 'block' || action === 'unblock') await q('UPDATE clients SET blocked=$1 WHERE id=$2', [action === 'block' ? 1 : 0, row.id]);
+          else {
+            const shown = row.credits + (row.free_used ? 0 : 1);
+            const next = Math.min(MAX_CREDITS, Math.max(0, mode === 'set' ? amount : mode === 'add' ? shown + amount : shown - amount));
+            const stored = balance(row, next);
+            await q('UPDATE clients SET credits=$1, free_used=$2 WHERE id=$3', [stored.credits, stored.freeUsed, row.id]);
+          }
+        }
+        const users = [];
+        if (action !== 'delete') for (const row of rows) users.push(toUser(await byId(row.id, q)));
+        return { affected: rows.length, users };
+      });
+    },
+    remove: async id => {
+      const rows = await db.query('DELETE FROM clients WHERE id=$1 RETURNING id', [id]);
+      if (!rows.length) throw fail(404, 'NOT_FOUND');
     },
     removeSpace: (client, kind, id) => db.query('DELETE FROM space WHERE id=$1 AND client_id=$2 AND kind=$3', [id, client.id, kind]),
   };
