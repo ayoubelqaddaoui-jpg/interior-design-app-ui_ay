@@ -1,28 +1,35 @@
 import type { Lang } from '@/data/types';
 import { api, backendEnabled } from './backend';
 
-export type PushStatus = 'enabled' | 'disabled' | 'blocked' | 'unsupported' | 'unconfigured';
+/** `install`: iPhone/iPad Safari only delivers web push to an app added to the Home Screen. */
+export type PushStatus = 'enabled' | 'disabled' | 'blocked' | 'unsupported' | 'unconfigured' | 'install';
+
+const ua = () => (typeof navigator === 'undefined' ? '' : navigator.userAgent);
+const isIos = () => /iPad|iPhone|iPod/.test(ua()) || (typeof navigator !== 'undefined' && navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+const standalone = () => (typeof window !== 'undefined' && (window.matchMedia?.('(display-mode: standalone)').matches || (navigator as unknown as { standalone?: boolean }).standalone === true));
 const supported = () => typeof window !== 'undefined' && window.isSecureContext && 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
+
 function keyBytes(value: string) {
   const base64 = value.replace(/-/g, '+').replace(/_/g, '/');
   const decoded = atob(base64 + '='.repeat((4 - base64.length % 4) % 4));
   return Uint8Array.from(decoded, char => char.charCodeAt(0));
 }
 async function registration() {
-  const registered = await navigator.serviceWorker.register('/push-sw.js', { scope: '/', updateViaCache: 'none' });
-  if (registered.active) return registered;
+  await navigator.serviceWorker.register('/push-sw.js', { scope: '/', updateViaCache: 'none' });
+  // `ready` resolves once a worker controls the scope, including on the very first visit.
   return navigator.serviceWorker.ready;
 }
 export async function pushStatus(): Promise<PushStatus> {
   if (!backendEnabled) return 'unconfigured';
-  if (!supported()) return 'unsupported';
+  if (!supported()) return isIos() && !standalone() ? 'install' : 'unsupported';
   if (Notification.permission === 'denied') return 'blocked';
   const worker = await navigator.serviceWorker.getRegistration('/');
   return worker && await worker.pushManager.getSubscription() ? 'enabled' : 'disabled';
 }
+/** Must be called from a tap/click handler. Throws a BackendError when the server is unreachable or the admin session is missing. */
 export async function enablePush(language: Lang): Promise<PushStatus> {
   if (!backendEnabled || !supported()) return pushStatus();
-  // Ask only from a user button press, never on mount or a language change.
+  // Must be the first await: browsers (notably Safari) only show the prompt inside the user gesture.
   const permission = await Notification.requestPermission();
   if (permission !== 'granted') return permission === 'denied' ? 'blocked' : 'disabled';
   const config = await api<{ publicKey: string | null }>('/push/config');
@@ -36,7 +43,7 @@ export async function enablePush(language: Lang): Promise<PushStatus> {
     subscription = null;
   }
   subscription ||= await worker.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: expected });
-  // Subscription is only considered enabled when persisted by the authenticated backend.
+  // Only "enabled" once the authenticated backend has stored it.
   await api('/push/subscriptions', { method: 'POST', body: { kind: 'web', subscription: subscription.toJSON(), language } });
   return 'enabled';
 }
@@ -54,3 +61,5 @@ export async function disablePush() {
   try { await api('/push/subscriptions', { method: 'DELETE', body: { kind: 'web', subscription: subscription.toJSON() } }); }
   finally { await subscription.unsubscribe(); }
 }
+/** Sends a real notification through the server to every registered device. */
+export async function sendTestPush() { return api<{ ok: boolean; devices: number }>('/push/test', { method: 'POST', body: {} }); }

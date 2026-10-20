@@ -1,159 +1,144 @@
-const test = process.versions.bun ? require('bun:test').test : require('node:test');
+const test = require('node:test');
 const assert = require('node:assert/strict');
-const fs = require('node:fs');
-const path = require('node:path');
-const crypto = require('node:crypto');
 const { Readable } = require('node:stream');
-const { createClients } = require('../server/clients');
+const crypto = require('node:crypto');
 const { createBackend } = require('../server');
-const root = path.resolve('.pw');
-fs.mkdirSync(root, { recursive: true });
-const upload = (clients, user, { device = 'a'.repeat(64), ip = '10.1.1.1', image = 'image one' } = {}) => {
-  const req = Readable.from([Buffer.from(image.slice(0, 3)), Buffer.from(image.slice(3))]);
-  req.headers = { 'content-type': 'image/png' }; req.socket = { remoteAddress: ip };
-  return clients.upload(req, user, device);
-};
-const profile = (clients, n) => clients.login(`Client ${n}`, `+21260000${String(n).padStart(4, '0')}`);
-function call(backend, url, { method = 'GET', body, headers = {}, raw } = {}) {
+const { freshDb, closeShared } = require('./test-db');
+
+const memory = { PGLITE_DIR: ':memory:', COOKIE_SECURE: 'false' };
+function call(backend, url, { method = 'GET', body, headers = {} } = {}) {
   return new Promise(resolve => {
-    const req = Readable.from(raw ? [raw] : body === undefined ? [] : [Buffer.from(JSON.stringify(body))]);
+    const req = Readable.from(body === undefined ? [] : [Buffer.from(JSON.stringify(body))]);
     Object.assign(req, { url, method, headers: { 'content-type': 'application/json', ...headers }, socket: { remoteAddress: 'test-client' } });
     const output = { headers: {} };
     const res = { headersSent: false, setHeader(key, value) { output.headers[key.toLowerCase()] = value; }, writeHead(status) { output.status = status; this.headersSent = true; }, end(value) { output.body = value ? JSON.parse(value) : undefined; resolve(output); } };
-    backend.server.emit('request', req, res);
+    backend.handle(req, res);
   });
 }
+const native = { 'x-dwira-native': '1' };
+const demand = id => ({ id, photoUri: 'data:image/png;base64,aW1hZ2U=', draft: { toolId: 'tool_interior' } });
 
-test('phone-only restore, persistent free entitlement, independent logout and stream hashes', async () => {
-  const dir = fs.mkdtempSync(path.join(root, 'clients-'));
-  const file = path.join(dir, 'clients.sqlite');
-  let clients = createClients(file);
+test('lead form flow: phone login -> free claim -> request, exactly as /lead + /render do it', async () => {
+  const backend = createBackend({ env: { ...memory }, db: await freshDb() });
   try {
-    const first = profile(clients, 1);
-    assert.equal(first.user.credits, 1);
-    const signal = await upload(clients, first.user);
-    const claimed = clients.claim(first.user, 'claim-first-0001', signal.uploadId);
-    assert.equal(claimed.freeUsed, 1);
-    clients.putSpace(first.user, 'history', { before: 'original', after: 'result', status: 'done' }, 'history-1');
-    clients.logout(first.token);
-    assert.equal(clients.authenticate(first.token), null);
-    clients.close(); clients = createClients(file);
-    const restored = clients.login('New name is not an identity', '00212600000001');
-    assert.equal(restored.user.id, first.user.id);
-    assert.equal(restored.user.freeUsed, 1);
-    assert.equal(clients.listSpace(restored.user, 'history')[0].after, 'result');
-    assert.throws(() => clients.claim(restored.user, 'claim-second-0002', signal.uploadId), /PRO_REQUIRED/);
-    assert.equal(clients.claim(restored.user, 'claim-first-0001', signal.uploadId).freeUsed, 1, 'lost response retry must not charge again');
-    const other = profile(clients, 2);
-    assert.equal(clients.listSpace(other.user, 'history').length, 0, 'device never restores another phone space');
-    const row = clients.db.prepare('SELECT * FROM signals').get();
-    assert.equal(row.image_hash, crypto.createHash('sha256').update('image one').digest('hex'));
-    assert(!JSON.stringify(row).includes('image one'));
-    const indexes = clients.db.prepare("SELECT name FROM sqlite_master WHERE type='index'").all().map(row => row.name);
-    for (const key of ['clients_phone', 'signals_phone', 'signals_device_id', 'signals_image_hash', 'signals_ip']) assert(indexes.includes(key));
-    assert.equal(fs.statSync(file).mode & 0o777, 0o600);
-  } finally { clients.close(); fs.rmSync(dir, { recursive: true, force: true }); }
-});
-
-for (const shared of ['device', 'image', 'ip']) test(`spam detects shared ${shared} only across different phones; block OFF/ON/OFF and normal user safety`, async () => {
-  const clients = createClients(':memory:');
-  try {
-    const first = profile(clients, 1), second = profile(clients, 2), third = profile(clients, 3), normal = profile(clients, 4);
-    const a = { device: 'a'.repeat(64), ip: '1.1.1.1', image: 'first' };
-    const b = { device: 'b'.repeat(64), ip: '2.2.2.2', image: 'second', [shared]: a[shared] };
-    clients.claim(first.user, 'claim-first-0001', (await upload(clients, first.user, a)).uploadId);
-    assert.equal(clients.monitor(0, Date.now()).block, false);
-    clients.claim(second.user, 'claim-second-0002', (await upload(clients, second.user, b)).uploadId);
-    assert.equal(clients.monitor(0, Date.now()).flagged, 2);
-    clients.setBlock(true);
-    const thirdUpload = await upload(clients, third.user, b);
-    assert.throws(() => clients.claim(third.user, 'claim-third-0003', thirdUpload.uploadId), /SPAM_BLOCKED/);
-    assert.equal(clients.user(third.user.id).freeUsed, 0);
-    clients.claim(normal.user, 'claim-normal-0004', (await upload(clients, normal.user, { device: 'd'.repeat(64), ip: '4.4.4.4', image: 'normal' })).uploadId);
-    assert.equal(clients.user(normal.user.id).freeUsed, 1, 'unflagged users must not be blocked');
-    clients.grant(first.user.id, 2);
-    clients.claim(first.user, 'claim-paid-00001', (await upload(clients, first.user, a)).uploadId);
-    assert.equal(clients.user(first.user.id).credits, 1, 'blocking must never block paid grants');
-    clients.setBlock(false);
-    clients.claim(third.user, 'claim-third-0003', thirdUpload.uploadId);
-    const report = clients.monitor(0, Date.now());
-    assert.equal(report.flagged, 3); assert.equal(report.total, 4); assert.equal(report.percentage, 75);
-    assert.equal(clients.monitor(Date.now() + 1000, Date.now() + 2000).total, 0);
-    assert(report.rows.some(row => row.accounts === 3 && row.freeUsed === 3));
-  } finally { clients.close(); }
-});
-
-test('atomic duplicate/racing claims and bounded paginated monitor', async () => {
-  const clients = createClients(':memory:');
-  try {
-    const first = profile(clients, 1), signal = await upload(clients, first.user);
-    const results = await Promise.allSettled([1, 2].map(async n => clients.claim(first.user, `racing-claim-${n}`, signal.uploadId)));
-    assert.equal(results.filter(row => row.status === 'fulfilled').length, 1);
-    for (let n = 2; n <= 24; n++) {
-      const client = profile(clients, n);
-      clients.claim(client.user, `page-claim-${n}`, (await upload(clients, client.user)).uploadId);
-    }
-    const one = clients.monitor(0, Date.now(), 1), two = clients.monitor(0, Date.now(), 2);
-    assert.equal(one.rows.length, 20); assert.equal(two.rows.length, 4);
-    assert.equal(new Set([...one.rows, ...two.rows].map(row => row.phone)).size, 24);
-  } finally { clients.close(); }
-});
-
-test('HTTP user/admin session isolation, backend ownership, request validation and admin delivery', async () => {
-  const directory = fs.mkdtempSync(path.join(root, 'clients-http-'));
-  const password = 'test-only', salt = 'test-salt';
-  const env = { DATA_FILE: path.join(directory, 'state.json'), ADMIN_EMAIL: 'test@example.com', ADMIN_PASSWORD_HASH: `${salt}:${crypto.scryptSync(password, salt, 64).toString('hex')}`, COOKIE_SECURE: 'false' };
-  const backend = createBackend({ env });
-  try {
-    const admin = await call(backend, '/api/admin/login', { method: 'POST', headers: { 'x-dwira-native': '1' }, body: { email: env.ADMIN_EMAIL, password } });
-    const adminAuth = { authorization: `Bearer ${admin.body.token}` };
-    const login = await call(backend, '/api/user/login', { method: 'POST', headers: { 'x-dwira-native': '1' }, body: { name: 'Test Person', phone: '+212612345678' } });
+    // /lead : "amine" / "0626900460" (the values from the failing screenshot)
+    const login = await call(backend, '/api/user/login', { method: 'POST', headers: native, body: { name: 'amine', phone: '0626900460' } });
+    assert.equal(login.status, 200);
+    assert.equal(login.body.user.whatsapp, '+212626900460');
+    assert.equal(login.body.user.freeUsed, 0);
+    assert.equal(login.body.user.credits, 1);
+    assert(login.headers['set-cookie'].startsWith('dwira_user='));
     const auth = { 'x-user-token': login.body.token };
-    assert.equal(login.status, 200); assert(login.headers['set-cookie'].startsWith('dwira_user='));
-    assert.equal((await call(backend, '/api/admin/spam', { headers: auth })).status, 401);
-    assert.equal((await call(backend, '/api/user/session', { headers: adminAuth })).status, 401);
-    assert.equal((await call(backend, '/api/admin/spam?from=bad', { headers: adminAuth })).status, 400);
-    const signal = await call(backend, '/api/user/image', { method: 'POST', headers: { ...auth, 'content-type': 'image/png', 'x-device-id': 'a'.repeat(64) }, raw: Buffer.from('image') });
-    assert.equal(signal.status, 201);
-    const demand = { id: 'claim-http-00001', uploadId: signal.body.uploadId, name: 'Spoofed Name', whatsapp: '+11111111111', photoUri: 'data:image/png;base64,aW1hZ2U=', draft: { toolId: 'tool_interior' } };
-    const requestAuth = { ...auth, 'x-demand-token': 'a'.repeat(64) };
-    const created = await call(backend, '/api/requests', { method: 'POST', headers: requestAuth, body: demand });
-    assert.equal(created.status, 201); assert.equal(created.body.name, 'Test Person');
-    assert.equal(created.body.whatsapp, '+212612345678');
-    assert.equal((await call(backend, '/api/requests', { method: 'POST', headers: requestAuth, body: demand })).body.id, created.body.id);
-    const history = await call(backend, '/api/user/history', { method: 'POST', headers: auth, body: { claimId: demand.id, before: demand.photoUri, status: 'pending', draft: demand.draft } });
-    assert.equal(history.status, 200);
-    await call(backend, `/api/requests/${created.body.id}`, { method: 'PATCH', headers: auth, body: { historyId: history.body.id } });
-    await call(backend, `/api/requests/${created.body.id}`, { method: 'PATCH', headers: adminAuth, body: { finalResult: 'https://example.com/final.jpg', status: 'delivered' } });
-    assert.equal((await call(backend, '/api/user/history', { headers: auth })).body[0].status, 'done');
-    const other = await call(backend, '/api/user/login', { method: 'POST', headers: { 'x-dwira-native': '1' }, body: { name: 'Other Person', phone: '+212600000002' } });
-    assert.equal((await call(backend, `/api/requests/${created.body.id}`, { headers: { 'x-user-token': other.body.token, 'x-demand-token': 'a'.repeat(64) } })).status, 404, 'device is not authorization');
-    assert.equal((await call(backend, `/api/user/history/${history.body.id}`, { headers: { 'x-user-token': other.body.token } })).status, 404);
-    await call(backend, '/api/user/logout', { method: 'POST', headers: { ...auth, ...adminAuth }, body: {} });
-    assert.equal((await call(backend, '/api/user/session', { headers: auth })).status, 401);
-    assert.equal((await call(backend, '/api/admin/session', { headers: adminAuth })).status, 200);
-    await call(backend, '/api/admin/logout', { method: 'POST', headers: { ...adminAuth, 'x-user-token': other.body.token }, body: {} });
-    assert.equal((await call(backend, '/api/user/session', { headers: { 'x-user-token': other.body.token } })).status, 200);
-    const restored = await call(backend, '/api/user/login', { method: 'POST', body: { name: 'Test Person', phone: '00212612345678' } });
-    assert.equal(restored.body.user.id, login.body.user.id); assert.equal(restored.body.user.freeUsed, 1);
-  } finally { backend.server.emit('close'); fs.rmSync(directory, { recursive: true, force: true }); }
+    assert.equal((await call(backend, '/api/user/session', { headers: auth })).body.user.name, 'amine');
+    // /render : no image-upload/spam step any more, just the request
+    const headers = { ...auth, 'x-demand-token': 'a'.repeat(64) };
+    const created = await call(backend, '/api/requests', { method: 'POST', headers, body: demand('claim-lead-0001') });
+    assert.equal(created.status, 201);
+    assert.equal(created.body.whatsapp, '+212626900460');
+    assert.equal(created.body.clientHash, undefined, 'internal fields are never exposed');
+    // lost response -> retry must be idempotent
+    assert.equal((await call(backend, '/api/requests', { method: 'POST', headers, body: demand('claim-lead-0001') })).body.id, created.body.id);
+    assert.equal((await call(backend, '/api/user/requests', { headers: auth })).body.length, 1);
+    assert.equal((await call(backend, '/api/user/session', { headers: auth })).body.user.freeUsed, 1);
+    // second free design needs Pro
+    assert.equal((await call(backend, '/api/user/claim', { method: 'POST', headers: auth, body: { id: 'claim-second-0002' } })).body.error, 'PRO_REQUIRED');
+  } finally { backend.server.emit('close'); }
 });
 
+test('invalid profiles are rejected and the same phone in any spelling restores the same account', async () => {
+  const backend = createBackend({ env: { ...memory }, db: await freshDb() });
+  try {
+    for (const body of [{ name: 'a', phone: '0626900460' }, { name: 'amine', phone: '123' }, { name: 'amine', phone: 'abc' }, {}]) {
+      assert.equal((await call(backend, '/api/user/login', { method: 'POST', body })).status, 400);
+    }
+    const ids = new Set();
+    for (const phone of ['0626900460', '+212626900460', '00212626900460', '06 26 90 04 60']) ids.add((await call(backend, '/api/user/login', { method: 'POST', body: { name: 'amine', phone } })).body.user.id);
+    assert.equal(ids.size, 1);
+    // concurrent first logins for a new phone create exactly one profile
+    const racing = await Promise.all([1, 2, 3, 4].map(() => call(backend, '/api/user/login', { method: 'POST', body: { name: 'racer', phone: '0611111111' } })));
+    assert.equal(new Set(racing.map(row => row.body.user.id)).size, 1);
+  } finally { backend.server.emit('close'); }
+});
 
-test('health identifies the live runtime; same-origin deployments work without an origin allowlist', async () => {
-  const directory = fs.mkdtempSync(path.join(root, 'health-http-'));
-  const backend = createBackend({ env: { DATA_FILE: path.join(directory, 'state.json'), COOKIE_SECURE: 'false' } });
+test('atomic racing claims, ownership isolation, history and credit grants', async () => {
+  const backend = createBackend({ env: { ...memory }, db: await freshDb() });
+  try {
+    const first = await backend.clients.login('Client One', '+212600000001');
+    const results = await Promise.allSettled([1, 2].map(n => backend.clients.claim(first.user, `racing-claim-${n}`)));
+    assert.equal(results.filter(row => row.status === 'fulfilled').length, 1, 'only one free claim can win');
+    assert.equal((await backend.clients.user(first.user.id)).freeUsed, 1);
+    await backend.clients.grant(first.user.id, 2);
+    assert.equal((await backend.clients.claim(first.user, 'paid-claim-0001')).credits, 1);
+
+    const admin = await call(backend, '/api/admin/login', { method: 'POST', headers: native, body: { email: 'admin', password: 'admin' } });
+    const adminAuth = { authorization: `Bearer ${admin.body.token}` };
+    const auth = { 'x-user-token': first.token };
+    assert.equal((await call(backend, '/api/admin/clients', { headers: auth })).status, 401, 'a client is never an admin');
+    assert.equal((await call(backend, '/api/user/session', { headers: adminAuth })).status, 401, 'an admin is not a client');
+    assert.equal((await call(backend, '/api/admin/clients', { headers: adminAuth })).body.length, 1);
+
+    const history = await call(backend, '/api/user/history', { method: 'POST', headers: auth, body: { claimId: 'paid-claim-0001', before: 'photo', status: 'pending', draft: { toolId: 'tool_interior' } } });
+    assert.equal(history.status, 200);
+    assert.equal((await call(backend, '/api/user/history', { method: 'POST', headers: auth, body: { claimId: 'not-claimed-0001', before: 'photo', status: 'pending', draft: { toolId: 't' } } })).status, 403);
+    const other = await backend.clients.login('Client Two', '+212600000002');
+    assert.equal((await call(backend, `/api/user/history/${history.body.id}`, { headers: { 'x-user-token': other.token } })).status, 404);
+    await call(backend, '/api/user/logout', { method: 'POST', headers: auth, body: {} });
+    assert.equal((await call(backend, '/api/user/session', { headers: auth })).status, 401);
+  } finally { backend.server.emit('close'); }
+});
+
+test('admin delivery updates the client history; clients cannot self-deliver or read other requests', async () => {
+  const backend = createBackend({ env: { ...memory }, db: await freshDb() });
+  try {
+    const login = await backend.clients.login('Test Person', '+212612345678');
+    const auth = { 'x-user-token': login.token, 'x-demand-token': 'a'.repeat(64) };
+    const created = await call(backend, '/api/requests', { method: 'POST', headers: auth, body: { ...demand('claim-http-00001'), name: 'Spoofed', whatsapp: '+11111111111' } });
+    assert.equal(created.body.name, 'Test Person', 'identity comes from the session, not the body');
+    const history = await call(backend, '/api/user/history', { method: 'POST', headers: auth, body: { claimId: 'claim-http-00001', before: 'photo', status: 'pending', draft: { toolId: 'tool_interior' } } });
+    assert.equal((await call(backend, `/api/requests/${created.body.id}`, { method: 'PATCH', headers: auth, body: { historyId: history.body.id, status: 'delivered', name: 'x' } })).body.status, 'pending');
+    const admin = await call(backend, '/api/admin/login', { method: 'POST', headers: native, body: { email: 'admin', password: 'admin' } });
+    const adminAuth = { authorization: `Bearer ${admin.body.token}` };
+    assert.equal((await call(backend, `/api/requests/${created.body.id}`, { method: 'PATCH', headers: adminAuth, body: { finalResult: 'https://example.com/final.jpg', status: 'delivered' } })).body.status, 'delivered');
+    assert.equal((await call(backend, '/api/user/history', { headers: auth })).body[0].status, 'done');
+    const other = await backend.clients.login('Other', '+212600000002');
+    assert.equal((await call(backend, `/api/requests/${created.body.id}`, { headers: { 'x-user-token': other.token } })).status, 404);
+    assert.equal((await call(backend, '/api/requests', { headers: { 'x-user-token': other.token } })).status, 401);
+    assert.equal((await call(backend, '/api/requests', { headers: adminAuth })).body.length, 1);
+    assert.equal((await call(backend, `/api/requests/${created.body.id}`, { method: 'DELETE', headers: adminAuth })).status, 200);
+    assert.equal((await call(backend, '/api/requests', { headers: adminAuth })).body.length, 0);
+  } finally { backend.server.emit('close'); }
+});
+
+test('health reports the database; same-origin works without an allowlist; default and custom admin login', async () => {
+  const salt = 'test-salt', password = 'a-long-test-password';
+  const env = { ...memory, ADMIN_EMAIL: 'owner@example.com', ADMIN_PASSWORD_HASH: `${salt}:${crypto.scryptSync(password, salt, 64).toString('hex')}` };
+  const backend = createBackend({ env, db: await freshDb() });
   try {
     const health = await call(backend, '/api/health', { headers: { origin: 'https://dwira.example', host: 'dwira.example' } });
     assert.equal(health.status, 200);
     assert.equal(health.body.ok, true);
-    assert.equal(health.body.runtime, process.versions.bun ? 'bun' : 'node');
-    assert.equal(health.body.adminConfigured, false);
+    assert.equal(health.body.database, 'pglite');
     assert.equal(health.headers['access-control-allow-origin'], 'https://dwira.example');
     assert.equal((await call(backend, '/api/health', { headers: { origin: 'https://evil.example', host: 'dwira.example' } })).status, 403);
-    assert.equal((await call(backend, '/api/admin/spam', { headers: { origin: 'https://dwira.example', host: 'dwira.example' } })).status, 401, 'same origin does not bypass admin authentication');
-    const fallback = await call(backend, '/api/admin/login', { method: 'POST', headers: { 'x-dwira-native': '1' }, body: { email: 'admin', password: 'admin' } });
-    assert.equal(fallback.status, 200, 'default admin/admin login works without server config');
-    assert.equal((await call(backend, '/api/admin/login', { method: 'POST', body: { email: 'admin', password: 'wrong' } })).status, 401);
-  } finally { backend.server.emit('close'); fs.rmSync(directory, { recursive: true, force: true }); }
+    assert.equal((await call(backend, '/api/admin/clients', { headers: { origin: 'https://dwira.example', host: 'dwira.example' } })).status, 401);
+    assert.equal((await call(backend, '/api/admin/login', { method: 'POST', body: { email: 'admin', password: 'admin' } })).status, 200);
+    assert.equal((await call(backend, '/api/admin/login', { method: 'POST', body: { email: 'owner@example.com', password } })).status, 200);
+    assert.equal((await call(backend, '/api/admin/login', { method: 'POST', body: { email: 'admin', password: 'nope' } })).status, 401);
+    assert.equal((await call(backend, '/api/admin/spam', { headers: {} })).status, 404, 'the spam monitor no longer exists');
+    assert.equal((await call(backend, '/api/admin/returning', { headers: {} })).status, 404, 'the returning-message API no longer exists');
+  } finally { backend.server.emit('close'); }
 });
+
+test('on Vercel without a database the API answers a clear 503 JSON error instead of crashing', async () => {
+  const backend = createBackend({ env: { VERCEL: '1' } });
+  try {
+    const health = await call(backend, '/api/health');
+    assert.equal(health.status, 503);
+    assert.equal(health.body.database, 'missing');
+    const login = await call(backend, '/api/user/login', { method: 'POST', body: { name: 'amine', phone: '0626900460' } });
+    assert.equal(login.status, 503);
+    assert.equal(login.body.error, 'DATABASE_NOT_CONFIGURED');
+  } finally { backend.server.emit('close'); }
+});
+
+test.after(closeShared);

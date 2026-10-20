@@ -3,7 +3,7 @@ import { Platform } from 'react-native';
 import type { Lang } from '@/data/types';
 import { api, backendEnabled } from './backend';
 
-export type PushStatus = 'enabled' | 'disabled' | 'blocked' | 'unsupported' | 'unconfigured';
+export type PushStatus = 'enabled' | 'disabled' | 'blocked' | 'unsupported' | 'unconfigured' | 'install';
 const tokenKey = 'dwira-fcm-token';
 async function notifications() { return import('expo-notifications'); }
 export async function pushStatus(): Promise<PushStatus> {
@@ -41,3 +41,4 @@ export async function disablePush() {
   if (token) await api('/push/subscriptions', { method: 'DELETE', body: { kind: 'fcm', token } });
   await secure.deleteItemAsync(tokenKey);
 }
+export async function sendTestPush() { return api<{ ok: boolean; devices: number }>('/push/test', { method: 'POST', body: {} }); }

@@ -7,8 +7,7 @@ This is Expo SDK 57 / React Native / web, not a blank app. Preserve the reposito
 - Local collections: tabs, tools, roomTypes, styles, palettes, sections, categories, inspirations, models, seed users/requests, guest history/conversations.
 - Local documents: branding, theme, assistant and settings (search, fonts, navigation, exhibition layouts, bulk settings, default credits).
 - `server/index.js`: authenticated request API, separate HttpOnly admin/user cookies (SecureStore tokens on native), rate limits, durable notification outbox and static hosting.
-- `server/clients.js`: SQLite phone profiles, hashed sessions, atomic free/paid claims, streaming image hashes, spam signals and block preference OFF by default. Phone alone restores a profile; device/image/IP only flag suspicious accounts.
-- `server/returning.js`: translated popup versions, phone-stable A/B assignment and deduplicated events/results.
+- `server/clients.js`: Postgres phone profiles (PGlite locally), hashed sessions and atomic free/paid claims. Phone alone restores a profile.
 - `server/notifications.js`: web push, FCM and other notification delivery with retry queue.
 - Offers are hardcoded in `src/app/pro.tsx`; there is NO existing offer CRUD or payment processor. Rendering/chat/WhatsApp services are demos. Do not claim these are real delivery or purchases.
 - Admin route guard currently trusts a device-local boolean plus the presence of a seed admin. It is a UI guard, not authorization. Node APIs separately authenticate real sessions. Model `apiKey` is currently a client-visible domain field: never seed real provider secrets to public content.
@@ -16,9 +15,9 @@ This is Expo SDK 57 / React Native / web, not a blank app. Preserve the reposito
 
 ## Decisions and compatibility
 
-### Node, SQLite, push, spam and phone users
+### Node, Postgres, push and phone users
 
-Keep the entire existing Node server and SQLite active. No schema migration or data deletion in the legacy server during this work. Supabase first replaces the content/document repository seam; Node continues handling requests, credits, phone users, notifications, spam and returning experiments until a separately verified migration and reconciliation. No dual writes or silent fallback of failed remote saves into local storage.
+Keep the existing Node server (now Postgres via `server/db.js`) active. No schema migration or data deletion in the legacy server during this work. Supabase first replaces the content/document repository seam; Node continues handling requests, credits, phone users, notifications until a separately verified migration and reconciliation. No dual writes or silent fallback of failed remote saves into local storage.
 
 ### Phone authentication (no OTP)
 
@@ -38,7 +37,7 @@ Save this plan, run typecheck, lint, web export, existing UI regression suite an
 
 ## Phase 2: schema, Auth, RLS
 
-Add versioned PostgreSQL migrations for content, documents, admin roles, profiles, relationships, owned requests/history/conversations, entitlements/claims, abuse/rate events, returning experiments, outbox, offers and media metadata. Every table uses default-deny RLS. Published content is public; drafts, model configs, profiles and administrative records are private. Storage policies protect admin uploads. Add two isolated Auth clients and role-checked admin auth functions, without switching the default login. Local automated contract tests are not a substitute for live RLS tests.
+Add versioned PostgreSQL migrations for content, documents, admin roles, profiles, relationships, owned requests/history/conversations, entitlements/claims, abuse/rate events, outbox, offers and media metadata. Every table uses default-deny RLS. Published content is public; drafts, model configs, profiles and administrative records are private. Storage policies protect admin uploads. Add two isolated Auth clients and role-checked admin auth functions, without switching the default login. Local automated contract tests are not a substitute for live RLS tests.
 
 ## Phase 3: data and storage
 

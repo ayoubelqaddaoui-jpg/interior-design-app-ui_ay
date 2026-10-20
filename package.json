@@ -29,6 +29,7 @@
     "expo-video": "~57.0.5",
     "i18next": "^26.4.2",
     "nativewind": "^4.2.7",
+    "pg": "^8.23.1",
     "prettier-plugin-tailwindcss": "^0.8.1",
     "react": "19.2.3",
     "react-dom": "19.2.3",
@@ -43,9 +44,11 @@
     "react-native-web": "^0.21.2",
     "react-native-worklets": "0.10.1",
     "tailwindcss": "^3.4.19",
+    "web-push": "^3.6.7",
     "zustand": "^5.0.15"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "^0.5.10",
     "@playwright/test": "^1.64.0",
     "@types/react": "~19.2.2",
     "babel-preset-expo": "^57.0.14",
@@ -64,7 +67,9 @@
     "serve:web": "node scripts/serve-dist.js",
     "check:themes": "sucrase-node scripts/check-themes.ts",
     "lint": "expo lint",
-    "test:ui": "node scripts/check-ui.js"
+    "test:ui": "node scripts/check-ui.js",
+    "test:server": "node --test --test-concurrency=1 scripts/check-backend-config.js scripts/check-push-server.js scripts/check-client-server.js",
+    "start:server": "node server/index.js"
   },
   "private": true,
   "engines": {

@@ -14,6 +14,7 @@ function load({ os = 'web', env = {}, transport = async () => new Response('{}',
     require: name => {
       if (name === 'react-native') return { Platform: { OS: os } };
       if (name.includes('storage')) return { storage: {} };
+      if (name.includes('useLocal')) return { useLocal: { getState: () => ({ set() {} }) } };
       throw new Error(`Unexpected dependency: ${name}`);
     },
   };
@@ -23,8 +24,8 @@ function load({ os = 'web', env = {}, transport = async () => new Response('{}',
 test('web defaults to same-origin API without an env variable; explicit demo and native remain opt-in', async () => {
   const web = load();
   assert.equal(web.backendEnabled, true);
-  await web.api('/admin/spam');
-  assert.deepEqual(web.urls, ['/api/admin/spam']);
+  await web.api('/user/session');
+  assert.deepEqual(web.urls, ['/api/user/session']);
   const remote = load({ env: { EXPO_PUBLIC_API_URL: ' https://api.example.com/api/// ' } });
   await remote.api('/health');
   assert.deepEqual(remote.urls, ['https://api.example.com/api/health']);
@@ -48,7 +49,7 @@ test('HTML SPA fallbacks, invalid JSON, network failures and timeouts are action
   }
 });
 test('JSON business/auth errors preserve their status and code', async () => {
-  for (const [status, code] of [[400, 'INVALID_PROFILE'], [401, 'Admin login required'], [403, 'SPAM_BLOCKED'], [402, 'PRO_REQUIRED']]) {
+  for (const [status, code] of [[400, 'INVALID_PROFILE'], [401, 'Admin login required'], [409, 'INVALID_CLAIM'], [402, 'PRO_REQUIRED']]) {
     const api = load({ transport: async () => new Response(JSON.stringify({ error: code }), { status, headers: { 'Content-Type': 'application/json' } }) });
     await assert.rejects(api.api('/user/claim'), error => error.status === status && error.code === code && !api.isBackendUnavailable(error));
   }

@@ -6,7 +6,7 @@ import { router } from '@/hooks/useLeaveGuard';
 import Animated, { FadeInDown, ZoomIn } from 'react-native-reanimated';
 import { toast } from '@/store/useToast';
 import { useUserSession } from '@/store/useUserSession';
-import { backendEnabled, BackendError, isBackendUnavailable } from '@/lib/backend';
+import { backendEnabled, isBackendUnavailable } from '@/lib/backend';
 import { useWizardGuard } from '@/hooks/useWizardGuard';
 import { reloadUserSpace } from '@/store/useStore';
 import { useWizard } from '@/store/useWizard';
@@ -47,7 +47,7 @@ export default function Lead() {
       if (!user.freeUsed) w.setLead({ name: user.name, whatsapp: user.whatsapp });
       if (user.freeUsed) router.replace({ pathname: '/pro', params: { generation: '1' } });
       else router.replace('/render');
-    } catch (error) { toast(t(isBackendUnavailable(error) ? 'account.unavailable' : error instanceof BackendError && error.code === 'SPAM_BLOCKED' ? 'account.blocked' : 'account.loginError')); }
+    } catch (error) { toast(t(isBackendUnavailable(error) ? 'account.unavailable' : 'account.loginError')); }
     finally { setBusy(false); }
   };
 

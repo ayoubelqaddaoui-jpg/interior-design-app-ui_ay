@@ -1,5 +1,9 @@
 export const pushTexts = {
   fr: {
+    install: 'Sur iPhone/iPad : ouvrez le menu Partager de Safari, choisissez « Sur l’écran d’accueil », puis ouvrez Dwira depuis l’icône et activez les notifications.',
+    login: 'Session administrateur expirée ou serveur non connecté. Reconnectez-vous (admin / admin) puis réessayez.',
+    unavailable: 'Le serveur est temporairement indisponible. Réessayez dans un instant.',
+    renew: 'Renouveler l’inscription', test: 'Envoyer un test', testSent: 'Notification de test envoyée.', testFailed: 'Le test a échoué. Réactivez les notifications puis réessayez.', testNone: 'Aucun appareil enregistré. Activez d’abord les notifications.',
     title: 'Notifications des nouvelles demandes', enable: 'Activer les notifications', disable: 'Désactiver sur cet appareil',
     enabled: 'Les notifications sont activées sur cet appareil. Vous pouvez renouveler l’inscription.', disabled: 'Recevez le nom et le téléphone du client, même lorsque l’app est fermée.',
     blocked: 'Notifications bloquées. Autorisez-les dans les paramètres du navigateur ou du téléphone, puis rechargez.',
@@ -11,6 +15,10 @@ export const pushTexts = {
     demandError: 'Votre demande n’a pas pu être confirmée. Réessayez : une nouvelle tentative ne crée pas de doublon.',
   },
   ar: {
+    install: 'على آيفون/آيباد: افتح قائمة المشاركة في سفاري واختر «إضافة إلى الشاشة الرئيسية»، ثم افتح Dwira من الأيقونة وفعّل الإشعارات.',
+    login: 'انتهت جلسة الإدارة أو الخادم غير متصل. سجّل الدخول مجددًا (admin / admin) ثم أعد المحاولة.',
+    unavailable: 'الخادم غير متاح مؤقتًا. أعد المحاولة بعد قليل.',
+    renew: 'تجديد الاشتراك', test: 'إرسال إشعار تجريبي', testSent: 'تم إرسال إشعار تجريبي.', testFailed: 'فشل الاختبار. أعد تفعيل الإشعارات ثم حاول مجددًا.', testNone: 'لا يوجد جهاز مسجّل. فعّل الإشعارات أولًا.',
     title: 'إشعارات الطلبات الجديدة', enable: 'تفعيل الإشعارات', disable: 'تعطيل على هذا الجهاز',
     enabled: 'الإشعارات مفعّلة على هذا الجهاز. يمكنك تجديد الاشتراك.', disabled: 'استقبل اسم العميل ورقم هاتفه حتى عندما يكون التطبيق مغلقًا.',
     blocked: 'الإشعارات محظورة. اسمح بها في إعدادات المتصفح أو الهاتف ثم أعد التحميل.',
@@ -22,6 +30,10 @@ export const pushTexts = {
     demandError: 'تعذر تأكيد طلبك. حاول مجددًا؛ إعادة المحاولة لا تنشئ طلبًا مكررًا.',
   },
   dar: {
+    install: 'فالآيفون/الآيباد: حل قائمة المشاركة ديال سفاري، ختار «إضافة إلى الشاشة الرئيسية»، من بعد حل Dwira من الأيقونة وفعّل الإشعارات.',
+    login: 'الجلسة ديال الإدارة سالات ولا السيرفر ماشي مربوط. عاود دخل (admin / admin) وجرّب مرة أخرى.',
+    unavailable: 'السيرفر ما خدامش دابا. عاود جرّب من بعد شوية.',
+    renew: 'جدّد الاشتراك', test: 'صيفط إشعار تجريبي', testSent: 'تصيفط إشعار تجريبي.', testFailed: 'التجربة ما نجحاتش. عاود فعّل الإشعارات وجرّب.', testNone: 'ما كاين حتى جهاز مسجل. فعّل الإشعارات الأول.',
     title: 'إشعارات الطلبات الجديدة', enable: 'فعّل الإشعارات', disable: 'حبّس فهاد الجهاز',
     enabled: 'الإشعارات خدامة فهاد الجهاز. تقدر تجدّد الاشتراك.', disabled: 'توصّل بسمية الزبون والنمرة ديالو حتى إلا كان التطبيق مسدود.',
     blocked: 'الإشعارات محبوسة. سمح ليها فإعدادات المتصفح ولا التليفون وعاود حمّل الصفحة.',

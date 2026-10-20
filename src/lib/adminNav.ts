@@ -7,9 +7,7 @@ export const ADMIN_GROUPS: NavGroup[] = [
     { key: 'dashboard', icon: 'view-dashboard-outline', href: '/admin' },
     { key: 'requests', icon: 'inbox-full-outline', href: '/admin/requests' },
     { key: 'users', icon: 'account-group-outline', href: '/admin/users' },
-    { key: 'spam', icon: 'shield-alert-outline', href: '/admin/spam' },
     { key: 'credits', icon: 'star-circle-outline', href: '/admin/credits' },
-    { key: 'returning', icon: 'message-text-outline', href: '/admin/returning' },
   ] },
   { key: 'content', items: [
     { key: 'tabs', icon: 'tab', href: '/admin/tabs' },
