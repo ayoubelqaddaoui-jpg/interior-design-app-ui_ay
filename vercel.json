@@ -8,11 +8,24 @@
   "trailingSlash": false,
   "rewrites": [
     {
-      "source": "/((?!api/|_expo/|assets/|push-sw\\.js|favicon\\.ico).*)",
+      "source": "/((?!api/|_expo/|assets/|icons/|push-sw\\.js|manifest\\.webmanifest|favicon\\.ico).*)",
       "destination": "/index.html"
     }
   ],
   "headers": [
+    {
+      "source": "/push-sw.js",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=0, must-revalidate"
+        },
+        {
+          "key": "Service-Worker-Allowed",
+          "value": "/"
+        }
+      ]
+    },
     {
       "source": "/_expo/static/(.*)",
       "headers": [
@@ -56,6 +69,18 @@
           "value": "SAMEORIGIN"
         }
       ]
+    }
+  ],
+  "functions": {
+    "api/[...path].js": {
+      "maxDuration": 30,
+      "includeFiles": "server/**"
+    }
+  },
+  "crons": [
+    {
+      "path": "/api/push/pump",
+      "schedule": "0 6 * * *"
     }
   ]
 }

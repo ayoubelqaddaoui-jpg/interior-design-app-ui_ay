@@ -4,7 +4,6 @@ import type { Draft } from '@/data/types';
 
 interface Wizard {
   claimId: string;
-  uploadId?: string;
   requestId?: string;
   proSeen: boolean;
   dirty: boolean;
@@ -21,11 +20,11 @@ interface Wizard {
 }
 export const useWizard = create<Wizard>((set) => ({
   claimId: uid('claim'), proSeen: false, dirty: false,
-  clear: () => set({ photoUri: '', draft: { toolId: '' }, toolId: '', dirty: false, lead: undefined, uploadId: undefined, requestId: undefined, proSeen: false }),
+  clear: () => set({ photoUri: '', draft: { toolId: '' }, toolId: '', dirty: false, lead: undefined, requestId: undefined, proSeen: false }),
   toolId: '',
   photoUri: '',
   draft: { toolId: '' },
-  start: (toolId, preset) => set({ toolId, photoUri: '', lead: undefined, claimId: uid('claim'), uploadId: undefined, requestId: undefined, proSeen: false, dirty: false, draft: { toolId, ...preset } }),
+  start: (toolId, preset) => set({ toolId, photoUri: '', lead: undefined, claimId: uid('claim'), requestId: undefined, proSeen: false, dirty: false, draft: { toolId, ...preset } }),
   setPhoto: (photoUri) => set({ photoUri, dirty: !!photoUri }),
   patch: (p) => set((s) => ({ draft: { ...s.draft, ...p }, dirty: true })),
   setLead: (lead) => set({ lead }),

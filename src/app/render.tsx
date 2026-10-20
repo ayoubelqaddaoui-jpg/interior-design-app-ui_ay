@@ -6,12 +6,11 @@ import { useStore } from '@/store/useStore';
 import { useWizard } from '@/store/useWizard';
 import { services } from '@/data/repositories';
 import { useT } from '@/i18n';
-import { Txt } from '@/components/ui/Txt';
 import { Button } from '@/components/ui/Button';
 import { Screen } from '@/components/ui/Screen';
 import { RenderingView } from '@/components/result/RenderingView';
 import { useUserSession } from '@/store/useUserSession';
-import { api, uploadSignal, BackendError } from '@/lib/backend';
+import { api, BackendError } from '@/lib/backend';
 import { useWizardGuard } from '@/hooks/useWizardGuard';
 import type { AppUser } from '@/data/types';
 
@@ -23,7 +22,6 @@ export default function RenderPage() {
   useWizardGuard();
   const [state, setState] = useState({ progress: 0, stage: 0 });
   const [failed, setFailed] = useState(false);
-  const [blocked, setBlocked] = useState(false);
   const started = useRef(false);
   const signal = useRef({ cancelled: false });
 
@@ -33,17 +31,14 @@ export default function RenderPage() {
     const user = useUserSession.getState().user;
     if (!user) { router.replace('/lead'); return; }
     if (user.freeUsed && !wiz.proSeen && !wiz.requestId) { router.replace({ pathname: '/pro', params: { generation: '1' } }); return; }
-    setFailed(false); setBlocked(false);
+    setFailed(false);
     signal.current = { cancelled: false };
     try {
-      if (!wiz.uploadId) useWizard.setState({ uploadId: (await uploadSignal(wiz.photoUri)).uploadId });
-      if (signal.current.cancelled) return;
-      const uploadId = useWizard.getState().uploadId;
       if (!user.freeUsed || wiz.lead) {
-        const request = await st.create('requests', { id: wiz.claimId, uploadId, userId: user.id, name: user.name, whatsapp: user.whatsapp, photoUri: wiz.photoUri, draft: wiz.draft, status: 'pending', createdAt: Date.now() });
+        const request = await st.create('requests', { id: wiz.claimId, userId: user.id, name: user.name, whatsapp: user.whatsapp, photoUri: wiz.photoUri, draft: wiz.draft, status: 'pending', createdAt: Date.now() });
         useWizard.setState({ requestId: request.id, lead: { name: user.name, whatsapp: user.whatsapp } });
       } else {
-        const result = await api<{ user: AppUser }>('/user/claim', { method: 'POST', body: { id: wiz.claimId, uploadId } });
+        const result = await api<{ user: AppUser }>('/user/claim', { method: 'POST', body: { id: wiz.claimId } });
         useUserSession.setState({ user: result.user });
       }
       if (signal.current.cancelled) return;
@@ -72,7 +67,6 @@ export default function RenderPage() {
       useWizard.setState({ dirty: false });
       router.replace({ pathname: '/result/[id]', params: { id: hist.id } });
     } catch (error) {
-      if (error instanceof BackendError && error.code === 'SPAM_BLOCKED') setBlocked(true);
       if (error instanceof BackendError && error.status === 402) { router.replace({ pathname: '/pro', params: { generation: '1' } }); return; }
       if (!signal.current.cancelled) setFailed(true);
     }
@@ -93,7 +87,6 @@ export default function RenderPage() {
     <Screen max={560} scroll={false} padded>
       <View className="flex-1 justify-center py-6">
         <RenderingView photo={w.photoUri} progress={state.progress} stage={state.stage} />
-        {blocked ? <Txt testID="spam-blocked" className="text-danger text-center font-bold mt-4">{t('account.blocked')}</Txt> : null}
         <View className="mt-8 items-center gap-3">
           {failed ? <Button testID="render-retry" title={t('common.retry')} onPress={() => { setState({ progress: 0, stage: 0 }); run(); }} /> : null}
           <Button testID="render-cancel" variant="ghost" title={t('render.cancel')} onPress={cancel} />

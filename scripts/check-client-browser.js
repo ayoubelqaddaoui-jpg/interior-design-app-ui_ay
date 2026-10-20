@@ -11,7 +11,7 @@ const dictionaries = Object.fromEntries(languages.map(lang => {
   vm.runInNewContext(ts.transpileModule(fs.readFileSync(`src/i18n/locales/${lang}.ts`, 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS } }).outputText, { module, exports: module.exports });
   return [lang, module.exports.default];
 }));
-for (const lang of languages) for (const group of ['leaveConfirm', 'account', 'spam']) {
+for (const lang of languages) for (const group of ['leaveConfirm', 'account']) {
   assert.deepEqual(Object.keys(dictionaries[lang][group]).sort(), Object.keys(dictionaries.fr[group]).sort());
   for (const value of Object.values(dictionaries[lang][group])) assert.equal(typeof value, 'string');
 }
@@ -112,7 +112,6 @@ async function main() {
         await wizard(page);
         await visible(page, 'pro-cta').waitFor();
         assert.equal(await page.getByTestId('lead-name').count(), 0, 'persistent login on second generation');
-        await visible(page, `returning-primary-${lang}`).click();
         await visible(page, 'pro-close').click();
         await page.getByTestId('unsaved-cancel').click();
         await visible(page, 'pro-close').click();
@@ -122,25 +121,11 @@ async function main() {
         await page.goto(base + '/settings');
         await visible(page, 'user-logout').waitFor();
         await visible(page, 'row-admin').click();
-        await visible(page, 'admin-email').fill('preview@example.com');
-        await visible(page, 'admin-password').fill('preview-password-only');
+        await visible(page, 'admin-email').fill('admin');
+        await visible(page, 'admin-password').fill('admin');
         await visible(page, 'admin-signin').click();
-        await page.route('**/api/admin/spam?*', route => route.fulfill({ status: 200, contentType: 'text/html', body: '<html>SPA fallback</html>' }));
-        await navigateAdmin(page, 'spam');
-        await expect(visible(page, 'spam-error')).toHaveText(dictionaries[lang].spam.unavailable);
-        assert.equal(await visible(page, 'spam-rate').count(), 0, 'failed API must not display fabricated zero metrics');
-        await page.unroute('**/api/admin/spam?*');
-        await visible(page, 'spam-retry').click();
-        await visible(page, 'spam-rate').waitFor();
-        assert.equal(await visible(page, 'spam-block').getAttribute('aria-checked'), 'false');
-        await visible(page, 'spam-block').click();
-        await expect(visible(page, 'spam-block')).toHaveAttribute('aria-checked', 'true');
-        await visible(page, 'spam-block').click();
-        await expect(visible(page, 'spam-block')).toHaveAttribute('aria-checked', 'false');
-        await visible(page, 'spam-from').fill('2099-01-01');
-        await visible(page, 'spam-to').fill('2099-12-31');
-        await visible(page, 'spam-filter').click();
-        await visible(page, 'spam-empty').waitFor();
+        for (const gone of ['spam', 'returning']) assert.equal(await page.getByTestId(`nav-${gone}`).count(), 0, `${gone} menu entry removed`);
+        await visible(page, 'push-enable').waitFor();
         await navigateAdmin(page, 'interface');
         await visible(page, 'layout-masonry').click();
         await navigateAdmin(page, 'tools');
@@ -173,29 +158,15 @@ async function main() {
         const restored = (await (await context.request.get(base + '/api/user/session')).json()).user;
         assert.equal(restored.id, user.id); assert.equal(restored.freeUsed, 1);
         assert.equal((await (await context.request.get(base + '/api/user/history')).json())[0].id, space[0].id);
-        // The same upload/device/IP with a NEW phone is blocked only while the switch is ON.
-        await visible(page, `returning-primary-${lang}`).click();
         await visible(page, 'pro-close').click();
         await page.getByTestId('unsaved-discard').click();
         await page.waitForTimeout(300);
-        await context.request.post(base + '/api/user/logout', { data: {} });
-        await context.request.patch(base + '/api/admin/spam', { data: { block: true } });
-        await page.goto(base);
-        await wizard(page);
-        await visible(page, 'lead-name').fill('Flagged test');
-        await visible(page, 'lead-phone').fill(phone.slice(0, -2) + String(count + 50));
-        await visible(page, 'lead-submit').click();
-        await expect(visible(page, 'spam-blocked')).toHaveText(dictionaries[lang].account.blocked);
-        await context.request.patch(base + '/api/admin/spam', { data: { block: false } });
-        await visible(page, 'render-retry').click();
-        await page.waitForURL('**/lead-success', { timeout: 25000 });
         await context.request.post(base + '/api/admin/logout', { data: {} });
         assert.equal((await context.request.get(base + '/api/user/session')).status(), 200);
         assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1), false);
-        await visible(page, 'success-home').waitFor();
         await page.waitForTimeout(400);
         await page.screenshot({ path: `.pw/client-${lang}-${size}-${theme}.png` });
-        console.log(`PASS ${lang}/${size}/${theme}: generation, session restore/logout isolation, spam switch/filters, shared back/close guards`);
+        console.log(`PASS ${lang}/${size}/${theme}: generation, session restore/logout isolation, admin menu without spam/returning, shared back/close guards`);
         count++;
       } catch (error) {
         await page.screenshot({ path: '.pw/client-failure.png' });

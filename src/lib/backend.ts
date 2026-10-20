@@ -76,10 +76,3 @@ export async function backendLogout() {
   finally { if (Platform.OS !== 'web') await (await import('expo-secure-store')).deleteItemAsync('dwira-backend-session'); }
 }
 
-/** Upload once for streaming server-side hashing; no spam-monitor image copies are saved. */
-export async function uploadSignal(uri: string) {
-  const blob = Platform.OS !== 'web' && /^(file|content):/.test(uri)
-    ? new (await import('expo-file-system')).File(uri)
-    : await (await fetch(uri)).blob();
-  return api<{ uploadId: string }>('/user/image', { method: 'POST', raw: blob, headers: { 'Content-Type': blob.type || 'image/jpeg', 'X-Device-ID': await clientToken() } });
-}

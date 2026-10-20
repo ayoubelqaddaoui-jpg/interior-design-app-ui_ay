@@ -50,4 +50,15 @@ let bad = 0;
   }
 })(dist);
 if (bad) process.exit(1);
+// Installable web app (required for web push on iPhone/iPad) - injected into the SPA shell.
+const shell = path.join(dist, 'index.html');
+if (fs.existsSync(shell)) {
+  let html = fs.readFileSync(shell, 'utf8');
+  if (!html.includes('rel="manifest"')) {
+    const tags = '<link rel="manifest" href="/manifest.webmanifest"><link rel="apple-touch-icon" href="/icons/apple-touch-icon.png"><meta name="theme-color" content="#FBDD2D"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="Dwira">';
+    html = html.replace('</head>', tags + '</head>');
+    fs.writeFileSync(shell, html);
+    console.log('[postexport] injected web app manifest');
+  }
+}
 console.log('[postexport] OK - dist is safe to deploy on Vercel');

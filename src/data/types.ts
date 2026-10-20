@@ -109,7 +109,6 @@ export interface HistoryItem {
 
 export type RequestStatus = 'pending' | 'processing' | 'delivered';
 export interface RenderRequest {
-  uploadId?: string;
   id: Id;
   userId: Id;
   name: string;
