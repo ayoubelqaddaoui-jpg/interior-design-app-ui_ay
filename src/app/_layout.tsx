@@ -18,8 +18,17 @@ import { AppExitHost } from '@/components/AppExitHost';
 import { PushNavigationHost } from '@/components/PushNavigationHost';
 import { GlobalSearch } from '@/components/GlobalSearch';
 import { ToastHost } from '@/components/ui/Toast';
+import { startPreferenceBindings, startSync } from '@/lib/sync';
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
+
+/** All content comes from the database: when the server cannot be reached yet, keep trying instead of showing an empty app. */
+async function initWithRetry() {
+  for (let attempt = 0; ; attempt++) {
+    try { await useStore.getState().init(); return; }
+    catch { await new Promise((resolve) => setTimeout(resolve, Math.min(1000 * 2 ** attempt, 8000))); }
+  }
+}
 
 export default function RootLayout() {
   const initialPath = usePathname();
@@ -30,7 +39,8 @@ export default function RootLayout() {
 
   useEffect(() => {
     (async () => {
-      await Promise.all([initLang(), useLocal.getState().load(), useUserSession.getState().refresh().then(() => useStore.getState().init())]);
+      // Device flags first: init() decides from them whether to load the admin-only lists.
+      await Promise.all([initLang(), useLocal.getState().load().then(() => useUserSession.getState().refresh()).then(initWithRetry)]);
       const { settings, branding } = useStore.getState().doc;
       const family = useLang.getState().lang === 'fr' ? settings.frenchFont || 'Inter' : settings.arabicFont || 'Tajawal';
       // Resolve actual persisted fonts once, before text mounts: no fallback/swap layout shift.
@@ -43,6 +53,13 @@ export default function RootLayout() {
   }, []);
 
   const ok = ready && loaded && booted;
+  // Real-time sync + database-backed preferences start once the first data is on screen.
+  useEffect(() => {
+    if (!ok) return;
+    const stopPrefs = startPreferenceBindings();
+    const stopSync = startSync();
+    return () => { stopSync(); stopPrefs(); };
+  }, [ok]);
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>

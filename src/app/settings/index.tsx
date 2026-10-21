@@ -5,7 +5,8 @@ import { useWizard } from '@/store/useWizard';
 import { router } from '@/hooks/useLeaveGuard';
 import Constants from 'expo-constants';
 import { useLang, LANGS, useT } from '@/i18n';
-import { useLocal } from '@/store/useLocal';
+import { usePrefs } from '@/store/usePrefs';
+import { setNotifications, useOwnerPushStatus } from '@/lib/notifications';
 import { reloadUserSpace, useMe, useStore } from '@/store/useStore';
 import { Card } from '@/components/ui/Card';
 import { Icon } from '@/components/ui/Icon';
@@ -30,7 +31,8 @@ export default function Settings() {
   const { t } = useT();
   const lang = useLang((s) => s.lang);
   const setLang = useLang((s) => s.set);
-  const { notifications, set } = useLocal();
+  const prefs = usePrefs((s) => s.client);
+  const devicePush = useOwnerPushStatus('client');
   const me = useMe();
   const user = useUserSession(s => s.user);
   const [loggingOut, setLoggingOut] = useState(false);
@@ -39,6 +41,13 @@ export default function Settings() {
     setLoggingOut(true);
     try { await useUserSession.getState().logout(); useWizard.getState().clear(); useStore.setState({ history: [], conversations: [], requests: [] }); await reloadUserSpace(); router.replace('/'); }
     catch { toast(t('account.logoutError')); } finally { setLoggingOut(false); }
+  };
+  const changeNotifications = async (on: boolean) => {
+    if (!user) { toast(t('push.clientLogin')); return; }
+    try {
+      const status = await setNotifications('client', on, lang);
+      toast(t(!on ? 'notif.disabled' : status === 'enabled' ? 'notif.enabled' : status === 'blocked' ? 'push.blocked' : 'push.error'));
+    } catch { toast(t('push.error')); }
   };
   const branding = useStore((s) => s.doc.branding);
   const [doc, setDoc] = useState<'about' | 'privacy' | null>(null);
@@ -60,7 +69,7 @@ export default function Settings() {
           right={<View className="bg-primary rounded-lg px-3 py-1"><Txt className="text-onprimary font-extrabold text-[12px]">{t('settings.pro')}</Txt></View>} />
         <View className="h-px bg-line mx-4" />
         <Row icon="bell-outline" title={t('settings.notifications')} sub={t('settings.notificationsDesc')}
-          right={<Toggle testID="switch-notif" label={t('settings.notifications')} value={notifications} onValueChange={(v) => { set({ notifications: v, bannerDismissed: true }); toast(t(v ? 'notif.enabled' : 'notif.disabled')); }} />} />
+          right={<Toggle testID="switch-notif" label={t('settings.notifications')} value={prefs?.notifications === true || (prefs?.notifications !== false && devicePush === 'enabled')} onValueChange={(v) => { void changeNotifications(v); }} />} />
       </Card>
 
       <Card className="overflow-hidden mb-5">

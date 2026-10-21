@@ -1,6 +1,5 @@
 import type { AppUser } from '@/data/types';
 import { api, backendEnabled } from '@/lib/backend';
-import { isClientId } from '@/data/repositories/remoteSpace';
 import { useStore } from '@/store/useStore';
 
 export type CreditMode = 'add' | 'subtract' | 'set';
@@ -26,11 +25,11 @@ export async function applyBulk(ids: string[], op: BulkOp): Promise<number> {
   const targets = op.type === 'credits' ? users : users.filter((u) => !isProtected(u));
   if (!targets.length) return 0;
 
-  const remote = targets.filter((u) => isClientId(u.id));
-  const local = targets.filter((u) => !isClientId(u.id));
+  // With the backend every user is a database client; local users only exist in offline demo mode.
+  const remote = backendEnabled ? targets : [];
+  const local = backendEnabled ? [] : targets;
   if (remote.length) {
-    if (!backendEnabled) throw new Error('BACKEND_UNAVAILABLE');
-    await api('/admin/clients/bulk', {
+        await api('/admin/clients/bulk', {
       method: 'POST',
       body: { ids: remote.map((u) => u.id), action: op.type, ...(op.type === 'credits' ? { mode: op.mode, amount: op.amount } : {}) },
     });

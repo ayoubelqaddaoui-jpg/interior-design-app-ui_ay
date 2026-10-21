@@ -10,6 +10,8 @@ import { useBp } from '@/hooks/useBp';
 import { useT } from '@/i18n';
 import { backendEnabled, backendLogout } from '@/lib/backend';
 import { useLocal } from '@/store/useLocal';
+import { usePrefs } from '@/store/usePrefs';
+import { releaseDevice } from '@/lib/notifications';
 import { useStore } from '@/store/useStore';
 import { RememberScroll, SearchTarget, useViewState } from '@/hooks/useViewState';
 import { useSearchObstacle } from '@/hooks/useSearchInset';
@@ -37,7 +39,8 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
   const { t } = useT();
   const router = useRouter();
   const pathname = usePathname();
-  useEffect(() => { if (backendEnabled) void useStore.getState().reload('requests'); }, []);
+  // init() may run before the stored admin session is known, so load the admin-only lists here.
+  useEffect(() => { if (backendEnabled) void Promise.all([useStore.getState().reload('requests'), useStore.getState().reload('users')]); }, []);
   const { target, focus } = useGlobalSearchParams<{ target?: string; focus?: string }>();
   const insets = useSafeAreaInsets();
   const active = useActive();
@@ -57,7 +60,12 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
   const measureDraft = useSearchObstacle(settingsDraft.dirty);
 
   const go = (href: string) => router.push(href as Href);
-  const logout = () => requestLeave(() => { void backendLogout().catch(() => {}); useLocal.getState().set({ adminSession: false }); });
+  const logout = () => requestLeave(() => {
+    // Stop this device's admin notifications before the session is revoked, then leave the panel.
+    void releaseDevice('admin').catch(() => {}).then(() => backendLogout()).catch(() => {});
+    usePrefs.getState().clear('admin');
+    useLocal.getState().set({ adminSession: false });
+  });
   const draftBar = settingsDraft.dirty ? <View onLayout={measureDraft} testID="admin-draft-bar" className="bg-soft border-t border-line p-2 flex-row items-center gap-2"><Txt className="flex-1 text-[12px] font-semibold">{t('improve.previewLabel')}</Txt><Button size="sm" variant="soft" title={t('improve.discard')} onPress={settingsDraft.discard} /><Button testID="admin-draft-submit" size="sm" title={t('improve.submit')} onPress={settingsDraft.save} /></View> : null;
   const nextMode = () => settingsDraft.patch( { adminNavMode: MODES[(MODES.indexOf(mode) + 1) % MODES.length] });
   const label = (k: string) => t(`admin.nav.${k}`);

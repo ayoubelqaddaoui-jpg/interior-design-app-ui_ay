@@ -1,23 +1,21 @@
 const crypto = require('node:crypto');
 const webpush = require('web-push');
 const TEXT = {
-  en: { title: 'New demand', open: 'Open', call: 'Call' },
-  fr: { title: 'Nouvelle demande', open: 'Ouvrir', call: 'Appeler' },
-  ar: { title: 'طلب جديد', open: 'فتح', call: 'اتصال' },
-  dar: { title: 'طلب جديد', open: 'فتح', call: 'اتصال' },
+  en: { title: 'New demand', lead: 'New lead', ready: 'Your design is ready', readyBody: 'Open the app to see it.', open: 'Open', call: 'Call' },
+  fr: { title: 'Nouvelle demande', lead: 'Nouveau client', ready: 'Votre design est prêt', readyBody: 'Ouvrez l’app pour le voir.', open: 'Ouvrir', call: 'Appeler' },
+  ar: { title: 'طلب جديد', lead: 'عميل جديد', ready: 'تصميمك جاهز', readyBody: 'افتح التطبيق لمشاهدته.', open: 'فتح', call: 'اتصال' },
+  dar: { title: 'طلب جديد', lead: 'كليون جديد', ready: 'التصميم ديالك واجد', readyBody: 'حل التطبيق باش تشوفو.', open: 'فتح', call: 'اتصال' },
 };
 const trim = (value, max) => Array.from(String(value ?? '').replace(/[\u0000-\u001f\u007f\u202a-\u202e\u2066-\u2069]/g, '').trim()).slice(0, max).join('');
 const phone = value => trim(value, 32).replace(/[^\d+]/g, '').replace(/(?!^)\+/g, '');
 const locale = value => Object.hasOwn(TEXT, value) ? value : 'en';
-function payloadFor(request, language) {
-  const lang = locale(language), text = TEXT[lang];
-  return {
-    title: text.title, body: `${trim(request.name, 80)} - ${phone(request.whatsapp)}`,
-    requestId: request.id, phone: phone(request.whatsapp), lang,
-    dir: lang === 'ar' || lang === 'dar' ? 'rtl' : 'ltr',
-    url: `/admin/requests?target=${encodeURIComponent(request.id)}&open=${encodeURIComponent(request.id)}`,
-    actions: [{ action: 'open', title: text.open }, { action: 'call', title: text.call }],
-  };
+/** event: 'request' (new render request, to admins) | 'lead' (new client account, to admins) | 'ready' (design delivered, to its owner). */
+function payloadFor(request, language, event = 'request') {
+  const lang = locale(language), text = TEXT[lang], dir = lang === 'ar' || lang === 'dar' ? 'rtl' : 'ltr';
+  if (event === 'ready') return { title: text.ready, body: text.readyBody, requestId: String(request.id), phone: '', lang, dir, url: '/history', actions: [{ action: 'open', title: text.open }] };
+  const base = { body: `${trim(request.name, 80)} - ${phone(request.whatsapp)}`, requestId: String(request.id), phone: phone(request.whatsapp), lang, dir, actions: [{ action: 'open', title: text.open }, { action: 'call', title: text.call }] };
+  if (event === 'lead') return { ...base, title: text.lead, url: `/admin/users?target=${encodeURIComponent(request.id)}` };
+  return { ...base, title: text.title, url: `/admin/requests?target=${encodeURIComponent(request.id)}&open=${encodeURIComponent(request.id)}` };
 }
 function validateSubscription(input) {
   const lang = locale(input?.language);
@@ -91,28 +89,41 @@ function createNotifier(db, env, adapters = {}) {
   let vapid;
   const keys = async () => vapid ||= await loadVapid(db, env);
   const fcmSender = adapters.fcm || (env.FCM_SERVICE_ACCOUNT_JSON ? createFcm(env.FCM_SERVICE_ACCOUNT_JSON) : null);
-  const subscriptions = async () => (await db.query('SELECT data FROM subscriptions')).map(row => JSON.parse(row.data));
-  const remove = id => db.query('DELETE FROM subscriptions WHERE id=$1', [id]);
-  async function deliver(request, completed = []) {
-    const done = new Set(completed);
+  const ADMIN = { type: 'admin' };
+  /** Devices of one audience whose owner has not switched notifications off (the preference lives in the database). */
+  async function recipients(audience = ADMIN) {
+    if (audience.type === 'client') {
+      const rows = await db.query("SELECT id,data,owner_id FROM subscriptions WHERE owner_type='client' AND owner_id=$1", [audience.id]);
+      if (!rows.length) return [];
+      const prefs = JSON.parse((await db.query('SELECT prefs FROM clients WHERE id=$1', [audience.id]))[0]?.prefs || '{}');
+      return prefs.notifications === false ? [] : rows.map(row => ({ ...JSON.parse(row.data), rowId: row.id }));
+    }
+    const rows = await db.query("SELECT id,data,owner_id FROM subscriptions WHERE owner_type='admin'");
+    if (!rows.length) return [];
+    const off = new Set((await db.query('SELECT admin_id,data FROM admin_prefs')).filter(row => JSON.parse(row.data || '{}').notifications === false).map(row => row.admin_id));
+    return rows.filter(row => !off.has(row.owner_id)).map(row => ({ ...JSON.parse(row.data), rowId: row.id }));
+  }
+  const removeDevice = deviceId => db.query('DELETE FROM subscriptions WHERE COALESCE(device_id,id)=$1', [deviceId]);
+  async function deliver(request, completed = [], options = {}) {
+    const done = new Set(completed), event = options.event || 'request';
     let retry = false;
     const { publicKey, privateKey, subject } = await keys();
     // Independent sends: one expired/failed device never suppresses the others.
-    await Promise.all((await subscriptions()).filter(row => !done.has(row.id)).map(async subscriber => {
-      const payload = payloadFor(request, subscriber.language);
+    await Promise.all((await recipients(options.audience)).filter(row => !done.has(row.rowId)).map(async subscriber => {
+      const payload = payloadFor(request, subscriber.language, event);
       try {
         if (subscriber.kind === 'fcm') {
           if (!fcmSender) throw Object.assign(new Error('FCM is not configured'), { code: 'fcm-unconfigured' });
           await fcmSender(subscriber.token, payload);
         } else {
-          await (adapters.web || ((sub, body, options) => webpush.sendNotification(sub, body, { ...options, vapidDetails: { subject, publicKey, privateKey } })))(subscriber.subscription, JSON.stringify(payload), { TTL: 86400, urgency: 'high', timeout: 8000 });
+          await (adapters.web || ((sub, body, opts) => webpush.sendNotification(sub, body, { ...opts, vapidDetails: { subject, publicKey, privateKey } })))(subscriber.subscription, JSON.stringify(payload), { TTL: 86400, urgency: 'high', timeout: 8000 });
         }
-        done.add(subscriber.id);
+        done.add(subscriber.rowId);
       } catch (error) {
         const expired = error.statusCode === 410 || error.statusCode === 404 || error.code === 'messaging/registration-token-not-registered';
-        if (expired) { await remove(subscriber.id); done.add(subscriber.id); } else retry = true;
+        if (expired) { await removeDevice(subscriber.id); done.add(subscriber.rowId); } else retry = true;
         // Never log tokens, endpoints, payloads, names or phone numbers.
-        console.warn('Demand push failed', { code: error.statusCode || error.code || 'delivery-failed' });
+        console.warn('Push failed', { event, code: error.statusCode || error.code || 'delivery-failed' });
       }
     }));
     return { retry, completed: [...done] };
@@ -120,9 +131,15 @@ function createNotifier(db, env, adapters = {}) {
   return {
     deliver,
     config: async () => ({ publicKey: (await keys()).publicKey, web: true, android: !!fcmSender }),
-    save: async subscriber => { await db.query('INSERT INTO subscriptions VALUES($1,$2) ON CONFLICT (id) DO UPDATE SET data=EXCLUDED.data', [subscriber.id, JSON.stringify(subscriber)]); },
-    remove,
-    count: async () => (await db.query('SELECT COUNT(*)::int AS n FROM subscriptions'))[0].n,
+    /** One row per (device, owner): the same browser can serve an admin and a client account at once. */
+    save: async (subscriber, owner = { type: 'admin', id: 'admin' }) => {
+      await db.query('INSERT INTO subscriptions(id,data,owner_type,owner_id,device_id) VALUES($1,$2,$3,$4,$5) ON CONFLICT (id) DO UPDATE SET data=EXCLUDED.data', [`${subscriber.id}:${owner.type}:${owner.id}`, JSON.stringify(subscriber), owner.type, owner.id, subscriber.id]);
+    },
+    remove: (deviceId, owner) => owner
+      ? db.query('DELETE FROM subscriptions WHERE COALESCE(device_id,id)=$1 AND owner_type=$2 AND owner_id=$3', [deviceId, owner.type, owner.id])
+      : removeDevice(deviceId),
+    count: async () => (await db.query("SELECT COUNT(*)::int AS n FROM subscriptions WHERE owner_type='admin'"))[0].n,
+    removeOwner: (type, id) => db.query('DELETE FROM subscriptions WHERE owner_type=$1 AND owner_id=$2', [type, id]),
   };
 }
 module.exports = { createNotifier, createFcm, payloadFor, validateSubscription, trim, phone };

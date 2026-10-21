@@ -5,47 +5,24 @@ import { useLocal } from '@/store/useLocal';
 import { useUserSession } from '@/store/useUserSession';
 import { uid } from '@/lib/uid';
 
-/** Only demands opt into the backend; every other repository remains unchanged. */
-export function remoteRequests(local: CollectionRepo<RenderRequest>): CollectionRepo<RenderRequest> {
-  const remoteIds = new Set<string>();
-  const remember = async (item: RenderRequest) => {
-    remoteIds.add(item.id);
-    if (await local.get(item.id)) await local.update(item.id, item);
-    else await local.create(item);
-    return item;
-  };
-  const isRemote = (id: string) => remoteIds.has(id) || /^[a-f0-9]{8}-[a-f0-9-]{27}$/i.test(id);
+/** Requests live only in the database: admins see all of them, a signed-in client sees their own. */
+export function remoteRequests(): CollectionRepo<RenderRequest> {
   return {
     async list() {
-      const cached = await local.list();
-      if (!useLocal.getState().adminSession) return useUserSession.getState().user ? api<RenderRequest[]>('/user/requests') : cached.filter(row => !isRemote(row.id));
-      try {
-        const rows = await api<RenderRequest[]>('/requests');
-        rows.forEach(row => remoteIds.add(row.id));
-        // Keep existing mock/local records, but never resurrect a deleted remote demand.
-        return [...cached.filter(row => !isRemote(row.id)), ...rows];
-      } catch (error) {
-        if (error instanceof BackendError && error.status === 401 && !useLocal.getState().adminOffline) useLocal.getState().set({ adminSession: false });
-        return cached;
+      if (useLocal.getState().adminSession) {
+        try { return await api<RenderRequest[]>('/requests'); }
+        catch (error) {
+          if (error instanceof BackendError && error.status === 401 && !useLocal.getState().adminOffline) useLocal.getState().set({ adminSession: false });
+          else if (!(error instanceof BackendError)) throw error;
+        }
       }
+      return useUserSession.getState().user ? api<RenderRequest[]>('/user/requests') : [];
     },
-    async get(id) {
-      if (!isRemote(id)) return local.get(id);
-      return remember(await api<RenderRequest>(`/requests/${encodeURIComponent(id)}`, { client: true }));
-    },
-    async create(input) {
-      // Stable ID supplied by the lead form makes retries idempotent after a lost response.
-      const row = await api<RenderRequest>('/requests', { method: 'POST', client: true, body: { ...input, id: input.id || uid('req') } });
-      return remember(row);
-    },
-    async update(id, patch) {
-      if (!isRemote(id)) return local.update(id, patch);
-      return remember(await api<RenderRequest>(`/requests/${encodeURIComponent(id)}`, { method: 'PATCH', client: true, body: patch }));
-    },
-    async remove(id) {
-      if (isRemote(id)) await api(`/requests/${encodeURIComponent(id)}`, { method: 'DELETE' });
-      await local.remove(id);
-    },
+    get: id => api<RenderRequest>(`/requests/${encodeURIComponent(id)}`, { client: true }),
+    // Stable ID supplied by the lead form makes retries idempotent after a lost response.
+    create: input => api<RenderRequest>('/requests', { method: 'POST', client: true, body: { ...input, id: input.id || uid('req') } }),
+    update: (id, patch) => api<RenderRequest>(`/requests/${encodeURIComponent(id)}`, { method: 'PATCH', client: true, body: patch }),
+    remove: async id => { await api(`/requests/${encodeURIComponent(id)}`, { method: 'DELETE' }); },
     async removeMany(ids) { for (const id of ids) await this.remove(id); },
   };
 }

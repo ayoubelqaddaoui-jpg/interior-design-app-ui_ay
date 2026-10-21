@@ -5,7 +5,8 @@ import { Card } from '@/components/ui/Card';
 import { Txt } from '@/components/ui/Txt';
 import { useT } from '@/i18n';
 import { BackendError, isBackendUnavailable } from '@/lib/backend';
-import { enablePush, disablePush, pushStatus, sendTestPush, syncPushLanguage, type PushStatus } from '@/lib/push';
+import { sendTestPush, type PushStatus } from '@/lib/push';
+import { setNotifications, useDevicePush, useOwnerPushStatus } from '@/lib/notifications';
 import { useLocal } from '@/store/useLocal';
 import { toast } from '@/store/useToast';
 
@@ -13,25 +14,22 @@ import { toast } from '@/store/useToast';
 export function PushNotifications() {
   const { t, lang } = useT();
   const offline = useLocal(s => s.adminOffline);
-  const [status, setStatus] = useState<PushStatus>('disabled');
+  const status: PushStatus = useOwnerPushStatus('admin');
   const [busy, setBusy] = useState(false);
-  const refresh = useCallback(() => pushStatus().then(setStatus).catch(() => setStatus('unsupported')), []);
-  useEffect(() => {
-    void refresh();
-    // Update only existing opt-ins; never prompt or subscribe automatically.
-    syncPushLanguage(lang).catch(() => {});
-  }, [lang, refresh]);
+  const refresh = useCallback(() => useDevicePush.getState().refresh(), []);
+  // Subscribing (silently, when the browser already allows it) and language updates are handled by the preference bindings.
+  useEffect(() => { void refresh(); }, [refresh]);
   const failure = (error: unknown) => toast(t(error instanceof BackendError && error.status === 401 ? 'push.login' : isBackendUnavailable(error) ? 'push.unavailable' : 'push.error'));
   const enable = async () => {
     if (busy) return;
     setBusy(true);
-    try { setStatus(await enablePush(lang)); }
+    try { await setNotifications('admin', true, lang); }
     catch (error) { failure(error); void refresh(); }
     finally { setBusy(false); }
   };
   const disable = async () => {
     setBusy(true);
-    try { await disablePush(); setStatus('disabled'); }
+    try { await setNotifications('admin', false, lang); }
     catch (error) { failure(error); }
     finally { setBusy(false); }
   };

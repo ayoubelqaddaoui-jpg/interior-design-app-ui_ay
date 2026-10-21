@@ -1,5 +1,10 @@
 import type { Lang } from '@/data/types';
+
 import { api, backendEnabled } from './backend';
+
+/** Whose notifications a device subscription is for. A browser can serve an admin and a client at once. */
+export type PushOwner = 'admin' | 'client';
+const ownerBody = (owner: PushOwner) => (owner === 'client' ? { owner } : {});
 
 /** `install`: iPhone/iPad Safari only delivers web push to an app added to the Home Screen. */
 export type PushStatus = 'enabled' | 'disabled' | 'blocked' | 'unsupported' | 'unconfigured' | 'install';
@@ -26,11 +31,17 @@ export async function pushStatus(): Promise<PushStatus> {
   const worker = await navigator.serviceWorker.getRegistration('/');
   return worker && await worker.pushManager.getSubscription() ? 'enabled' : 'disabled';
 }
-/** Must be called from a tap/click handler. Throws a BackendError when the server is unreachable or the admin session is missing. */
-export async function enablePush(language: Lang): Promise<PushStatus> {
+/** True when the browser already allows notifications (no prompt needed to subscribe this device). */
+export async function pushGranted() { return backendEnabled && supported() && Notification.permission === 'granted'; }
+/**
+ * Subscribes this device for `owner`. With `prompt` (default) it must be called from a tap/click handler and asks for
+ * permission; with `prompt: false` it only works when permission was already granted and never shows UI.
+ * Throws a BackendError when the server is unreachable or the session is missing.
+ */
+export async function enablePush(language: Lang, owner: PushOwner = 'admin', prompt = true): Promise<PushStatus> {
   if (!backendEnabled || !supported()) return pushStatus();
   // Must be the first await: browsers (notably Safari) only show the prompt inside the user gesture.
-  const permission = await Notification.requestPermission();
+  const permission = prompt ? await Notification.requestPermission() : Notification.permission;
   if (permission !== 'granted') return permission === 'denied' ? 'blocked' : 'disabled';
   const config = await api<{ publicKey: string | null }>('/push/config');
   if (!config.publicKey) return 'unconfigured';
@@ -44,22 +55,23 @@ export async function enablePush(language: Lang): Promise<PushStatus> {
   }
   subscription ||= await worker.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: expected });
   // Only "enabled" once the authenticated backend has stored it.
-  await api('/push/subscriptions', { method: 'POST', body: { kind: 'web', subscription: subscription.toJSON(), language } });
+  await api('/push/subscriptions', { method: 'POST', body: { kind: 'web', subscription: subscription.toJSON(), language, ...ownerBody(owner) } });
   return 'enabled';
 }
-export async function syncPushLanguage(language: Lang) {
+export async function syncPushLanguage(language: Lang, owner: PushOwner = 'admin') {
   if (!backendEnabled || !supported() || Notification.permission !== 'granted') return;
   const worker = await navigator.serviceWorker.getRegistration('/');
   const subscription = await worker?.pushManager.getSubscription();
-  if (subscription) await api('/push/subscriptions', { method: 'POST', body: { kind: 'web', subscription: subscription.toJSON(), language } });
+  if (subscription) await api('/push/subscriptions', { method: 'POST', body: { kind: 'web', subscription: subscription.toJSON(), language, ...ownerBody(owner) } });
 }
-export async function disablePush() {
+/** Stops notifications for `owner` on this device. The browser subscription itself is only dropped when `keepDevice` is false. */
+export async function disablePush(owner: PushOwner = 'admin', keepDevice = false) {
   if (!supported()) return;
   const worker = await navigator.serviceWorker.getRegistration('/');
   const subscription = await worker?.pushManager.getSubscription();
   if (!subscription) return;
-  try { await api('/push/subscriptions', { method: 'DELETE', body: { kind: 'web', subscription: subscription.toJSON() } }); }
-  finally { await subscription.unsubscribe(); }
+  try { await api('/push/subscriptions', { method: 'DELETE', body: { kind: 'web', subscription: subscription.toJSON(), ...ownerBody(owner) } }); }
+  finally { if (!keepDevice) await subscription.unsubscribe(); }
 }
 /** Sends a real notification through the server to every registered device. */
 export async function sendTestPush() { return api<{ ok: boolean; devices: number }>('/push/test', { method: 'POST', body: {} }); }

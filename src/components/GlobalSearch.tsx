@@ -12,7 +12,7 @@ import { useSearchInset } from '@/hooks/useSearchInset';
 import { useBp } from '@/hooks/useBp';
 import { useShallow } from 'zustand/react/shallow';
 import { requestLeave, router } from '@/hooks/useLeaveGuard';
-import { useStore } from '@/store/useStore';
+import { useIsAdmin, useStore } from '@/store/useStore';
 import { useLocal } from '@/store/useLocal';
 import { useL, useT } from '@/i18n';
 
@@ -23,7 +23,7 @@ export function GlobalSearch() {
   const path = usePathname();
   const admin = path === '/admin' || path.startsWith('/admin/');
   const session = useLocal((s) => s.adminSession);
-  const isAdmin = useStore(s => s.users.some(user => user.role === 'admin'));
+  const isAdmin = useIsAdmin();
   const enabled = useStore((s) => admin ? s.doc.settings.adminSearchEnabled !== false : s.doc.settings.appSearchEnabled !== false);
   if (!enabled || (admin && (!session || !isAdmin))) return null;
   return <SearchControl key={admin ? 'admin' : 'app'} admin={admin} />;

@@ -23,14 +23,21 @@ i18n.use(initReactI18next).init({
   compatibilityJSON: 'v4',
 });
 
-interface LangState { lang: Lang; set(l: Lang): void }
+const langListeners = new Set<(l: Lang) => void>();
+/** Lets the preference layer persist user-chosen languages without a circular import. */
+export const onLangChosen = (fn: (l: Lang) => void) => { langListeners.add(fn); return () => { langListeners.delete(fn); }; };
+
+/** `persist` is false when the language came from the database (no write-back). */
+interface LangState { lang: Lang; set(l: Lang, persist?: boolean): void }
 export const useLang = create<LangState>((set) => ({
   lang: 'dar',
-  set(l) {
+  set(l, persist = true) {
     i18n.changeLanguage(l);
     applyDocDir(l);
+    // Device fallback for visitors who are not signed in; signed-in people also get it saved in the database.
     storage.write('lang', l);
     set({ lang: l });
+    if (persist) langListeners.forEach(fn => fn(l));
   },
 }));
 

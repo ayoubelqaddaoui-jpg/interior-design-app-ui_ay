@@ -61,6 +61,9 @@ export interface InspirationItem extends Ordered {
   styleId?: Id;
 }
 
+/** Pro offer shown on the paywall. Fully admin-editable and stored in the database. */
+export interface Plan extends Ordered { id: Id; title: LText; price: string; period: LText; popular: boolean }
+
 export interface AiModel {
   id: Id;
   name: string;
@@ -181,6 +184,7 @@ export interface CollMap {
   categories: InspirationCategory;
   inspirations: InspirationItem;
   models: AiModel;
+  plans: Plan;
   users: AppUser;
   requests: RenderRequest;
   history: HistoryItem;
@@ -192,5 +196,7 @@ export interface DocMap {
   assistant: AssistantConfig;
   settings: AppSettings;
 }
+/** Per-identity preferences stored in the database (one set per client, one per admin). */
+export interface UserPrefs { notifications?: boolean; bannerDismissed?: boolean; lang?: Lang }
 export type CollName = keyof CollMap;
 export type DocName = keyof DocMap;

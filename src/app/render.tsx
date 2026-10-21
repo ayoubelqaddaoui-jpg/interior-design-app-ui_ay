@@ -10,10 +10,9 @@ import { Button } from '@/components/ui/Button';
 import { Screen } from '@/components/ui/Screen';
 import { RenderingView } from '@/components/result/RenderingView';
 import { useUserSession } from '@/store/useUserSession';
-import { api, BackendError } from '@/lib/backend';
+import { BackendError } from '@/lib/backend';
 import { useWizardGuard } from '@/hooks/useWizardGuard';
 import { freshUser, needsPro } from '@/lib/credits';
-import type { AppUser } from '@/data/types';
 
 /** Runs the (mock) render, then creates history/request entries and routes to the result or the WhatsApp success page. */
 export default function RenderPage() {
@@ -39,15 +38,15 @@ export default function RenderPage() {
     setFailed(false);
     signal.current = { cancelled: false };
     try {
-      if (!user!.freeUsed || wiz.lead) {
+      // Every generation is a request the admin is notified about. The server spends the free design or a
+      // credit in the same step (idempotent per claim id), so a retry never charges twice.
+      const firstFree = !user!.freeUsed || !!wiz.lead;
+      if (!useWizard.getState().requestId) {
         const request = await st.create('requests', { id: wiz.claimId, userId: user!.id, name: user!.name, whatsapp: user!.whatsapp, photoUri: wiz.photoUri, draft: wiz.draft, status: 'pending', createdAt: Date.now() });
-        useWizard.setState({ requestId: request.id, lead: { name: user!.name, whatsapp: user!.whatsapp } });
-      } else {
-        const result = await api<{ user: AppUser }>('/user/claim', { method: 'POST', body: { id: wiz.claimId } });
-        useUserSession.setState({ user: result.user });
-        // The credit is spent: a retry of this same generation must never bounce to the paywall.
-        useWizard.setState({ proSeen: true });
+        useWizard.setState({ requestId: request.id, ...(firstFree ? { lead: { name: user!.name, whatsapp: user!.whatsapp } } : {}) });
       }
+      // The credit is spent: a retry of this same generation must never bounce to the paywall.
+      if (!firstFree) useWizard.setState({ proSeen: true });
       if (signal.current.cancelled) return;
       await useUserSession.getState().refresh();
       if (signal.current.cancelled) return;
@@ -70,7 +69,10 @@ export default function RenderPage() {
         router.replace('/lead-success');
         return;
       }
-      const hist = await fresh.create('history', { id: wiz.claimId, claimId: wiz.claimId, userId: user!.id, before: wiz.photoUri, after: imageUri, status: 'done', draft: wiz.draft, createdAt: Date.now() });
+      const requestId = useWizard.getState().requestId;
+      const hist = await fresh.create('history', { id: wiz.claimId, claimId: wiz.claimId, userId: user!.id, before: wiz.photoUri, after: imageUri, status: 'done', draft: wiz.draft, createdAt: Date.now(), requestId });
+      // The design is shown in the app straight away, so the admin's request is already fulfilled.
+      if (requestId) await fresh.update('requests', requestId, { aiResult: imageUri, historyId: hist.id, status: 'delivered', autoSent: true }).catch(() => {});
       useWizard.setState({ dirty: false });
       router.replace({ pathname: '/result/[id]', params: { id: hist.id } });
     } catch (error) {
