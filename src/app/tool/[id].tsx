@@ -37,7 +37,7 @@ export default function ToolWizard() {
   const steps = useMemo<StepKey[]>(() => ['photo' as any, ...ORDER.filter((s) => tool?.steps.includes(s))], [tool]);
 
   const close = () => router.dismissTo('/');
-  const back = () => router.canGoBack() ? router.back() : close();
+  const back = () => router.back();
 
   if (!tool) return <Redirect href="/" />;
 

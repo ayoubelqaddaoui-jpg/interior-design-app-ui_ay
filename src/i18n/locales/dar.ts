@@ -357,7 +357,7 @@ const dar: Dict = {
       mode: 'الوضع + الألوان',
       model: 'اختيار الموديل',
     },
-    crud: { addNew: 'زيد', editItem: 'عدّل', confirmDelete: 'تمسح هاد العنصر؟', noItems: 'ما كاين والو', saved: 'تسجل', up: 'فوق', down: 'تحت', showHide: 'بيّن / خبّي', required: 'خانة ضرورية' },
+    crud: { hidden: 'مخبّي', addNew: 'زيد', editItem: 'عدّل', confirmDelete: 'تمسح هاد العنصر؟', noItems: 'ما كاين والو', saved: 'تسجل', up: 'فوق', down: 'تحت', showHide: 'بيّن / خبّي', required: 'خانة ضرورية' },
     brand: { appName: 'سمية التطبيق', logo: 'اللوغو', upload: 'حمّل لوغو', remove: 'مسح', note: 'اللوغو والسمية كيبانو فوق فالصفحة الرئيسية.' },
     theme: {
       title: 'ثيم التطبيق',

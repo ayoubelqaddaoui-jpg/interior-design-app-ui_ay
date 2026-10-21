@@ -4,6 +4,7 @@ const path = require('node:path');
 const { isIP } = require('node:net');
 const crypto = require('node:crypto');
 const { createDb } = require('./db');
+const { sendBuffer, sendFile } = require('./compress');
 const { createClients } = require('./clients');
 const { createSync } = require('./sync');
 const { createContent } = require('./content');
@@ -102,7 +103,7 @@ function createBackend({ env = process.env, db = createDb(env), senders } = {}) 
     const origin = req.headers.origin;
     res.setHeader('X-Content-Type-Options', 'nosniff');
     res.setHeader('Referrer-Policy', 'no-referrer');
-    const json = (status, value) => { res.writeHead(status, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }); res.end(JSON.stringify(value)); };
+    const json = (status, value) => sendBuffer(req, res, status, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }, Buffer.from(JSON.stringify(value)));
     try {
       const url = new URL(req.url, 'http://localhost');
       if (url.pathname.startsWith('/api/')) {
@@ -367,8 +368,7 @@ function createBackend({ env = process.env, db = createDb(env), senders } = {}) 
         file = path.join(root, 'index.html');
       }
       const types = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.webmanifest': 'application/manifest+json', '.png': 'image/png', '.ico': 'image/x-icon', '.woff2': 'font/woff2', '.ttf': 'font/ttf', '.svg': 'image/svg+xml' };
-      res.writeHead(200, { 'Content-Type': types[path.extname(file)] || 'application/octet-stream', 'Cache-Control': /^\/(assets|_expo)\//.test(pathname) ? 'public, max-age=31536000, immutable' : 'no-cache' });
-      fs.createReadStream(file).pipe(res);
+      sendFile(req, res, file, { 'Content-Type': types[path.extname(file)] || 'application/octet-stream', 'Cache-Control': /^\/(assets|_expo)\//.test(pathname) ? 'public, max-age=31536000, immutable' : 'no-cache' });
     } catch (error) {
       if (!error.status) console.warn('API error', error.code || error.message);
       if (!res.headersSent) json(error.status || 500, { error: error.status ? error.message : 'Server error' }); else res.end();

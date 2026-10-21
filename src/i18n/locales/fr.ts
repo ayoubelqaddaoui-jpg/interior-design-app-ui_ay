@@ -356,7 +356,7 @@ const fr = {
       mode: 'Mode + palette',
       model: 'Choix du modèle',
     },
-    crud: {
+    crud: { hidden: 'Masqué',
       addNew: 'Ajouter',
       editItem: 'Modifier',
       confirmDelete: 'Supprimer cet élément ?',

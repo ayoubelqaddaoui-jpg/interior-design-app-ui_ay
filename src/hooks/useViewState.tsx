@@ -23,12 +23,13 @@ export function useViewState<T>(name: string, initial: T | (() => T)): [T, React
   }), [key]);
   return [value, set];
 }
-type ScrollAncestor = { ref: React.RefObject<ScrollView | null>; horizontal?: boolean | null };
+type ScrollAncestor = { ref: React.RefObject<ScrollView | null>; horizontal?: boolean | null; offset: { current: number } };
 const ScrollContext = createContext<ScrollAncestor[]>([]);
 export const RememberScroll = React.forwardRef<ScrollView, ScrollViewProps & { stateKey?: string }>(function RememberScroll({ stateKey = 'page', children, onScroll, onContentSizeChange, ...props }, forwardedRef) {
   const page = usePageKey(); const key = stateKey.startsWith('shared:') ? stateKey : `${page}:${stateKey}`;
   const ancestors = useContext(ScrollContext);
   const ref = useRef<ScrollView>(null);
+  const offset = useRef(0);
   useImperativeHandle(forwardedRef, () => ref.current!, []);
   const restoring = useRef(true);
   const restore = useCallback(() => { const p = positions.get(key); if (p) ref.current?.scrollTo({ ...p, animated: false }); }, [key]);
@@ -47,10 +48,15 @@ export const RememberScroll = React.forwardRef<ScrollView, ScrollViewProps & { s
     window.addEventListener('dwira:before-navigation', capture);
     return () => window.removeEventListener('dwira:before-navigation', capture);
   }, [key]);
-  return <ScrollContext.Provider value={[...ancestors, { ref, horizontal: props.horizontal }]}><ScrollView {...props} testID={props.testID ?? `scroll-${key}`} ref={ref} scrollEventThrottle={16}
+  return <ScrollContext.Provider value={[...ancestors, { ref, horizontal: props.horizontal, offset }]}><ScrollView {...props} testID={props.testID ?? `scroll-${key}`} ref={ref} scrollEventThrottle={16}
     contentOffset={positions.get(key)} onContentSizeChange={(w, h) => { if (restoring.current) restore(); onContentSizeChange?.(w, h); }}
-    onScroll={(e) => { if (!restoring.current) positions.set(key, e.nativeEvent.contentOffset); onScroll?.(e); }}>{children}</ScrollView></ScrollContext.Provider>;
+    onScroll={(e) => { offset.current = e.nativeEvent.contentOffset.y; if (!restoring.current) positions.set(key, e.nativeEvent.contentOffset); onScroll?.(e); }}>{children}</ScrollView></ScrollContext.Provider>;
 });
+/** The nearest vertical scroll container: drag-and-drop uses it to auto-scroll near the screen edges. */
+export function useVerticalScroller() {
+  const all = useContext(ScrollContext);
+  return [...all].reverse().find((entry) => !entry.horizontal);
+}
 /** Search targets reveal themselves after layout, including nested scrolling panes. */
 export function SearchTarget({ id, children }: { id: string; children: React.ReactNode }) {
   const { target, focus } = useLocalSearchParams<{ target?: string; focus?: string }>();

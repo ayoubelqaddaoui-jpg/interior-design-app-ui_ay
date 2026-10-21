@@ -19,8 +19,13 @@ import { PushNavigationHost } from '@/components/PushNavigationHost';
 import { GlobalSearch } from '@/components/GlobalSearch';
 import { ToastHost } from '@/components/ui/Toast';
 import { startPreferenceBindings, startSync } from '@/lib/sync';
+import { setCurrentPath } from '@/lib/route';
+import { backendEnabled } from '@/lib/backend';
+import { prefetchContent } from '@/data/repositories/remoteContent';
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
+// Public content does not depend on who is signed in: download it now, not after the session answers.
+if (backendEnabled) prefetchContent();
 
 /** All content comes from the database: when the server cannot be reached yet, keep trying instead of showing an empty app. */
 async function initWithRetry() {
@@ -32,12 +37,17 @@ async function initWithRetry() {
 
 export default function RootLayout() {
   const initialPath = usePathname();
+  setCurrentPath(initialPath);
   const [booted, setBooted] = useState(false);
   const ready = useStore((s) => s.ready);
   const loaded = useLocal((s) => s.loaded);
   const lang = useLang((s) => s.lang);
 
   useEffect(() => {
+    // Icons and the default fonts download while data loads, so nothing waits for them afterwards.
+    void initLang().then(() => ensureFont(useLang.getState().lang === 'fr' ? 'Inter' : 'Tajawal')).catch(() => {});
+    void ensureFont('Lora').catch(() => {});
+    void loadIcons().catch(() => {});
     (async () => {
       // Device flags first: init() decides from them whether to load the admin-only lists.
       await Promise.all([initLang(), useLocal.getState().load().then(() => useUserSession.getState().refresh()).then(initWithRetry)]);
@@ -66,7 +76,7 @@ export default function RootLayout() {
         <ThemeProvider>
           {/* `direction` flips every flex-row on native + web: Darija/Arabic = RTL, French = LTR. */}
           <View style={{ flex: 1, direction: isRtl(lang) ? 'rtl' : 'ltr' } as any}>
-            {ok ? (
+            {ready && loaded ? (
               <>
               <Stack screenOptions={{ headerShown: false, animation: 'slide_from_right', contentStyle: { backgroundColor: 'transparent' } }}>
                 <Stack.Screen name="(tabs)" />
@@ -76,9 +86,9 @@ export default function RootLayout() {
               <AppExitHost />
               <PushNavigationHost />
               </>
-            ) : (
-              <View className="flex-1 items-center justify-center bg-bg"><ActivityIndicator /></View>
-            )}
+            ) : null}
+            {/* The first screen's code downloads behind this loader while fonts settle: no text ever flashes in a fallback font. */}
+            {!ok ? <View pointerEvents="auto" className="absolute inset-0 items-center justify-center bg-bg"><ActivityIndicator /></View> : null}
             <ToastHost />
             <UnsavedChangesHost />
           </View>

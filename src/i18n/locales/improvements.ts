@@ -1,5 +1,10 @@
 export const improvements = {
   "fr": {
+    "dragHandle": "Glisser pour réorganiser",
+    "toolsCount": "{{count}} outil(s)",
+    "categoriesCount": "{{count}} catégorie(s)",
+    "photosCount": "{{count}} photo(s)",
+    "reorderHint": "Maintenez la poignée et glissez pour changer l’ordre",
     "pageCount": "Page {{page}} / {{count}}",
     "allRoles": "Tous les rôles",
     "unsaved": "Vous avez des modifications non enregistrées. Enregistrer ou abandonner ?",
@@ -24,8 +29,6 @@ export const improvements = {
     "chooseArabicFont": "Choisir la police arabe",
     "selectedShort": "sélectionnés",
     "visibilityShort": "Visibilité",
-    "upShort": "Monter",
-    "downShort": "Descendre",
     "holdSelect": "Maintenir pour sélectionner",
     "editCount": "Modifier {{count}} éléments",
     "pasteTitles": "Coller les titres",
@@ -102,6 +105,11 @@ export const improvements = {
     "pasteText": "Titres collés"
   },
   "ar": {
+    "dragHandle": "اسحب لإعادة الترتيب",
+    "toolsCount": "{{count}} أداة",
+    "categoriesCount": "{{count}} فئة",
+    "photosCount": "{{count}} صورة",
+    "reorderHint": "اضغط على المقبض واسحب لتغيير الترتيب",
     "pageCount": "الصفحة {{page}} / {{count}}",
     "allRoles": "كل الأدوار",
     "unsaved": "لديك تغييرات غير محفوظة. هل تريد حفظها أم تجاهلها؟",
@@ -126,8 +134,6 @@ export const improvements = {
     "chooseArabicFont": "اختر الخط العربي",
     "selectedShort": "محدد",
     "visibilityShort": "الظهور",
-    "upShort": "أعلى",
-    "downShort": "أسفل",
     "holdSelect": "اضغط مطولًا للتحديد",
     "editCount": "تعديل {{count}} عناصر",
     "pasteTitles": "لصق العناوين",
@@ -204,6 +210,11 @@ export const improvements = {
     "pasteText": "العناوين الملصقة"
   },
   "dar": {
+    "dragHandle": "جرّ باش تبدّل الترتيب",
+    "toolsCount": "{{count}} أداة",
+    "categoriesCount": "{{count}} فئة",
+    "photosCount": "{{count}} تصويرة",
+    "reorderHint": "ضغط على المقبض وجرّ باش تبدّل الترتيب",
     "pageCount": "الصفحة {{page}} / {{count}}",
     "allRoles": "كل الأدوار",
     "unsaved": "لديك تغييرات غير محفوظة. هل تريد حفظها أم تجاهلها؟",
@@ -228,8 +239,6 @@ export const improvements = {
     "chooseArabicFont": "اختر الخط العربي",
     "selectedShort": "مختار",
     "visibilityShort": "الظهور",
-    "upShort": "لفوق",
-    "downShort": "لتحت",
     "holdSelect": "ضغط مطوّل باش تختار",
     "editCount": "تعديل {{count}} عناصر",
     "pasteTitles": "لصق العناوين",

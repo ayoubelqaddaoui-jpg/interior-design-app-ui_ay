@@ -10,12 +10,38 @@ import { Txt } from '@/components/ui/Txt';
 import { useBp } from '@/hooks/useBp';
 import { SearchTarget, useViewState } from '@/hooks/useViewState';
 import { useT } from '@/i18n';
+import type { Chip, RowView } from '@/admin/entities';
+import { DragRow, justDragged, useReorder } from './DragReorder';
 
-export type Col<T> = { label: string; flex?: number; render: (item: T) => React.ReactNode };
+const TONE: Record<NonNullable<Chip['tone']>, { box: string; text: string; icon: 'muted' | 'primary' | 'success' | 'danger' | 'fg' }> = {
+  muted: { box: 'bg-surface2', text: 'text-muted', icon: 'muted' },
+  primary: { box: 'bg-soft', text: 'text-fg', icon: 'fg' },
+  success: { box: 'bg-surface2', text: 'text-success', icon: 'success' },
+  danger: { box: 'bg-surface2', text: 'text-danger', icon: 'danger' },
+};
+function Pill({ chip }: { chip: Chip }) {
+  const tone = TONE[chip.tone ?? 'muted'];
+  return (
+    <View className={`flex-row items-center gap-1 rounded-full px-2.5 h-6 ${tone.box}`} style={{ maxWidth: '100%' }}>
+      {chip.icon ? <Icon name={chip.icon} size={13} tone={tone.icon} /> : null}
+      <Txt className={`text-[11.5px] font-semibold ${tone.text}`} numberOfLines={1} style={{ flexShrink: 1 }}>{chip.label}</Txt>
+    </View>
+  );
+}
+const Chips = ({ chips }: { chips?: Chip[] }) => chips?.length ? <View className="flex-row flex-wrap gap-1.5 mt-1.5">{chips.map((chip, i) => <Pill key={i} chip={chip} />)}</View> : null;
 
-/** Table on desktop, stacked cards on mobile. Same data/props. */
-export function CrudTable<T extends { id: string; visible?: boolean }>({ rows, cols, onEdit, onDelete, onMove, onToggle, rowTestID, selected, onSelect, onLongPress, visual = false }: {
-  visual?: boolean; rows: T[]; cols: Col<T>[]; onEdit?: (r: T) => void; onDelete?: (r: T) => void; onMove?: (r: T, d: -1 | 1) => void; onToggle?: (r: T) => void; rowTestID?: string; selected?: string[]; onSelect?: (id: string) => void; onLongPress?: (id: string) => void;
+/**
+ * Admin collection view. Lists (rows with a leading visual) and grids (image tiles) are both built from the
+ * entity's own `view(row)` description; reordering is always the drag handle, never arrow buttons.
+ */
+export function CrudTable<T extends { id: string; visible?: boolean }>({ rows, view, onEdit, onDelete, onReorder, onMove, onToggle, rowTestID, selected, onSelect, onLongPress, visual = false }: {
+  rows: T[]; view: (r: T, index: number) => RowView; visual?: boolean;
+  onEdit?: (r: T) => void; onDelete?: (r: T) => void; onToggle?: (r: T) => void;
+  /** Drag-and-drop: `ids` (one row or the whole selection) were dropped on `targetId`. */
+  onReorder?: (ids: string[], targetId: string) => void;
+  /** Keyboard / screen-reader alternative to dragging (no visible arrows). */
+  onMove?: (r: T, d: -1 | 1) => void;
+  rowTestID?: string; selected?: string[]; onSelect?: (id: string) => void; onLongPress?: (id: string) => void;
 }) {
   const { desktop } = useBp();
   const { t } = useT();
@@ -32,66 +58,88 @@ export function CrudTable<T extends { id: string; visible?: boolean }>({ rows, c
     return () => clearTimeout(timer);
   }, [targetIndex, target, focus, setPage]);
   const visibleRows = rows.slice(currentPage * pageSize, (currentPage + 1) * pageSize);
+  const reorder = useReorder(rows.map((r) => r.id), selected ?? [], (ids, to) => onReorder?.(ids, to), !!onReorder);
   const measure = (event: import('react-native').LayoutChangeEvent) => setWidth(event.nativeEvent.layout.width);
   const pagination = pageCount > 1 ? <View testID="crud-pagination" className="flex-row flex-wrap items-center justify-between gap-2 py-2"><Button testID="page-previous" size="sm" variant="soft" icon="chevron-left" title={t('improve.previous')} disabled={currentPage === 0} onPress={() => setPage(currentPage - 1)} /><Txt testID="page-count" className="text-muted text-[12px]">{t('improve.pageCount', { page: currentPage + 1, count: pageCount })}</Txt><Button testID="page-next" size="sm" variant="soft" icon="chevron-right" title={t('improve.next')} disabled={currentPage === pageCount - 1} onPress={() => setPage(currentPage + 1)} /></View> : null;
-  const [expanded, setExpanded] = useViewState<string[]>('expanded-rows', []);
   if (!rows.length) return <EmptyState icon="database-off-outline" title={t('admin.crud.noItems')} />;
-  const checkbox = (r: T) => onSelect ? <Pressable testID={`select-${r.id}`} accessibilityRole="checkbox" aria-checked={selected?.includes(r.id) ?? false} accessibilityState={{ checked: selected?.includes(r.id) ?? false }} accessibilityLabel={t('common.select')} onPress={(event) => { event.stopPropagation(); onSelect(r.id); }} className="w-10 h-10 items-center justify-center"><Icon name={selected?.includes(r.id) ? 'checkbox-marked' : 'checkbox-blank-outline'} size={22} tone={selected?.includes(r.id) ? 'primary' : 'muted'} /></Pressable> : null;
-  const actions = (r: T, i: number) => (
-    <View className="flex-row items-center gap-1" style={{ flexShrink: 0 }}>
-      {onMove ? <>
-        <Pressable accessibilityLabel={t('admin.crud.up')} disabled={i === 0} onPress={(event) => { event.stopPropagation(); onMove(r, -1); }} className={`w-8 h-8 items-center justify-center ${i === 0 ? 'opacity-25' : ''}`}><Icon name="arrow-up" size={18} /></Pressable>
-        <Pressable accessibilityLabel={t('admin.crud.down')} disabled={i === rows.length - 1} onPress={(event) => { event.stopPropagation(); onMove(r, 1); }} className={`w-8 h-8 items-center justify-center ${i === rows.length - 1 ? 'opacity-25' : ''}`}><Icon name="arrow-down" size={18} /></Pressable>
-      </> : null}
-      {onToggle ? <Pressable testID={`toggle-${r.id}`} accessibilityLabel={t('admin.crud.showHide')} onPress={(event) => { event.stopPropagation(); onToggle(r); }} hitSlop={6} className="w-9 h-9 items-center justify-center"><Icon name={r.visible === false ? 'eye-off-outline' : 'eye-outline'} size={19} tone={r.visible === false ? 'muted' : 'fg'} /></Pressable> : null}
-      {onEdit ? <Pressable testID={`edit-${r.id}`} accessibilityLabel={t('common.edit')} onPress={(event) => { event.stopPropagation(); onEdit(r); }} hitSlop={6} className="w-9 h-9 items-center justify-center"><Icon name="pencil-outline" size={19} /></Pressable> : null}
-      {onDelete ? <Pressable testID={`del-${r.id}`} accessibilityLabel={t('common.delete')} onPress={(event) => { event.stopPropagation(); onDelete(r); }} hitSlop={6} className="w-9 h-9 items-center justify-center"><Icon name="trash-can-outline" size={19} tone="danger" /></Pressable> : null}
+
+  const isOn = (r: T) => selected?.includes(r.id) ?? false;
+  const checkbox = (r: T) => onSelect ? <Pressable testID={`select-${r.id}`} accessibilityRole="checkbox" aria-checked={isOn(r)} accessibilityState={{ checked: isOn(r) }} accessibilityLabel={t('common.select')} onPress={(event) => { event.stopPropagation(); onSelect(r.id); }} hitSlop={4} className="w-9 h-9 items-center justify-center"><Icon name={isOn(r) ? 'checkbox-marked-circle' : 'checkbox-blank-circle-outline'} size={22} tone={isOn(r) ? 'primary' : 'muted'} /></Pressable> : null;
+  const actions = (r: T) => (
+    <View className="flex-row items-center" style={{ flexShrink: 0 }}>
+      {onToggle ? <Pressable testID={`toggle-${r.id}`} accessibilityLabel={t('admin.crud.showHide')} onPress={(event) => { event.stopPropagation(); onToggle(r); }} hitSlop={4} className="w-9 h-9 items-center justify-center"><Icon name={r.visible === false ? 'eye-off-outline' : 'eye-outline'} size={19} tone={r.visible === false ? 'muted' : 'fg'} /></Pressable> : null}
+      {onEdit ? <Pressable testID={`edit-${r.id}`} accessibilityLabel={t('common.edit')} onPress={(event) => { event.stopPropagation(); onEdit(r); }} hitSlop={4} className="w-9 h-9 items-center justify-center"><Icon name="pencil-outline" size={19} /></Pressable> : null}
+      {onDelete ? <Pressable testID={`del-${r.id}`} accessibilityLabel={t('common.delete')} onPress={(event) => { event.stopPropagation(); onDelete(r); }} hitSlop={4} className="w-9 h-9 items-center justify-center"><Icon name="trash-can-outline" size={19} tone="danger" /></Pressable> : null}
     </View>
   );
-  if (visual) return <View onLayout={measure}><View testID="crud-visual-grid" style={{ flexDirection: 'row', flexWrap: 'wrap', margin: -4 }}>
-    {visibleRows.map((r, i) => <View key={r.id} style={{ width: width >= 900 ? '25%' : width >= 640 ? '33.333%' : width >= 340 ? '50%' : '100%', padding: 4, minWidth: 0 }}>
-      <SearchTarget id={r.id}><Card className={`overflow-hidden ${selected?.includes(r.id) ? 'border-primary bg-soft' : ''}`}>
-        <Pressable testID={rowTestID ? `${rowTestID}-${r.id}` : undefined} delayLongPress={450} onLongPress={onLongPress ? () => onLongPress(r.id) : undefined} onPress={() => selected?.length && onSelect ? onSelect(r.id) : onEdit?.(r)}>
-          <MediaView uri={(r as any).image || (r as any).cover} style={{ height: desktop ? 130 : 108, opacity: r.visible === false ? 0.5 : 1 }} />
-          <View className="p-2 gap-1">{cols.slice(1).map((c, j) => <View key={j}>{c.render(r)}</View>)}</View>
-        </Pressable>
-        <View className="flex-row flex-wrap items-center justify-between px-1 pb-1">{checkbox(r)}{actions(r, currentPage * pageSize + i)}</View>
-      </Card></SearchTarget>
-    </View>)}
-  </View>{pagination}</View>;
+  const press = (r: T) => ({
+    accessibilityRole: onSelect ? 'button' as const : undefined,
+    accessibilityLabel: onSelect ? t('improve.holdSelect') : undefined,
+    delayLongPress: 450,
+    onLongPress: onLongPress ? () => { if (!justDragged()) onLongPress(r.id); } : undefined,
+    onPress: onSelect && selected?.length ? () => { if (!justDragged()) onSelect(r.id); } : undefined,
+  });
+  const hiddenBadge = (r: T) => r.visible === false ? <View className="flex-row items-center gap-1 rounded-full px-2 h-5 bg-ink"><Icon name="eye-off-outline" size={11} tone="onink" /><Txt className="text-onink text-[10px] font-bold">{t('admin.crud.hidden')}</Txt></View> : null;
+
+  if (visual) {
+    const columns = width >= 900 ? 4 : width >= 640 ? 3 : width >= 340 ? 2 : 1;
+    return <View onLayout={measure}><View testID="crud-visual-grid" style={{ flexDirection: 'row', flexWrap: 'wrap', margin: -5 }}>
+      {visibleRows.map((r, i) => {
+        const v = view(r, currentPage * pageSize + i);
+        return <DragRow key={r.id} id={r.id} reorder={reorder} layout="grid" handleTone="light" onMove={onMove ? (d) => onMove(r, d) : undefined} style={{ width: `${100 / columns}%`, padding: 5, minWidth: 0 }}>{(handle) => (
+          <SearchTarget id={r.id}>
+              <Card className={`overflow-hidden rounded-3xl ${isOn(r) ? 'border-primary' : ''}`} style={{ borderWidth: isOn(r) ? 2 : 1 }}>
+                <Pressable testID={rowTestID ? `${rowTestID}-${r.id}` : undefined} {...press(r)} className={r.visible === false ? 'opacity-60' : ''}>
+                  <MediaView media={v.cover} style={{ height: desktop ? 140 : 116 }} />
+                  <View className="p-2.5">
+                    <Txt className="font-extrabold text-[14px]" numberOfLines={1}>{v.title}</Txt>
+                    {v.subtitle ? <Txt className="text-muted text-[12px] mt-0.5" numberOfLines={1}>{v.subtitle}</Txt> : null}
+                    <Chips chips={v.chips} />
+                  </View>
+                </Pressable>
+                <View pointerEvents="box-none" style={{ position: 'absolute', top: 6, left: 6, right: 6, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <View style={{ direction: 'ltr' } as never}>{handle}</View>
+                  <View className="flex-row items-center gap-1">{hiddenBadge(r)}{onSelect ? <View className="rounded-full bg-surface">{checkbox(r)}</View> : null}</View>
+                </View>
+                <View className="flex-row items-center justify-end px-1 pb-1 border-t border-line">{actions(r)}</View>
+              </Card>
+          </SearchTarget>
+        )}</DragRow>;
+      })}
+    </View>{pagination}</View>;
+  }
+
   return (
     <View onLayout={measure}>
-    <Card className="overflow-hidden">
-      {desktop ? (
-        <View className="flex-row items-center px-4 h-10 bg-surface2">
-          {onSelect ? <View style={{ width: 40 }} /> : null}
-          {cols.map((c, i) => <Txt key={i} className="text-muted text-[12px] font-bold uppercase" style={{ flex: c.flex ?? 1, minWidth: 0 }}>{c.label}</Txt>)}
-          <View style={{ width: onEdit || onDelete || onToggle || onMove ? 192 : 0 }} />
-        </View>
-      ) : null}
-      {visibleRows.map((r, i) => (
-        <SearchTarget key={r.id} id={r.id}><Pressable accessibilityRole={onSelect ? 'button' : undefined} accessibilityLabel={onSelect ? t('improve.holdSelect') : undefined} delayLongPress={450} onLongPress={onLongPress ? () => onLongPress(r.id) : undefined} onPress={onSelect && selected?.length ? () => onSelect(r.id) : !desktop ? () => setExpanded((old) => old.includes(r.id) ? old.filter((id) => id !== r.id) : [...old, r.id]) : undefined} testID={rowTestID ? `${rowTestID}-${r.id}` : undefined} className={`px-3 py-2 border-t ${selected?.includes(r.id) ? 'border-primary' : 'border-line'} ${r.visible === false ? 'opacity-55' : ''} ${selected?.includes(r.id) ? 'bg-soft' : ''}`} style={{ borderWidth: selected?.includes(r.id) ? 2 : undefined }}>
-          {desktop ? (
-            <View className="flex-row items-center">
-              {checkbox(r)}
-              {cols.map((c, j) => <View key={j} style={{ flex: c.flex ?? 1, minWidth: 0 }} className="pe-3">{c.render(r)}</View>)}
-              <View style={{ width: onEdit || onDelete || onToggle || onMove ? 192 : 0 }} className="items-end">{actions(r, currentPage * pageSize + i)}</View>
-            </View>
-          ) : (
-            <View>
-              <View className="flex-row items-center">
-                {checkbox(r)}
-                <View className="flex-1 pe-2">{cols[0].render(r)}</View>
-
-              </View>
-              <View className="flex-row items-center justify-between mt-1"><Icon name={expanded.includes(r.id) ? 'chevron-up' : 'chevron-down'} size={17} tone="muted" />{actions(r, currentPage * pageSize + i)}</View>
-              {(expanded.includes(r.id) ? cols.slice(1) : cols.slice(1, 2)).map((c, j) => (
-                <View key={j} className="flex-row items-start mt-1 gap-2"><Txt className="text-muted text-[12px] leading-[20px] w-24">{c.label}</Txt><View className="flex-1">{c.render(r)}</View></View>
-              ))}
-            </View>
-          )}
-        </Pressable></SearchTarget>
-      ))}
-    </Card>{pagination}</View>
+      <View style={{ gap: 8 }}>
+        {visibleRows.map((r, i) => {
+          const v = view(r, currentPage * pageSize + i);
+          return (
+            <DragRow key={r.id} id={r.id} reorder={reorder} layout="list" onMove={onMove ? (d) => onMove(r, d) : undefined}>{(handle) => (
+              <SearchTarget id={r.id}>
+                <Card className={`rounded-3xl ${isOn(r) ? 'border-primary bg-soft' : ''}`} style={{ borderWidth: isOn(r) ? 2 : 1 }}>
+                  <Pressable testID={rowTestID ? `${rowTestID}-${r.id}` : undefined} {...press(r)} className={`flex-row items-center gap-2 ps-1.5 pe-2 py-2.5 ${r.visible === false ? 'opacity-60' : ''}`}>
+                    {handle}
+                    {v.lead ? <View style={{ flexShrink: 0 }}>{v.lead}</View> : null}
+                    <View className="flex-1" style={{ minWidth: 0 }}>
+                      <View className="flex-row items-center gap-2">
+                        <Txt className="font-extrabold text-[16px]" numberOfLines={1} style={{ flexShrink: 1 }}>{v.title}</Txt>
+                        {hiddenBadge(r)}
+                      </View>
+                      {v.subtitle ? <Txt className="text-muted text-[13px] mt-0.5" numberOfLines={1}>{v.subtitle}</Txt> : null}
+                      <Chips chips={v.chips} />
+                      {v.extra ? <View className="mt-1.5">{v.extra}</View> : null}
+                    </View>
+                    {desktop ? <View className="flex-row items-center gap-1">{checkbox(r)}{actions(r)}</View> : null}
+                  </Pressable>
+                  {!desktop ? <View className="flex-row items-center justify-between px-2 pb-1.5 -mt-1"><View className="flex-row items-center">{checkbox(r)}</View>{actions(r)}</View> : null}
+                </Card>
+              </SearchTarget>
+            )}</DragRow>
+          );
+        })}
+      </View>
+      {pagination}
+    </View>
   );
 }

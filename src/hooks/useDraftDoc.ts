@@ -1,6 +1,6 @@
 import i18n from '@/i18n';
 import { toast } from '@/store/useToast';
-import { moveSelection } from '@/lib/reorder';
+import { moveSelection, moveTo } from '@/lib/reorder';
 import { sorted, useStore } from '@/store/useStore';
 import type { CollMap, CollName, DocMap, DocName } from '@/data/types';
 import { docBaselines as baselines, collectionBaselines } from '@/store/drafts';
@@ -49,6 +49,11 @@ export function useCollectionDraft<K extends CollName>(name: K) {
     const rows = sorted(useStore.getState()[name] as any[]);
     stage(moveSelection(rows, ids, direction).map((row, order) => ({ ...row, order })));
   };
+  /** Drag-and-drop: the dragged rows take the place of `targetId`. */
+  const drop = (ids: string[], targetId: string) => {
+    const rows = sorted(useStore.getState()[name] as any[]);
+    stage(moveTo(rows, ids, targetId).map((row, order) => ({ ...row, order })));
+  };
   const save = async () => {
     const saved = collectionBaselines.get(name);
     if (!saved) return true;
@@ -78,5 +83,5 @@ export function useCollectionDraft<K extends CollName>(name: K) {
     const saved = collectionBaselines.get(name);
     if (saved) collectionBaselines.set(name, saved.filter((row) => !ids.includes(row.id)));
   };
-  return { update, move, save, discard, dirty, forget };
+  return { update, move, drop, save, discard, dirty, forget };
 }

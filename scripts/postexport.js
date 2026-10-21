@@ -61,4 +61,20 @@ if (fs.existsSync(shell)) {
     console.log('[postexport] injected web app manifest');
   }
 }
+// Brotli copies of every text asset, made once here so the Node server never compresses on a visitor's request.
+{
+  const zlib = require('zlib');
+  let made = 0;
+  (function pack(dir) {
+    for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+      const p = path.join(dir, e.name);
+      if (e.isDirectory()) { pack(p); continue; }
+      if (!/\.(js|css|html|json|svg|webmanifest)$/.test(e.name) || fs.statSync(p).size < 1024) continue;
+      const data = fs.readFileSync(p);
+      fs.writeFileSync(p + '.br', zlib.brotliCompressSync(data, { params: { [zlib.constants.BROTLI_PARAM_QUALITY]: 11, [zlib.constants.BROTLI_PARAM_SIZE_HINT]: data.length } }));
+      made++;
+    }
+  })(dist);
+  console.log(`[postexport] wrote ${made} brotli file(s)`);
+}
 console.log('[postexport] OK - dist is safe to deploy on Vercel');

@@ -245,7 +245,19 @@ async function main() {
   tabs = await saved('tabs');
   assert.equal(tabs.filter((row) => row.title.fr === 'Regression edited').length, 2);
   for (const row of added) await page.getByTestId(`select-${row.id}`).click();
-  await page.getByTestId('crud-batch-move--1').click();
+  {
+    // Drag the two selected rows (together) above the last pre-existing tab via the drag handle.
+    const last = tabs.filter((row) => !added.some((a) => a.id === row.id)).sort((a, b) => a.order - b.order).pop();
+    const handle = await page.getByTestId(`drag-${added[0].id}`).boundingBox();
+    const target = await page.getByTestId(`row-${last.id}`).boundingBox();
+    await page.mouse.move(handle.x + handle.width / 2, handle.y + handle.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(handle.x + handle.width / 2, handle.y + handle.height / 2 - 12, { steps: 3 });
+    await page.mouse.move(target.x + target.width / 2, target.y + target.height / 2, { steps: 12 });
+    await page.waitForTimeout(150);
+    await page.mouse.up();
+    await page.waitForTimeout(300);
+  }
   await page.getByTestId('crud-submit').click();
   await page.waitForTimeout(300);
   tabs = (await saved('tabs')).sort((a, b) => a.order - b.order);

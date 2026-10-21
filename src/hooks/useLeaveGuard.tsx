@@ -9,6 +9,7 @@ import { Txt } from '@/components/ui/Txt';
 import i18n, { useT } from '@/i18n';
 import { changes, type Change } from '@/lib/changes';
 import { toast } from '@/store/useToast';
+import { currentPath, parentRoute, TAB_ROOTS } from '@/lib/route';
 
 type Guard = { save: () => Promise<boolean | void>; discard: () => void; changes?: () => Change[]; allow?: (destination?: string) => boolean };
 export type DraftDetails = { before: unknown; after: unknown; labels?: Record<string, string>; secrets?: string[] };
@@ -60,6 +61,21 @@ function navigateTo(href: unknown, action: () => void) {
     setTimeout(() => { nativeDestination = undefined; }, 250);
   }), destination);
 }
+/** Back on a page that was opened directly (shared link, notification, reload): there is no in-app stack to pop. */
+/** True when the page before this one in the browser history belongs to the app (never an external site or blank tab). */
+function cameFromApp() {
+  try { return !!document.referrer && new URL(document.referrer).origin === window.location.origin; } catch { return false; }
+}
+
+function backWithoutHistory() {
+  const path = currentPath();
+  // Bottom-bar roots keep the old behaviour: nothing to go back to inside the app.
+  if (TAB_ROOTS.includes(path)) { requestAppExit(() => { if (Platform.OS !== 'web') BackHandler.exitApp(); }); return; }
+  // Web: return to the page the visitor came from (previous site, chat, search...).
+  if (Platform.OS === 'web' && window.history.length > 1 && cameFromApp()) { window.history.back(); return; }
+  // Native, or a fresh tab: land on the logical parent instead of leaving the user stuck.
+  expoRouter.replace(parentRoute(path) as never);
+}
 export const router = {
   ...expoRouter,
   navigate: (...args: Parameters<typeof expoRouter.navigate>) => navigateTo(args[0], () => exitAware(args[0], () => expoRouter.navigate(...args))),
@@ -69,7 +85,7 @@ export const router = {
     if (dialog.getState().pending) { dialog.setState({ pending: null }); return; }
     const overlay = topCheckpoint();
     if (overlay && overlay.priority > 0) { overlay.action(); return; }
-    requestLeave(() => { if (expoRouter.canGoBack()) expoRouter.back(); else requestAppExit(() => { if (Platform.OS !== 'web') BackHandler.exitApp(); }); });
+    requestLeave(() => { if (expoRouter.canGoBack()) expoRouter.back(); else backWithoutHistory(); });
   },
   dismiss: (...args: Parameters<typeof expoRouter.dismiss>) => requestLeave(() => navigate(() => expoRouter.dismiss(...args))),
   dismissAll: () => requestLeave(() => navigate(() => expoRouter.dismissAll())),
