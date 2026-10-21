@@ -357,7 +357,7 @@ const ar: Dict = {
       mode: 'الوضع + الألوان',
       model: 'اختيار النموذج',
     },
-    crud: {
+    crud: { hidden: 'مخفي',
       addNew: 'إضافة',
       editItem: 'تعديل',
       confirmDelete: 'حذف هذا العنصر؟',

@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Pressable, View } from 'react-native';
 import { Redirect, useLocalSearchParams } from 'expo-router';
 import { useUserSession } from '@/store/useUserSession';
-import { router } from '@/hooks/useLeaveGuard';
+import { router, useBackCheckpoint } from '@/hooks/useLeaveGuard';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { useMe, useStore } from '@/store/useStore';
 import { useWizard } from '@/store/useWizard';
@@ -17,9 +17,10 @@ import { saveImage, shareImage } from '@/lib/share';
 import { toast } from '@/store/useToast';
 import { freshUser } from '@/lib/credits';
 import { useBp } from '@/hooks/useBp';
+import { NO_CONTEXT_MENU, NO_SELECT } from '@/lib/noSelect';
 
 export default function Result() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, fresh } = useLocalSearchParams<{ id: string; fresh?: string }>();
   const { t } = useT();
   const L = useL();
   const { desktop } = useBp();
@@ -28,10 +29,14 @@ export default function Result() {
   const tool = useStore((s) => s.tools.find((x) => x.id === item?.draft.toolId));
   const me = useMe();
   const [hold, setHold] = useState(false);
+  // Straight after a generation Back (header, browser or hardware) means Home, never the editable request.
+  useBackCheckpoint(fresh === '1', () => router.dismissTo('/'));
 
   if (!item || !item.after) return <Redirect href="/" />;
 
-  const goBack = () => router.back();
+  // Straight after a generation the request is claimed and can no longer be edited: Back always means Home.
+  // A result opened from History keeps the normal Back behaviour.
+  const goBack = () => (fresh === '1' ? router.dismissTo('/') : router.back());
   const regenerate = async () => {
     const current = (await freshUser()) ?? me;
     if ((current?.credits ?? 0) <= 0) { toast(t('result.noCredits')); router.push('/pro'); return; }
@@ -64,11 +69,11 @@ export default function Result() {
         <BeforeAfter before={item.before} after={item.after} hold={hold} aspect={desktop ? 1.25 : 0.9} />
       </Animated.View>
       <View className="flex-row items-center justify-between mt-4">
-        <Pressable testID="btn-before" onPressIn={() => setHold(true)} onPressOut={() => setHold(false)} className={`flex-row items-center gap-2 h-11 px-5 rounded-full border ${hold ? 'bg-ink border-ink' : 'bg-surface border-line'} active:opacity-90`}>
+        <Pressable testID="btn-before" onPressIn={() => setHold(true)} onPressOut={() => setHold(false)} {...NO_CONTEXT_MENU} style={NO_SELECT} className={`flex-row items-center gap-2 h-11 px-5 rounded-full border ${hold ? 'bg-ink border-ink' : 'bg-surface border-line'} active:opacity-90`}>
           <Icon name="image-filter-hdr" size={18} tone={hold ? 'onink' : 'fg'} />
-          <Txt className={`font-bold ${hold ? 'text-onink' : 'text-fg'}`}>{t('result.before')}</Txt>
+          <Txt style={NO_SELECT} className={`font-bold ${hold ? 'text-onink' : 'text-fg'}`}>{t('result.before')}</Txt>
         </Pressable>
-        <Txt className="text-muted text-[12px] flex-1 text-end ms-3">{t('result.holdHint')}</Txt>
+        <Txt style={NO_SELECT} className="text-muted text-[12px] flex-1 text-end ms-3">{t('result.holdHint')}</Txt>
       </View>
       {actions}
     </Screen>

@@ -99,15 +99,15 @@ export function CrudScreen({ entity }: { entity: string }) {
           <Button size="sm" icon="select-all" variant="ghost" title={t('common.all')} disabled={busy} onPress={() => setSelected(rows.map((r) => r.id))} />
           <Button testID="crud-batch-edit" size="sm" icon="pencil-outline" variant="ghost" title={t('common.edit')} disabled={busy} onPress={() => { setQuickKeys([]); setBatch('edit'); }} />
           <Button testID="crud-batch-visibility" size="sm" icon="eye-outline" variant="ghost" title={t('improve.visibilityShort')} disabled={busy} onPress={() => { setQuickKeys(['visible']); setBatch('edit'); }} />
-          {cfg.ordered ? ([-1, 1] as const).map((d) => <Button key={d} testID={`crud-batch-move-${d}`} size="sm" icon={d === -1 ? 'arrow-up' : 'arrow-down'} variant="ghost" title={t(d === -1 ? 'improve.upShort' : 'improve.downShort')} disabled={busy} onPress={() => run(() => Promise.resolve(staged.move(selected, d)))} />) : null}
           <Button testID="crud-batch-delete" size="sm" icon="trash-can-outline" variant="ghost" title={t('common.delete')} disabled={busy} onPress={() => setBulkDelete(true)} />
         </ScrollView>
       </Card> : undefined}>
       <View className="flex-row items-center gap-3 mb-2"><View className="flex-1"><Input testID="crud-filter" placeholder={t('admin.dash.searchPh')} value={query} onChangeText={setQuery} /></View><Txt className="text-muted text-[12px]">{filtered.length} / {rows.length}</Txt></View>
       {entity === 'tabs' ? <HomeTabsOption /> : null}
-      <CrudTable visual={['categories', 'inspirations', 'styles'].includes(entity)} onLongPress={bulkEnabled ? (id) => { if (!busy) setSelected((old) => old.includes(id) ? old : [...old, id]); } : undefined} selected={selected} onSelect={bulkEnabled ? (id) => { if (!busy) setSelected((old) => old.includes(id) ? old.filter((x) => x !== id) : [...old, id]); } : undefined} rows={editing && preview ? isNew ? [...filtered, preview] : filtered.map((r) => r.id === preview.id ? preview : r) : filtered} cols={cfg.cols(ctx)} rowTestID="row"
+      <CrudTable visual={!!cfg.visual} onLongPress={bulkEnabled ? (id) => { if (!busy) setSelected((old) => old.includes(id) ? old : [...old, id]); } : undefined} selected={selected} onSelect={bulkEnabled ? (id) => { if (!busy) setSelected((old) => old.includes(id) ? old.filter((x) => x !== id) : [...old, id]); } : undefined} rows={editing && preview ? isNew ? [...filtered, preview] : filtered.map((r) => r.id === preview.id ? preview : r) : filtered} view={cfg.view(ctx)} rowTestID="row"
         onEdit={open} onDelete={setDel}
-        onMove={cfg.ordered && bulkEnabled ? (r, d) => staged.move([r.id], d) : undefined}
+        onReorder={cfg.ordered && bulkEnabled && !query.trim() ? staged.drop : undefined}
+        onMove={cfg.ordered && bulkEnabled && !query.trim() ? (r, d) => staged.move([r.id], d) : undefined}
         onToggle={(r) => staged.update(r.id, { visible: r.visible === false } as any)} />
       {staged.dirty ? <Card className="p-2 mt-3 flex-row items-center gap-2"><Txt className="flex-1 text-[12px]">{t('improve.previewLabel')}</Txt><Button testID="crud-discard" size="sm" variant="soft" title={t('improve.discard')} onPress={staged.discard} /><Button testID="crud-submit" size="sm" title={t('improve.submit')} onPress={staged.save} /></Card> : null}
       <View className="h-3" />

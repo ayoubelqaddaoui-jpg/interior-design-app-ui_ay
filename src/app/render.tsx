@@ -74,7 +74,8 @@ export default function RenderPage() {
       // The design is shown in the app straight away, so the admin's request is already fulfilled.
       if (requestId) await fresh.update('requests', requestId, { aiResult: imageUri, historyId: hist.id, status: 'delivered', autoSent: true }).catch(() => {});
       useWizard.setState({ dirty: false });
-      router.replace({ pathname: '/result/[id]', params: { id: hist.id } });
+      // `fresh` marks a just-claimed result: the result page sends Back to Home instead of the editable wizard.
+      router.replace({ pathname: '/result/[id]', params: { id: hist.id, fresh: '1' } });
     } catch (error) {
       if (error instanceof BackendError && error.status === 402) { router.replace({ pathname: '/pro', params: { generation: '1' } }); return; }
       if (!signal.current.cancelled) setFailed(true);

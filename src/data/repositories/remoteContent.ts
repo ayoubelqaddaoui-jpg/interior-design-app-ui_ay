@@ -16,9 +16,13 @@ let lastWrite = 0;
 export const lastContentWrite = () => lastWrite;
 
 /** Parallel reads (init loads 13 repos at once) share one request. */
+let firstReadAt = 0;
 export function contentSnapshot(force = true): Promise<Snapshot> {
   if (inflight) return inflight;
-  if (!force && current && Date.now() - fetchedAt < 2000) return Promise.resolve(current);
+  const now = Date.now();
+  if (!firstReadAt && !force) firstReadAt = now;
+  // A snapshot prefetched while the session was still loading serves the whole startup burst, however long that took.
+  if (!force && current && (now - fetchedAt < 2000 || now - firstReadAt < 2000)) return Promise.resolve(current);
   inflight = api<Snapshot>('/content').then(snapshot => { current = snapshot; fetchedAt = Date.now(); return snapshot; }).finally(() => { inflight = null; });
   return inflight;
 }
@@ -76,3 +80,6 @@ export function remoteDoc<K extends DocName>(name: K, defaults: () => DocMap[K])
     patch,
   };
 }
+
+/** Starts the content download at app launch, in parallel with the session check, instead of behind it. */
+export function prefetchContent() { void contentSnapshot(true).catch(() => { /* startup retries on its own */ }); }

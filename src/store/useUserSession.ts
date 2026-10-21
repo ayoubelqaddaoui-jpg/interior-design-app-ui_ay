@@ -5,6 +5,7 @@ import { t } from 'i18next';
 import { api, backendEnabled, BackendError } from '@/lib/backend';
 import { toast } from '@/store/useToast';
 import { usePrefs } from '@/store/usePrefs';
+import { inAdminArea } from '@/lib/route';
 
 /** User authentication never touches useLocal.adminSession or its secure-store key. */
 export const useUserSession = create<{
@@ -12,7 +13,7 @@ export const useUserSession = create<{
   refresh(): Promise<void>;
   login(name: string, phone: string): Promise<AppUser>;
   logout(): Promise<void>;
-}>((set) => ({
+}>((set, get) => ({
   user: null,
   async refresh() {
     if (!backendEnabled) return;
@@ -24,7 +25,13 @@ export const useUserSession = create<{
     catch (error) {
       if (error instanceof BackendError && error.status === 401) { set({ user: null }); usePrefs.getState().clear('client'); }
       // The admin blocked this account: sign out locally so nothing keeps working with a dead session.
-      else if (error instanceof BackendError && error.code === 'ACCOUNT_BLOCKED') { set({ user: null }); usePrefs.getState().clear('client'); toast(t('account.blocked')); }
+      else if (error instanceof BackendError && error.code === 'ACCOUNT_BLOCKED') {
+        // Tell the person once, at the moment they are signed out, and never inside the admin panel
+        // (an administrator working there is not the blocked client and must not see this message).
+        const wasSignedIn = !!get().user;
+        set({ user: null }); usePrefs.getState().clear('client');
+        if (wasSignedIn && !inAdminArea()) toast(t('account.blocked'));
+      }
     }
   },
   async login(name, phone) {

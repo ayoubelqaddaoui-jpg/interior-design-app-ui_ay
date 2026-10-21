@@ -1,11 +1,15 @@
 import React, { useEffect } from 'react';
-import { View, StyleSheet } from 'react-native';
+import { Platform, View, StyleSheet } from 'react-native';
 import { Image } from 'expo-image';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, { Easing, runOnJS, useAnimatedStyle, useSharedValue, withDelay, withSequence, withTiming, interpolate } from 'react-native-reanimated';
 import { Icon } from '@/components/ui/Icon';
 import { Txt } from '@/components/ui/Txt';
 import { useT } from '@/i18n';
+import { NO_SELECT } from '@/lib/noSelect';
+
+// Images never take pointer events: the slider (not the <img>) receives every press and drag.
+const IMG = [StyleSheet.absoluteFill, { pointerEvents: 'none' }, NO_SELECT] as any;
 
 /**
  * Interactive before/after slider.
@@ -44,8 +48,10 @@ export function BeforeAfter({ before, after, hold, aspect = 1.1 }: { before: str
 
   return (
     <GestureDetector gesture={pan}>
-      <View testID="before-after" style={{ aspectRatio: aspect, width: '100%', direction: 'ltr' } as any} className="rounded-3xl overflow-hidden bg-surface2" onLayout={(e) => { W.set(e.nativeEvent.layout.width); }}>
-        <Image source={{ uri: after }} style={StyleSheet.absoluteFill} contentFit="cover" />
+      <View testID="before-after" style={[{ aspectRatio: aspect, width: '100%', direction: 'ltr', cursor: 'ew-resize', touchAction: 'none' } as any, NO_SELECT]} className="rounded-3xl overflow-hidden bg-surface2"
+        // The browser's native image drag / context menu / selection must never compete with the slider.
+        {...(Platform.OS === 'web' ? { onDragStart: (e: Event) => e.preventDefault(), onContextMenu: (e: Event) => e.preventDefault() } : {})} onLayout={(e) => { W.set(e.nativeEvent.layout.width); }}>
+        <Image source={{ uri: after }} style={IMG} contentFit="cover" draggable={false} />
         <Animated.View style={[{ position: 'absolute', left: 0, top: 0, bottom: 0, overflow: 'hidden' }, clip]}>
           <BeforeImg uri={before} W={W} />
         </Animated.View>
@@ -66,6 +72,6 @@ export function BeforeAfter({ before, after, hold, aspect = 1.1 }: { before: str
 
 function BeforeImg({ uri, W }: { uri: string; W: { value: number } }) {
   const s = useAnimatedStyle(() => ({ width: W.value }));
-  return <Animated.View style={[{ position: 'absolute', left: 0, top: 0, bottom: 0 }, s]}><Image source={{ uri }} style={StyleSheet.absoluteFill} contentFit="cover" /></Animated.View>;
+  return <Animated.View style={[{ position: 'absolute', left: 0, top: 0, bottom: 0 }, s]}><Image source={{ uri }} style={IMG} contentFit="cover" draggable={false} /></Animated.View>;
 }
 void runOnJS;

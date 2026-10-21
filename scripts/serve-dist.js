@@ -3,6 +3,7 @@
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
+const { sendFile } = require('../server/compress');
 const root = path.resolve(__dirname, '..', 'dist');
 const port = Number(process.env.PORT || process.argv[2] || 4173);
 const types = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.png': 'image/png', '.jpg': 'image/jpeg', '.ico': 'image/x-icon', '.woff2': 'font/woff2', '.ttf': 'font/ttf', '.svg': 'image/svg+xml', '.mp4': 'video/mp4' };
@@ -17,8 +18,8 @@ http.createServer((req, res) => {
     if (/^\/(?:_expo|assets)\//.test(url) || url === '/favicon.ico' || url === '/push-sw.js') { res.writeHead(404); return res.end('Asset not found'); }
     file = path.join(root, 'index.html');
   }
-  if (path.extname(file) === '.html') res.setHeader('Cache-Control', 'no-cache');
-  else if (/^\/(?:_expo|assets)\//.test(url)) res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
-  res.writeHead(200, { 'Content-Type': types[path.extname(file)] || 'application/octet-stream' });
-  fs.createReadStream(file).pipe(res);
+  const headers = { 'Content-Type': types[path.extname(file)] || 'application/octet-stream' };
+  if (path.extname(file) === '.html') headers['Cache-Control'] = 'no-cache';
+  else if (/^\/(?:_expo|assets)\//.test(url)) headers['Cache-Control'] = 'public, max-age=31536000, immutable';
+  sendFile(req, res, file, headers);
 }).listen(port, '0.0.0.0', () => console.log(`dist served on http://localhost:${port}`));

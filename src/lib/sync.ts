@@ -58,8 +58,9 @@ export async function syncOnce() {
     if (session.user) {
       if (state.user?.blocked) jobs.push(session.refresh()); // signs this device out
       else if (changed('client')) jobs.push(session.refresh().then(reloadUserSpace));
-    } else if (state.client != null) {
+    } else if (state.client != null && !state.user?.blocked) {
       // The server recognises a client session this device has not loaded (signed in from the cookie).
+      // A blocked account is skipped: retrying it every poll would only re-announce the block.
       jobs.push(session.refresh().then(reloadUserSpace));
     }
     await Promise.allSettled(jobs);
