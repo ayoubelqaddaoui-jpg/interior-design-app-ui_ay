@@ -5,6 +5,7 @@ import { router } from '@/hooks/useLeaveGuard';
 import { backendEnabled, api } from '@/lib/backend';
 import { useLang } from '@/i18n';
 import { useLocal } from '@/store/useLocal';
+import { useUserSession } from '@/store/useUserSession';
 
 /** Native Android uses device FCM tokens; browser builds resolve the .web file instead. */
 export function PushNavigationHost() {
@@ -19,12 +20,14 @@ export function PushNavigationHost() {
         const data = response.notification.request.content.data || {};
         const phone = String(data.phone || '').replace(/[^\d+]/g, '').slice(0, 32);
         if (response.actionIdentifier === 'call' && /^\+?\d{6,20}$/.test(phone)) { void Linking.openURL(`tel:${phone}`); return; }
-        if (typeof data.url === 'string' && /^\/admin\/requests(?:\?|$)/.test(data.url)) router.push(data.url as Href);
+        if (typeof data.url === 'string' && /^\/(?:admin\/requests|admin\/users|history)(?:\?|$)/.test(data.url)) router.push(data.url as Href);
       };
       const response = n.addNotificationResponseReceivedListener(handle);
       const token = n.addPushTokenListener(device => {
-        if (!useLocal.getState().adminSession || device.type !== 'android') return;
-        void api('/push/subscriptions', { method: 'POST', body: { kind: 'fcm', token: device.data, language: useLang.getState().lang } }).catch(() => {});
+        if (device.type !== 'android') return;
+        const language = useLang.getState().lang;
+        if (useLocal.getState().adminSession) void api('/push/subscriptions', { method: 'POST', body: { kind: 'fcm', token: device.data, language } }).catch(() => {});
+        if (useUserSession.getState().user) void api('/push/subscriptions', { method: 'POST', body: { kind: 'fcm', token: device.data, language, owner: 'client' } }).catch(() => {});
       });
       remove = () => { response.remove(); token.remove(); };
       if (disposed) { remove(); return; }

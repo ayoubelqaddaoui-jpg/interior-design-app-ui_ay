@@ -3,9 +3,9 @@ import { toast } from '@/store/useToast';
 import { moveSelection } from '@/lib/reorder';
 import { sorted, useStore } from '@/store/useStore';
 import type { CollMap, CollName, DocMap, DocName } from '@/data/types';
+import { docBaselines as baselines, collectionBaselines } from '@/store/drafts';
 import { useBackCheckpoint, useLeaveGuard, router } from './useLeaveGuard';
 
-const baselines = new Map<DocName, DocMap[DocName]>();
 /** Repository data is untouched until Submit. The shared store is the live preview. */
 export function useDraftDoc<K extends DocName>(name: K) {
   const draft = useStore((s) => s.doc[name]);
@@ -35,7 +35,6 @@ export function useDraftDoc<K extends DocName>(name: K) {
   return { draft, saved, set, patch, save, discard, dirty };
 }
 
-const collectionBaselines = new Map<CollName, any[]>();
 /** Inline visibility and ordering are previews too, not implicit repository writes. */
 export function useCollectionDraft<K extends CollName>(name: K) {
   const list = useStore((s) => s[name]);

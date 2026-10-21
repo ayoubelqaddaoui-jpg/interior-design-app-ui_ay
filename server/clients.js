@@ -17,17 +17,19 @@ const toUser = row => row && ({ id: row.id, name: row.name, whatsapp: row.phone,
 /** Phone-based client profiles, sessions, free/paid entitlement claims and per-client history/chat space. */
 function createClients(db) {
   const byId = async (id, q = db.query) => (await q('SELECT * FROM clients WHERE id=$1', [id]))[0];
-  async function login(name, input) {
+  async function login(name, input, defaultCredits = 1) {
     const canonical = canonicalPhone(input);
     if (!/^\+[1-9]\d{5,14}$/.test(canonical) || typeof name !== 'string' || name.trim().length < 2 || name.length > 120) throw fail(400, 'INVALID_PROFILE');
     // Atomic upsert: two simultaneous first logins for one phone cannot create two profiles.
-    await db.query('INSERT INTO clients(id,phone,name,created_at) VALUES($1,$2,$3,$4) ON CONFLICT (phone) DO NOTHING', [crypto.randomUUID(), canonical, name.trim(), Date.now()]);
+    // The admin's "default credits" setting is the balance a new client starts with (free design included).
+    const start = balance({ free_used: 0 }, Number.isSafeInteger(defaultCredits) && defaultCredits >= 0 ? Math.min(defaultCredits, MAX_CREDITS) : 1);
+    const created = (await db.query('INSERT INTO clients(id,phone,name,created_at,credits,free_used) VALUES($1,$2,$3,$4,$5,$6) ON CONFLICT (phone) DO NOTHING RETURNING id', [crypto.randomUUID(), canonical, name.trim(), Date.now(), start.credits, start.freeUsed])).length > 0;
     const row = (await db.query('SELECT * FROM clients WHERE phone=$1', [canonical]))[0];
     if (row.blocked) throw fail(403, 'ACCOUNT_BLOCKED');
     const token = crypto.randomBytes(32).toString('hex');
     await db.query('DELETE FROM user_sessions WHERE expires_at<=$1', [Date.now()]);
     await db.query('INSERT INTO user_sessions VALUES($1,$2,$3)', [digest(token), row.id, Date.now() + 365 * 86400000]);
-    return { token, user: toUser(row) };
+    return { token, user: toUser(row), created };
   }
   async function authenticate(token) {
     if (!token || !/^[a-f0-9]{64}$/.test(token)) return null;

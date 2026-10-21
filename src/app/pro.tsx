@@ -7,26 +7,23 @@ import { Pressable, View } from 'react-native';
 import { router } from '@/hooks/useLeaveGuard';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, { FadeInDown } from 'react-native-reanimated';
-import { tArr, useT } from '@/i18n';
+import { tArr, useL, useT } from '@/i18n';
 import { Button } from '@/components/ui/Button';
 import { Icon } from '@/components/ui/Icon';
 import { Screen } from '@/components/ui/Screen';
 import { Txt } from '@/components/ui/Txt';
 import { toast } from '@/store/useToast';
-import { useMe } from '@/store/useStore';
+import { sorted, useMe, useStore } from '@/store/useStore';
 import { freshUser, needsPro } from '@/lib/credits';
-
-const PLANS = [
-  { k: 'weekly', price: '49 MAD', per: '/wk' },
-  { k: 'monthly', price: '149 MAD', per: '/mo', popular: true },
-  { k: 'yearly', price: '999 MAD', per: '/yr' },
-] as const;
 
 /** Paywall UI only: no real payment. */
 export default function Pro() {
   const { t } = useT();
   useWizardGuard();
   const me = useMe();
+  const L = useL();
+  // Plans, prices and the highlighted one are edited by the admin and stored in the database.
+  const plans = sorted(useStore((s) => s.plans)).filter((p) => p.visible);
   const { generation } = useLocalSearchParams<{ generation?: string }>();
   const canContinue = generation === '1' && !!useWizard.getState().photoUri && (me?.credits ?? 0) > 0;
   // Credits may have been granted by the admin after this screen was reached: re-check and leave the paywall if so.
@@ -39,7 +36,8 @@ export default function Pro() {
     });
     return () => { alive = false; };
   }, [generation]);
-  const [plan, setPlan] = useViewState<string>('plan', 'monthly');
+  const [picked, setPlan] = useViewState<string>('plan', '');
+  const plan = plans.some((p) => p.id === picked) ? picked : (plans.find((p) => p.popular) ?? plans[0])?.id;
   const [confirming, setConfirming] = useState(false);
   const confirmation = useRef(false);
   const confirmUpgrade = async () => {
@@ -72,14 +70,14 @@ export default function Pro() {
           </Animated.View>
         ))}
         <View className="mt-4 gap-2.5">
-          {PLANS.map((p) => {
-            const on = plan === p.k;
+          {plans.map((p) => {
+            const on = plan === p.id;
             return (
-              <Pressable key={p.k} testID={`plan-${p.k}`} onPress={() => setPlan(p.k)} className={`flex-row items-center rounded-2xl px-4 py-4 border-2 ${on ? 'border-primary bg-soft' : 'border-line bg-surface'}`}>
+              <Pressable key={p.id} testID={`plan-${p.id.replace(/^plan_/, '')}`} onPress={() => setPlan(p.id)} className={`flex-row items-center rounded-2xl px-4 py-4 border-2 ${on ? 'border-primary bg-soft' : 'border-line bg-surface'}`}>
                 <View className={`w-6 h-6 rounded-full border-2 items-center justify-center me-3 ${on ? 'border-ink bg-ink' : 'border-line'}`}>{on ? <Icon name="check" size={14} tone="onink" /> : null}</View>
-                <Txt className="font-extrabold text-[16px] flex-1">{t(`pro.${p.k}`)}</Txt>
-                {'popular' in p ? <View className="bg-danger rounded-md px-2 py-0.5 me-2"><Txt className="text-white text-[10px] font-black">{t('pro.popular')}</Txt></View> : null}
-                <Txt className="font-black text-[16px]">{p.price}<Txt className="text-muted text-[12px] font-semibold">{p.per}</Txt></Txt>
+                <Txt className="font-extrabold text-[16px] flex-1">{L(p.title)}</Txt>
+                {p.popular ? <View className="bg-danger rounded-md px-2 py-0.5 me-2"><Txt className="text-white text-[10px] font-black">{t('pro.popular')}</Txt></View> : null}
+                <Txt className="font-black text-[16px]">{p.price}<Txt className="text-muted text-[12px] font-semibold">{L(p.period)}</Txt></Txt>
               </Pressable>
             );
           })}

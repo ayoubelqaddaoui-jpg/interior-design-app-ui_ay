@@ -5,6 +5,8 @@ const { isIP } = require('node:net');
 const crypto = require('node:crypto');
 const { createDb } = require('./db');
 const { createClients } = require('./clients');
+const { createSync } = require('./sync');
+const { createContent } = require('./content');
 const { createNotifier, validateSubscription, trim, phone } = require('./notifications');
 const hash = value => crypto.createHash('sha256').update(value).digest('hex');
 const fail = (status, message) => Object.assign(new Error(message), { status });
@@ -14,10 +16,11 @@ function passwordMatches(password, encoded) {
   return crypto.timingSafeEqual(crypto.scryptSync(String(password), salt, 64), Buffer.from(digest, 'hex'));
 }
 // Built-in default admin login (admin / admin) unless DISABLE_DEFAULT_ADMIN=true. ADMIN_EMAIL / ADMIN_PASSWORD_HASH work in addition.
-function adminCredentialsMatch(env, email, password) {
+/** Returns the stable admin identity (preferences and notification devices are stored per admin) or null. */
+function adminIdentity(env, email, password) {
   const user = email.trim().toLowerCase();
-  if (env.DISABLE_DEFAULT_ADMIN !== 'true' && user === 'admin' && password === 'admin') return true;
-  return !!env.ADMIN_EMAIL && user === env.ADMIN_EMAIL.toLowerCase() && passwordMatches(password, env.ADMIN_PASSWORD_HASH);
+  if (env.DISABLE_DEFAULT_ADMIN !== 'true' && user === 'admin' && password === 'admin') return 'admin';
+  return !!env.ADMIN_EMAIL && user === env.ADMIN_EMAIL.toLowerCase() && passwordMatches(password, env.ADMIN_PASSWORD_HASH) ? user : null;
 }
 async function readBody(req) {
   if (!req.headers['content-type']?.startsWith('application/json')) throw fail(415, 'JSON required');
@@ -49,11 +52,15 @@ const withTimeout = (promise, ms) => Promise.race([promise, new Promise(resolve 
 function createBackend({ env = process.env, db = createDb(env), senders } = {}) {
   const notifier = createNotifier(db, env, senders);
   const clients = createClients(db);
+  const sync = createSync(db);
+  const content = createContent(db, sync);
   const trustedProxies = new Set(String(env.TRUSTED_PROXY_IPS || '').split(',').map(value => value.trim()).filter(Boolean));
   const address = req => {
     const remote = req.socket?.remoteAddress || 'unknown';
-    const forwarded = req.headers['x-real-ip'];
-    return trustedProxies.has(remote) && typeof forwarded === 'string' && isIP(forwarded) ? forwarded : remote;
+    // On Vercel every request reaches the function through the platform proxy: without this all visitors would
+    // share one rate-limit bucket and real traffic (including leads) would be throttled.
+    const forwarded = env.VERCEL ? String(req.headers['x-forwarded-for'] || req.headers['x-real-ip'] || '').split(',')[0].trim() : req.headers['x-real-ip'];
+    return (env.VERCEL || trustedProxies.has(remote)) && typeof forwarded === 'string' && isIP(forwarded) ? forwarded : remote;
   };
   const allowedOrigins = String(env.APP_ORIGINS || 'http://localhost:4173,http://localhost:8080').split(',').map(value => value.trim());
   const apiLimit = Math.max(300, Math.min(5000, Number(env.API_RATE_LIMIT) || 300));
@@ -61,6 +68,10 @@ function createBackend({ env = process.env, db = createDb(env), senders } = {}) 
   const rowOf = row => JSON.parse(row.data);
   const publicRow = ({ clientHash: ignored, clientRequestId: ignored2, ...row }) => row;
 
+  /** Queue a notification. `kind`: request (new demand -> admins) | lead (new client -> admins) | ready (design delivered -> its owner). */
+  async function enqueue(kind, jobId, payload) {
+    await db.query('INSERT INTO outbox(request_id,attempts,next_at,completed,kind,payload) VALUES($1,0,$2,$3,$4,$5) ON CONFLICT (request_id) DO NOTHING', [jobId, Date.now(), '[]', kind, payload ? JSON.stringify(payload) : null]);
+  }
   /** Deliver due notification jobs. A short lease stops concurrent instances sending the same job twice. */
   async function pump(only) {
     try {
@@ -69,13 +80,20 @@ function createBackend({ env = process.env, db = createDb(env), senders } = {}) 
       for (const job of due) {
         const leased = await db.query('UPDATE outbox SET next_at=$1 WHERE request_id=$2 AND next_at=$3 RETURNING request_id', [now + 60000, job.request_id, job.next_at]);
         if (!leased.length) continue;
-        const demand = (await db.query('SELECT data FROM requests WHERE id=$1', [job.request_id]))[0];
-        if (!demand) { await db.query('DELETE FROM outbox WHERE request_id=$1', [job.request_id]); continue; }
+        let item, options;
+        if (job.kind === 'request') {
+          const demand = (await db.query('SELECT data FROM requests WHERE id=$1', [job.request_id]))[0];
+          if (demand) { item = rowOf(demand); options = { event: 'request' }; }
+        } else {
+          const payload = JSON.parse(job.payload || 'null');
+          if (payload) { item = payload; options = { event: job.kind, ...(payload.audience ? { audience: payload.audience } : {}) }; }
+        }
+        if (!item) { await db.query('DELETE FROM outbox WHERE request_id=$1', [job.request_id]); continue; }
         try {
-          const result = await notifier.deliver(rowOf(demand), JSON.parse(job.completed));
+          const result = await notifier.deliver(item, JSON.parse(job.completed), options);
           if (!result.retry || job.attempts >= 6) await db.query('DELETE FROM outbox WHERE request_id=$1', [job.request_id]);
           else await db.query('UPDATE outbox SET completed=$1, attempts=attempts+1, next_at=$2 WHERE request_id=$3', [JSON.stringify(result.completed), Date.now() + Math.min(3600000, 30000 * 2 ** (job.attempts + 1)), job.request_id]);
-        } catch { console.warn('Demand notification job deferred'); }
+        } catch { console.warn('Notification job deferred'); }
       }
     } catch { console.warn('Notification queue temporarily unavailable'); }
   }
@@ -95,13 +113,14 @@ function createBackend({ env = process.env, db = createDb(env), senders } = {}) 
         res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Demand-Token, X-Dwira-Native, X-User-Token');
         res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PATCH, DELETE, OPTIONS');
         if (req.method === 'OPTIONS') { res.writeHead(204); return res.end(); }
-        const key = `${address(req)}:${url.pathname === '/api/admin/login' ? 'login' : 'api'}`;
+        const bucketName = url.pathname === '/api/admin/login' ? 'login' : url.pathname === '/api/sync' ? 'sync' : 'api';
+        const key = `${address(req)}:${bucketName}`;
         const now = Date.now();
         if (buckets.size > 10000) for (const [id, bucket] of buckets) if (bucket.until < now) buckets.delete(id);
         const bucket = buckets.get(key) || { count: 0, until: now + 15 * 60000 };
         if (bucket.until < now) { bucket.count = 0; bucket.until = now + 15 * 60000; }
         bucket.count++; buckets.set(key, bucket);
-        if (bucket.count > (url.pathname === '/api/admin/login' ? 20 : apiLimit)) throw fail(429, 'Too many requests');
+        if (bucket.count > (bucketName === 'login' ? 20 : bucketName === 'sync' ? 20000 : apiLimit)) throw fail(429, 'Too many requests');
 
         if (url.pathname === '/api/health' && req.method === 'GET') {
           // Never exposes secrets: only whether the database is reachable.
@@ -113,7 +132,8 @@ function createBackend({ env = process.env, db = createDb(env), senders } = {}) 
 
         const rawCookie = req.headers.cookie?.split(';').map(value => value.trim()).find(value => value.startsWith('dwira_admin='))?.slice(12);
         const sessionToken = req.headers.authorization?.replace(/^Bearer /, '') || rawCookie;
-        const session = sessionToken && (await db.query('SELECT token_hash FROM admin_sessions WHERE token_hash=$1 AND expires_at>$2', [hash(sessionToken), now]))[0];
+        const session = sessionToken && (await db.query('SELECT token_hash,admin_id FROM admin_sessions WHERE token_hash=$1 AND expires_at>$2', [hash(sessionToken), now]))[0];
+        const adminId = session?.admin_id;
         const admin = () => { if (!session) throw fail(401, 'Admin login required'); };
         const clientToken = req.headers['x-demand-token'];
         const clientHash = typeof clientToken === 'string' && /^[a-f0-9]{64}$/.test(clientToken) ? hash(clientToken) : null;
@@ -126,11 +146,34 @@ function createBackend({ env = process.env, db = createDb(env), senders } = {}) 
         // ---- Client accounts ----
         if (url.pathname === '/api/user/login' && req.method === 'POST') {
           const body = await readBody(req);
-          const result = await clients.login(body.name, body.phone);
+          const result = await clients.login(body.name, body.phone, (await content.getDoc('settings')).defaultFreeCredits);
           res.setHeader('Set-Cookie', cookie('dwira_user', result.token, 365 * 86400));
-          return json(200, { user: result.user, ...(req.headers['x-dwira-native'] === '1' ? { token: result.token } : {}) });
+          if (result.created) {
+            // A brand-new lead: tell the admins right away (bounded wait; failures stay queued for retry).
+            await enqueue('lead', `lead:${result.user.id}`, { id: result.user.id, name: result.user.name, whatsapp: result.user.whatsapp });
+            await sync.bump('clients');
+            await withTimeout(pump(`lead:${result.user.id}`), Number(env.PUSH_WAIT_MS) || 8000);
+          }
+          return json(200, { user: result.user, prefs: await content.clientPrefs(result.user.id), ...(req.headers['x-dwira-native'] === '1' ? { token: result.token } : {}) });
         }
-        if (url.pathname === '/api/user/session' && req.method === 'GET') return json(200, { user: requireUser() });
+        if (url.pathname === '/api/user/session' && req.method === 'GET') return json(200, { user: requireUser(), prefs: await content.clientPrefs(client.id) });
+        // ---- Sync, shared content and preferences ----
+        if (url.pathname === '/api/sync' && req.method === 'GET') {
+          const keys = ['content', ...(session ? ['requests', 'clients', `a:${adminId}`] : []), ...(client ? [`c:${client.id}`] : [])];
+          const versions = await sync.read(keys);
+          // Opportunistic retry of failed notifications (serverless has no background timer; cron is only daily).
+          const waiting = (await db.query('SELECT 1 FROM outbox WHERE next_at<=$1 LIMIT 1', [now]))[0];
+          if (waiting) await withTimeout(pump(), 9000);
+          return json(200, { content: versions.content, requests: session ? versions.requests : null, clients: session ? versions.clients : null, admin: session ? versions[`a:${adminId}`] : null, client: client ? versions[`c:${client.id}`] : null, user: client ? { id: client.id, blocked: !!client.blocked } : null, isAdmin: !!session });
+        }
+        if (url.pathname === '/api/content' && req.method === 'GET') return json(200, await content.snapshot(!!session));
+        if (url.pathname === '/api/prefs') {
+          const asAdmin = url.searchParams.get('as') === 'admin';
+          if (asAdmin) admin(); else requireUser();
+          if (req.method === 'GET') return json(200, asAdmin ? await content.adminPrefs(adminId) : await content.clientPrefs(client.id));
+          if (req.method === 'PATCH') return json(200, asAdmin ? await content.setAdminPrefs(adminId, await readBody(req)) : await content.setClientPrefs(client.id, await readBody(req)));
+          throw fail(405, 'Method not allowed');
+        }
         if (url.pathname === '/api/user/logout' && req.method === 'POST') {
           await clients.logout(userToken);
           res.setHeader('Set-Cookie', cookie('dwira_user', '', 0));
@@ -138,7 +181,9 @@ function createBackend({ env = process.env, db = createDb(env), senders } = {}) 
         }
         if (url.pathname === '/api/user/claim' && req.method === 'POST') {
           const body = await readBody(req);
-          return json(200, { user: await clients.claim(requireUser(), body.id) });
+          const claimed = await clients.claim(requireUser(), body.id);
+          await sync.bump(`c:${client.id}`, 'clients');
+          return json(200, { user: claimed });
         }
         if (url.pathname === '/api/user/requests' && req.method === 'GET') {
           requireUser();
@@ -155,7 +200,7 @@ function createBackend({ env = process.env, db = createDb(env), senders } = {}) 
             if (!row) throw fail(404, 'NOT_FOUND');
             return json(200, row);
           }
-          if (req.method === 'DELETE' && id) { await clients.removeSpace(client, kind, id); return json(200, { ok: true }); }
+          if (req.method === 'DELETE' && id) { await clients.removeSpace(client, kind, id); await sync.bump(`c:${client.id}`, 'clients'); return json(200, { ok: true }); }
           if (req.method === 'POST' || req.method === 'PATCH' && id) {
             const body = await readBody(req);
             const existing = id && (await clients.listSpace(client, kind)).find(row => row.id === id);
@@ -164,31 +209,57 @@ function createBackend({ env = process.env, db = createDb(env), senders } = {}) 
             const value = { ...existing, ...body };
             if (kind === 'history' && (!value.draft?.toolId || typeof value.before !== 'string' || !['pending', 'done'].includes(value.status))) throw fail(400, 'INVALID_HISTORY');
             if (kind === 'conversations' && (!Array.isArray(value.messages) || value.messages.length > 1000 || typeof value.title !== 'string')) throw fail(400, 'INVALID_CONVERSATION');
-            return json(200, await clients.putSpace(client, kind, value, id || (kind === 'history' ? body.claimId : crypto.randomUUID())));
+            const saved = await clients.putSpace(client, kind, value, id || (kind === 'history' ? body.claimId : crypto.randomUUID()));
+            await sync.bump(`c:${client.id}`, 'clients');
+            return json(200, saved);
           }
           throw fail(405, 'Method not allowed');
         }
 
         // ---- Admin ----
         if (url.pathname === '/api/admin/clients' && req.method === 'GET') { admin(); return json(200, await clients.users()); }
-        if (url.pathname === '/api/admin/clients/bulk' && req.method === 'POST') { admin(); return json(200, await clients.bulk(await readBody(req))); }
+        if (url.pathname === '/api/admin/clients/bulk' && req.method === 'POST') {
+          admin();
+          const body = await readBody(req), result = await clients.bulk(body);
+          if (body.action === 'delete') for (const id of body.ids) await notifier.removeOwner('client', id);
+          await sync.bump('clients', 'requests', ...(Array.isArray(body.ids) ? body.ids.map(id => `c:${id}`) : []));
+          return json(200, result);
+        }
+        const contentItem = url.pathname.match(/^\/api\/admin\/content\/([A-Za-z]+)(?:\/([A-Za-z0-9_-]{1,100}))?$/);
+        if (contentItem) {
+          admin();
+          if (req.method === 'PUT' && contentItem[2]) return json(200, await content.putItem(contentItem[1], contentItem[2], await readBody(req)));
+          if (req.method === 'DELETE' && !contentItem[2]) { await content.deleteItems(contentItem[1], (await readBody(req)).ids); return json(200, { ok: true }); }
+          throw fail(405, 'Method not allowed');
+        }
+        const contentDoc = url.pathname.match(/^\/api\/admin\/doc\/([A-Za-z]+)$/);
+        if (contentDoc && req.method === 'PATCH') { admin(); return json(200, await content.patchDoc(contentDoc[1], await readBody(req))); }
         const creditClient = url.pathname.match(/^\/api\/admin\/clients\/([a-f0-9-]+)$/);
         if (creditClient && req.method === 'PATCH') {
           admin();
           const body = await readBody(req);
-          return json(200, await clients.update(creditClient[1], { credits: body.credits, blocked: body.blocked }));
+          const updated = await clients.update(creditClient[1], { credits: body.credits, blocked: body.blocked });
+          await sync.bump('clients', `c:${creditClient[1]}`);
+          return json(200, updated);
         }
-        if (creditClient && req.method === 'DELETE') { admin(); await clients.remove(creditClient[1]); return json(200, { ok: true }); }
+        if (creditClient && req.method === 'DELETE') {
+          admin();
+          await clients.remove(creditClient[1]);
+          await notifier.removeOwner('client', creditClient[1]);
+          await sync.bump('clients', 'requests', `c:${creditClient[1]}`);
+          return json(200, { ok: true });
+        }
         if (req.method === 'POST' && url.pathname === '/api/admin/login') {
           const body = await readBody(req);
-          if (typeof body.email !== 'string' || typeof body.password !== 'string' || body.password.length > 512 || !adminCredentialsMatch(env, body.email, body.password)) throw fail(401, 'Invalid credentials');
+          const identity = typeof body.email === 'string' && typeof body.password === 'string' && body.password.length <= 512 ? adminIdentity(env, body.email, body.password) : null;
+          if (!identity) throw fail(401, 'Invalid credentials');
           const token = crypto.randomBytes(32).toString('hex');
           await db.query('DELETE FROM admin_sessions WHERE expires_at<=$1', [now]);
-          await db.query('INSERT INTO admin_sessions VALUES($1,$2)', [hash(token), now + 7 * 86400000]);
+          await db.query('INSERT INTO admin_sessions(token_hash,expires_at,admin_id) VALUES($1,$2,$3)', [hash(token), now + 7 * 86400000, identity]);
           res.setHeader('Set-Cookie', cookie('dwira_admin', token, 604800));
           return json(200, { ok: true, user: { id: 'usr_admin', name: 'Admin' }, ...(req.headers['x-dwira-native'] === '1' ? { token } : {}) });
         }
-        if (req.method === 'GET' && url.pathname === '/api/admin/session') { admin(); return json(200, { ok: true }); }
+        if (req.method === 'GET' && url.pathname === '/api/admin/session') { admin(); return json(200, { ok: true, prefs: await content.adminPrefs(adminId) }); }
         if (req.method === 'POST' && url.pathname === '/api/admin/logout') {
           if (session) await db.query('DELETE FROM admin_sessions WHERE token_hash=$1', [session.token_hash]);
           res.setHeader('Set-Cookie', cookie('dwira_admin', '', 0));
@@ -198,14 +269,15 @@ function createBackend({ env = process.env, db = createDb(env), senders } = {}) 
         // ---- Notifications for new requests ----
         if (req.method === 'GET' && url.pathname === '/api/push/config') return json(200, await notifier.config());
         if (url.pathname === '/api/push/subscriptions') {
-          admin();
           const body = await readBody(req);
+          // `owner: 'client'` registers the device for the signed-in client's own notifications (design ready).
+          const owner = body.owner === 'client' ? (requireUser(), { type: 'client', id: client.id }) : (admin(), { type: 'admin', id: adminId });
           let subscriber;
           try { subscriber = validateSubscription(body); } catch { throw fail(400, 'Invalid subscription'); }
           if (req.method === 'POST') {
             if (subscriber.kind === 'fcm' && !(await notifier.config()).android) throw fail(503, 'Push is not configured');
-            await notifier.save(subscriber);
-          } else if (req.method === 'DELETE') await notifier.remove(subscriber.id);
+            await notifier.save(subscriber, owner);
+          } else if (req.method === 'DELETE') await notifier.remove(subscriber.id, owner);
           else throw fail(405, 'Method not allowed');
           return json(200, { ok: true });
         }
@@ -232,7 +304,7 @@ function createBackend({ env = process.env, db = createDb(env), senders } = {}) 
           await clients.claim(client, body.id);
           const request = { ...input, id: crypto.randomUUID(), clientHash, clientRequestId: body.id };
           const inserted = await db.query('INSERT INTO requests(id,user_id,client_request_id,created_at,data) VALUES($1,$2,$3,$4,$5) ON CONFLICT (user_id, client_request_id) DO NOTHING RETURNING id', [request.id, client.id, body.id, request.createdAt, JSON.stringify(request)]);
-          if (inserted.length) await db.query('INSERT INTO outbox(request_id,attempts,next_at,completed) VALUES($1,0,$2,$3)', [request.id, now, '[]']);
+          if (inserted.length) { await enqueue('request', request.id); await sync.bump('requests', 'clients', `c:${client.id}`); }
           const stored = rowOf((await db.query('SELECT data FROM requests WHERE user_id=$1 AND client_request_id=$2', [client.id, body.id]))[0]);
           // The demand is already durable. Serverless functions freeze after the response, so send the
           // notification now (bounded) instead of in the background; failures stay queued for retry.
@@ -250,7 +322,7 @@ function createBackend({ env = process.env, db = createDb(env), senders } = {}) 
           const request = found && rowOf(found);
           if (!request || (!session && (!client || request.userId !== client.id))) throw fail(404, 'Not found');
           if (req.method === 'GET') return json(200, publicRow(request));
-          if (req.method === 'DELETE') { admin(); await db.query('DELETE FROM outbox WHERE request_id=$1', [request.id]); await db.query('DELETE FROM requests WHERE id=$1', [request.id]); return json(200, { ok: true }); }
+          if (req.method === 'DELETE') { admin(); await db.query('DELETE FROM outbox WHERE request_id=$1', [request.id]); await db.query('DELETE FROM requests WHERE id=$1', [request.id]); await sync.bump('requests', `c:${request.userId}`); return json(200, { ok: true }); }
           if (req.method === 'PATCH') {
             const body = await readBody(req), patch = {};
             const fields = session ? ['status', 'autoSent', 'aiResult', 'finalResult', 'historyId'] : ['aiResult', 'historyId'];
@@ -261,12 +333,20 @@ function createBackend({ env = process.env, db = createDb(env), senders } = {}) 
             }
             // The client's own auto-send workflow may only mark its own completed render.
             if (!session && body.status === 'delivered' && body.autoSent === true && body.aiResult) { patch.status = 'delivered'; patch.autoSent = true; }
+            let wasDelivered = false;
             const result = await db.tx(async q => {
               const current = rowOf((await q('SELECT data FROM requests WHERE id=$1 FOR UPDATE', [request.id]))[0]);
+              wasDelivered = current.status === 'delivered';
               const next = Object.assign(current, patch);
               await q('UPDATE requests SET data=$1 WHERE id=$2', [JSON.stringify(next), request.id]);
               return next;
             });
+            await sync.bump('requests', `c:${result.userId}`);
+            // The admin delivered the final design: tell its owner on every device they enabled notifications on.
+            if (session && result.status === 'delivered' && !wasDelivered) {
+              await enqueue('ready', `ready:${result.id}`, { id: result.id, name: result.name, whatsapp: result.whatsapp, audience: { type: 'client', id: result.userId } });
+              await withTimeout(pump(`ready:${result.id}`), Number(env.PUSH_WAIT_MS) || 8000);
+            }
             if (result.status === 'delivered' && result.historyId && (result.finalResult || result.aiResult)) {
               const owner = await clients.user(result.userId);
               const item = owner && (await clients.listSpace(owner, 'history')).find(row => row.id === result.historyId);

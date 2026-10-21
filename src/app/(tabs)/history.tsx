@@ -4,8 +4,10 @@ import { Pressable, View } from 'react-native';
 import { router } from '@/hooks/useLeaveGuard';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { useStore, useMe } from '@/store/useStore';
-import { useLocal } from '@/store/useLocal';
-import { useT } from '@/i18n';
+import { ME } from '@/data/repositories';
+import { usePrefs } from '@/store/usePrefs';
+import { setNotifications, useOwnerPushStatus } from '@/lib/notifications';
+import { useLang, useT } from '@/i18n';
 import { ConfirmSheet } from '@/components/ui/Sheet';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { GridSelector } from '@/components/ui/GridSelector';
@@ -23,9 +25,13 @@ export default function History() {
   const me = useMe();
   const userId = useUserSession(s => s.user?.id);
   const history = useStore((s) => s.history).filter((h) => h.userId === userId).sort((a, b) => b.createdAt - a.createdAt);
-  const chats = useStore((s) => s.conversations).filter((c) => c.userId === (userId || 'usr_me')).sort((a, b) => b.updatedAt - a.updatedAt);
+  const chats = useStore((s) => s.conversations).filter((c) => c.userId === (userId || ME)).sort((a, b) => b.updatedAt - a.updatedAt);
   const tools = useStore((s) => s.tools);
-  const { notifications, bannerDismissed, set } = useLocal();
+  const prefs = usePrefs((s) => s.client);
+  const devicePush = useOwnerPushStatus('client');
+  const lang = useLang((s) => s.lang);
+  // The saved choice follows the person to every device; on this device the banner also disappears once it is subscribed.
+  const showBanner = !!userId && !!prefs && prefs.notifications !== true && !prefs.bannerDismissed && devicePush !== 'enabled' && devicePush !== 'unsupported' && devicePush !== 'unconfigured';
   const [tab, setTab] = useViewState<'designs' | 'chats'>('tab', 'designs');
   const [selecting, setSelecting] = useViewState('selecting', false);
   const [sel, setSel] = useViewState<string[]>('sel', []);
@@ -38,7 +44,12 @@ export default function History() {
     await useStore.getState().removeMany(tab === 'designs' ? 'history' : 'conversations', sel);
     exit();
   };
-  const enableNotif = () => { set({ notifications: true, bannerDismissed: true }); toast(t('notif.enabled')); };
+  const enableNotif = async () => {
+    try {
+      const status = await setNotifications('client', true, lang);
+      toast(t(status === 'enabled' ? 'notif.enabled' : status === 'blocked' ? 'push.blocked' : 'push.error'));
+    } catch { toast(t('push.error')); }
+  };
 
   const header = (
     <View className="flex-row items-center justify-between h-14">
@@ -61,12 +72,12 @@ export default function History() {
         <Txt className={`font-bold ${sel.length ? 'text-white' : 'text-muted'}`}>{t('history.deleteSel')}</Txt>
       </Pressable>
     ) : undefined}>
-      {!notifications && !bannerDismissed ? (
+      {showBanner ? (
         <Animated.View entering={FadeInDown.duration(300)} className="flex-row items-center gap-3 bg-soft rounded-2xl p-3.5 mt-1 mb-3">
           <Icon name="bell-ring-outline" size={22} tone="fg" />
           <Txt className="flex-1 text-[13px] font-semibold leading-[18px]">{t('history.banner')}</Txt>
-          <Pressable testID="banner-enable" onPress={enableNotif} className="w-8 h-8 rounded-full bg-primary items-center justify-center"><Icon name="chevron-right" size={18} tone="onprimary" flip /></Pressable>
-          <Pressable onPress={() => set({ bannerDismissed: true })} hitSlop={8}><Icon name="close" size={16} tone="muted" /></Pressable>
+          <Pressable testID="banner-enable" onPress={() => { void enableNotif(); }} className="w-8 h-8 rounded-full bg-primary items-center justify-center"><Icon name="chevron-right" size={18} tone="onprimary" flip /></Pressable>
+          <Pressable testID="banner-dismiss" onPress={() => { void usePrefs.getState().save('client', { bannerDismissed: true }); }} hitSlop={8}><Icon name="close" size={16} tone="muted" /></Pressable>
         </Animated.View>
       ) : null}
 

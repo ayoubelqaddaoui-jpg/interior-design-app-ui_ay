@@ -2,10 +2,12 @@ import { useUserSession } from './useUserSession';
 import { create } from 'zustand';
 import type { CollMap, CollName, DocMap, DocName, AppUser } from '@/data/types';
 import { repos, docs, ME } from '@/data/repositories';
+import { backendEnabled } from '@/lib/backend';
+import { contentSnapshot, lastContentWrite } from '@/data/repositories/remoteContent';
+import { collectionBaselines, docBaselines } from '@/store/drafts';
 import { moveSelection } from '@/lib/reorder';
 import { uid } from '@/lib/uid';
-import { defaultAssistant, defaultBranding, defaultSettings, defaultTheme, seedPalettes } from '@/data/mock/seed';
-import { storage } from '@/data/mock/storage';
+import { defaultAssistant, defaultBranding, defaultSettings, defaultTheme } from '@/data/mock/seed';
 
 type Colls = { [K in CollName]: CollMap[K][] };
 
@@ -14,6 +16,8 @@ interface State extends Colls {
   ready: boolean;
   init(): Promise<void>;
   reload(name: CollName): Promise<void>;
+  /** Re-reads the shared content (collections + settings documents) from the database, keeping unsaved admin drafts. */
+  reloadContent(): Promise<void>;
   create<K extends CollName>(name: K, input: Omit<CollMap[K], 'id'> & { id?: string }): Promise<CollMap[K]>;
   update<K extends CollName>(name: K, id: string, patch: Partial<CollMap[K]>): Promise<void>;
   remove(name: CollName, id: string): Promise<void>;
@@ -26,10 +30,12 @@ interface State extends Colls {
 
 const empty: Colls = {
   tabs: [], tools: [], roomTypes: [], styles: [], palettes: [], sections: [], categories: [],
-  inspirations: [], models: [], users: [], requests: [], history: [], conversations: [],
+  inspirations: [], models: [], plans: [], users: [], requests: [], history: [], conversations: [],
 };
 let initializing: Promise<void> | null = null;
 const COLLS = Object.keys(empty) as CollName[];
+const CONTENT_COLLS = ['tabs', 'tools', 'roomTypes', 'styles', 'palettes', 'sections', 'categories', 'inspirations', 'models', 'plans'] as const;
+const DOC_NAMES = ['branding', 'theme', 'assistant', 'settings'] as const;
 
 /** One shared store: user app and admin panel read/write the same state, so changes appear instantly. */
 export const useStore = create<State>((set, get) => ({
@@ -43,17 +49,7 @@ export const useStore = create<State>((set, get) => ({
     // Start independent reads together rather than serializing startup behind migration.
     const listsPromise = Promise.all(COLLS.map((c) => repos[c].list()));
     const docsPromise = Promise.all([docs.branding.get(), docs.theme.get(), docs.assistant.get(), docs.settings.get()]);
-    // One-time upgrade: preserve existing edits/order and never resurrect deleted presets.
-    if (!await storage.read<boolean>('migration:curated-palettes-v2')) {
-      const palettes = await repos.palettes.list();
-      const curated = seedPalettes().filter((p) => !['pal_surprise', 'pal_neutral', 'pal_earth', 'pal_blue', 'pal_pastel', 'pal_green'].includes(p.id));
-      let order = palettes.length ? Math.max(...palettes.map((p) => p.order)) + 1 : 0;
-      for (const palette of curated) if (!palettes.some((p) => p.id === palette.id)) await repos.palettes.create({ ...palette, order: order++ });
-      await storage.write('migration:curated-palettes-v2', true);
-    }
     const lists = await listsPromise;
-    // Include newly migrated palettes without re-reading unrelated collections.
-    lists[COLLS.indexOf('palettes')] = await repos.palettes.list();
     const [branding, theme, assistant, settings] = await docsPromise;
     const patch: Record<string, unknown> = {};
     COLLS.forEach((c, i) => (patch[c] = lists[i]));
@@ -63,6 +59,17 @@ export const useStore = create<State>((set, get) => ({
   },
   async reload(name) {
     set({ [name]: await repos[name].list() } as Partial<State>);
+  },
+  async reloadContent() {
+    const startedAt = Date.now();
+    const [snapshot] = await Promise.all([contentSnapshot(true)]);
+    // An admin save finished while this was in flight: the snapshot may predate it, the next sync tick fixes it.
+    if (lastContentWrite() >= startedAt) return;
+    const patch: Record<string, unknown> = {};
+    for (const name of CONTENT_COLLS) if (!collectionBaselines.has(name)) patch[name] = [...(snapshot.collections[name] ?? [])];
+    const doc = { ...get().doc };
+    for (const name of DOC_NAMES) if (!docBaselines.has(name)) (doc as any)[name] = await docs[name].get();
+    set({ ...(patch as Partial<State>), doc });
   },
   async create(name, input) {
     const item = await (repos[name] as any).create(input);
@@ -104,10 +111,13 @@ export const nextOrder = (a: { order: number }[]) => (a.length ? Math.max(...a.m
 /** Current (single, device-local) end user. */
 export const useMe = (): AppUser | undefined => {
   const user = useUserSession(s => s.user);
-  const guest = useStore(s => s.users.find(u => u.id === ME));
+  // Only the offline demo has a local guest profile; with the backend a person exists once they sign in.
+  const guest = useStore(s => (backendEnabled ? undefined : s.users.find(u => u.id === ME)));
   return user ?? guest;
 };
 export async function reloadUserSpace() {
   await Promise.all(['history', 'conversations', 'requests'].map(name => useStore.getState().reload(name as CollName)));
 }
+/** Admin panel access: a server-validated admin session (backend) or the seeded admin profile (demo). */
+export const useIsAdmin = () => useStore((s) => backendEnabled || s.users.some((u) => u.role === 'admin'));
 export { uid };

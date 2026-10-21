@@ -12,6 +12,7 @@ export const pushTexts = {
     error: 'Impossible d’enregistrer les notifications. Vérifiez la connexion et reconnectez-vous à l’administration.',
     privacy: 'Le nom et le téléphone du client peuvent apparaître sur l’écran verrouillé de cet appareil.',
     loginHint: 'Identifiants par défaut : admin / admin.', call: 'Appeler',
+    clientLogin: 'Créez votre première conception pour activer les notifications de votre compte.',
     demandError: 'Votre demande n’a pas pu être confirmée. Réessayez : une nouvelle tentative ne crée pas de doublon.',
   },
   ar: {
@@ -27,6 +28,7 @@ export const pushTexts = {
     error: 'تعذر تسجيل الإشعارات. تحقق من الاتصال وسجّل الدخول مجددًا إلى الإدارة.',
     privacy: 'قد يظهر اسم العميل ورقم هاتفه على شاشة قفل هذا الجهاز.',
     loginHint: 'بيانات الدخول الافتراضية: admin / admin.', call: 'اتصال',
+    clientLogin: 'أنشئ أول تصميم لك لتفعيل إشعارات حسابك.',
     demandError: 'تعذر تأكيد طلبك. حاول مجددًا؛ إعادة المحاولة لا تنشئ طلبًا مكررًا.',
   },
   dar: {
@@ -42,6 +44,7 @@ export const pushTexts = {
     error: 'ما قدرناش نسجلو الإشعارات. تأكد من الاتصال وعاود دخل للإدارة.',
     privacy: 'سمية الزبون والنمرة ديالو يقدرو يبانوا فشاشة القفل ديال هاد الجهاز.',
     loginHint: 'بيانات الدخول الافتراضية: admin / admin.', call: 'اتصل',
+    clientLogin: 'دير أول تصميم ديالك باش تفعّل إشعارات الحساب ديالك.',
     demandError: 'ما قدرناش نأكدو الطلب ديالك. عاود جرّب؛ المحاولة ما كتزيدش طلب مكرر.',
   },
 };

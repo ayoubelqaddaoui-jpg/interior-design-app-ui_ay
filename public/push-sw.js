@@ -1,10 +1,12 @@
 /* Push-only worker: deliberately does not intercept fetch or cache private app/admin data. */
 self.addEventListener('install', event => event.waitUntil(self.skipWaiting()));
 self.addEventListener('activate', event => event.waitUntil(self.clients.claim()));
+// Admin requests/leads and the client's own history ("design ready") are the only pages a notification may open.
+const OPENABLE = ['/admin/requests', '/admin/users', '/history'];
 function safeUrl(value) {
   try {
     const url = new URL(value, self.location.origin);
-    return url.origin === self.location.origin && url.pathname === '/admin/requests' ? url.href : new URL('/admin/requests', self.location.origin).href;
+    return url.origin === self.location.origin && OPENABLE.includes(url.pathname) ? url.href : new URL('/admin/requests', self.location.origin).href;
   } catch { return new URL('/admin/requests', self.location.origin).href; }
 }
 self.addEventListener('push', event => {

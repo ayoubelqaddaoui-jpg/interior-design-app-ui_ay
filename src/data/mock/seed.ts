@@ -149,6 +149,13 @@ export const seedModels = (): T.AiModel[] =>
     { id: 'mdl_sdxl', name: 'Stable Diffusion XL', provider: 'Stability AI', modelName: 'sdxl-1.0', apiKey: '', enabled: false, isDefault: false },
   ]);
 
+export const seedPlans = (): T.Plan[] =>
+  ord([
+    { id: 'plan_weekly', title: L('فالسيمانة', 'أسبوعي', 'Hebdomadaire'), price: '49 MAD', period: L('/سيمانة', '/أسبوع', '/sem.'), popular: false },
+    { id: 'plan_monthly', title: L('فالشهر', 'شهري', 'Mensuel'), price: '149 MAD', period: L('/شهر', '/شهر', '/mois'), popular: true },
+    { id: 'plan_yearly', title: L('فالعام', 'سنوي', 'Annuel'), price: '999 MAD', period: L('/عام', '/سنة', '/an'), popular: false },
+  ]);
+
 export const ME = 'usr_me';
 export const seedUsers = (defaultCredits: number): T.AppUser[] => {
   const now = Date.now();
@@ -199,4 +206,4 @@ export const defaultAssistant = (): T.AssistantConfig => ({
   whatsappNumber: '+212600000000',
   welcome: L('مرحبا! أنا مساعد ديال التصميم الداخلي، كيفاش نقدر نعاونك؟', 'مرحبًا! كيف يمكنني مساعدتك في تصميم منزلك؟', 'Bonjour ! Comment puis-je vous aider pour votre déco ?'),
 });
-export const defaultSettings = (): T.AppSettings => ({ appSearchEnabled: true, adminSearchEnabled: true, exitConfirmationEnabled: true, defaultFreeCredits: 1, autoSendWhatsApp: false, homeShowAll: true, homeTabsVisible: true, userNavStyle: 'floating', adminNavMode: 'drawer', bulkPanels: ['tabs', 'tools', 'sections', 'categories', 'inspirations', 'styles', 'roomTypes', 'palettes', 'models'] });
+export const defaultSettings = (): T.AppSettings => ({ appSearchEnabled: true, adminSearchEnabled: true, exitConfirmationEnabled: true, defaultFreeCredits: 1, autoSendWhatsApp: false, homeShowAll: true, homeTabsVisible: true, userNavStyle: 'floating', adminNavMode: 'drawer', bulkPanels: ['tabs', 'tools', 'sections', 'categories', 'inspirations', 'styles', 'roomTypes', 'palettes', 'models', 'plans'] });

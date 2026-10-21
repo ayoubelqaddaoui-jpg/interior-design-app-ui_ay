@@ -1,6 +1,7 @@
 /**
- * Single composition root. To plug the real backend, replace the factories below
- * with implementations of the interfaces in ./types — the UI never imports mocks directly.
+ * Single composition root. With the backend enabled (the default) every repository is a thin client of the
+ * database API: content, settings, users, requests and per-user spaces have no local copy to drift from.
+ * `EXPO_PUBLIC_BACKEND_MODE=demo` swaps in AsyncStorage mocks seeded from ./mock/seed for offline demos only.
  */
 import type { DocRepositories, Repositories, Services } from './types';
 import { createMockCollection, createMockDoc } from '../mock/collection';
@@ -8,10 +9,10 @@ import * as S from '../mock/seed';
 import { backendEnabled, backendLogin } from '@/lib/backend';
 import { remoteSpace, remoteUsers } from './remoteSpace';
 import { remoteRequests } from './remoteRequests';
+import { remoteCollection, remoteDoc } from './remoteContent';
 import { mockServices } from '../mock/services';
 
-const localRequests = createMockCollection('requests', S.seedRequests);
-export const repos: Repositories = {
+const demo = (): Repositories => ({
   tabs: createMockCollection('tabs', S.seedTabs),
   tools: createMockCollection('tools', S.seedTools),
   roomTypes: createMockCollection('roomTypes', S.seedRoomTypes),
@@ -21,18 +22,36 @@ export const repos: Repositories = {
   categories: createMockCollection('categories', S.seedCategories),
   inspirations: createMockCollection('inspirations', S.seedInspirations),
   models: createMockCollection('models', S.seedModels),
-  users: backendEnabled ? remoteUsers(createMockCollection('users', () => S.seedUsers(S.defaultSettings().defaultFreeCredits))) : createMockCollection('users', () => S.seedUsers(S.defaultSettings().defaultFreeCredits)),
-  requests: backendEnabled ? remoteRequests(localRequests) : localRequests,
-  history: backendEnabled ? remoteSpace('history', createMockCollection('history', () => [])) : createMockCollection('history', () => []),
-  conversations: backendEnabled ? remoteSpace('conversations', createMockCollection('conversations', () => [])) : createMockCollection('conversations', () => []),
-};
+  plans: createMockCollection('plans', S.seedPlans),
+  users: createMockCollection('users', () => S.seedUsers(S.defaultSettings().defaultFreeCredits)),
+  requests: createMockCollection('requests', S.seedRequests),
+  history: createMockCollection('history', () => []),
+  conversations: createMockCollection('conversations', () => []),
+});
 
-export const docs: DocRepositories = {
-  branding: createMockDoc('branding', S.defaultBranding),
-  theme: createMockDoc('theme', S.defaultTheme),
-  assistant: createMockDoc('assistant', S.defaultAssistant),
-  settings: createMockDoc('settings', S.defaultSettings),
-};
+const remote = (): Repositories => ({
+  tabs: remoteCollection('tabs'),
+  tools: remoteCollection('tools'),
+  roomTypes: remoteCollection('roomTypes'),
+  styles: remoteCollection('styles'),
+  palettes: remoteCollection('palettes'),
+  sections: remoteCollection('sections'),
+  categories: remoteCollection('categories'),
+  inspirations: remoteCollection('inspirations'),
+  models: remoteCollection('models'),
+  plans: remoteCollection('plans'),
+  users: remoteUsers(),
+  requests: remoteRequests(),
+  // Signed-out visitors keep a device-only chat/history until they sign in (there is no identity to store it under).
+  history: remoteSpace('history', createMockCollection('history', () => [])),
+  conversations: remoteSpace('conversations', createMockCollection('conversations', () => [])),
+});
+
+export const repos: Repositories = backendEnabled ? remote() : demo();
+
+export const docs: DocRepositories = backendEnabled
+  ? { branding: remoteDoc('branding', S.defaultBranding), theme: remoteDoc('theme', S.defaultTheme), assistant: remoteDoc('assistant', S.defaultAssistant), settings: remoteDoc('settings', S.defaultSettings) }
+  : { branding: createMockDoc('branding', S.defaultBranding), theme: createMockDoc('theme', S.defaultTheme), assistant: createMockDoc('assistant', S.defaultAssistant), settings: createMockDoc('settings', S.defaultSettings) };
 
 export const services: Services = backendEnabled ? { ...mockServices, auth: { loginAdmin: backendLogin } } : mockServices;
 export { ME } from '../mock/seed';

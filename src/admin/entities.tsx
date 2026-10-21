@@ -167,5 +167,18 @@ const models: EntityConfig<'models'> = {
   blank: (c) => ({ name: '', provider: '', modelName: '', apiKey: '', enabled: true, isDefault: false, order: o(c, 'models'), visible: true }),
 };
 
-export const ENTITIES = { tabs, tools, sections, categories, inspirations, styles, roomTypes, palettes, models } as unknown as Record<string, EntityConfig<any>>;
+const plans: EntityConfig<'plans'> = {
+  name: 'plans', navKey: 'plans', icon: 'crown-outline', ordered: true,
+  fields: (c) => [
+    { kind: 'ltext', key: 'title', label: c.t('admin.f.title') },
+    { kind: 'text', key: 'price', label: c.t('admin.f.price'), required: true },
+    { kind: 'ltext', key: 'period', label: c.t('admin.f.period') },
+    { kind: 'bool', key: 'popular', label: c.t('admin.f.popular') },
+    ...common(c),
+  ],
+  cols: (c) => [titleCol(c), txt(c.t('admin.f.price'), (r) => `${r.price} ${c.L(r.period)}`.trim(), 1)],
+  blank: (c) => ({ title: lt(), price: '', period: lt(), popular: false, order: o(c, 'plans'), visible: true }),
+};
+
+export const ENTITIES = { tabs, tools, sections, categories, inspirations, styles, roomTypes, palettes, models, plans } as unknown as Record<string, EntityConfig<any>>;
 export const NAV_ENTITIES = Object.values(ENTITIES);

@@ -10,7 +10,8 @@ import { backendEnabled } from '@/lib/backend';
 import { services } from '@/data/repositories';
 import { useT } from '@/i18n';
 import { useLocal } from '@/store/useLocal';
-import { useStore } from '@/store/useStore';
+import { refreshAdminSession } from '@/lib/sync';
+import { useIsAdmin, useStore } from '@/store/useStore';
 
 /** Mock login — swap `services.auth` for the real backend later. Role guard lives in admin/_layout. */
 export function AdminLogin({ forbidden }: { forbidden?: boolean }) {
@@ -20,7 +21,7 @@ export function AdminLogin({ forbidden }: { forbidden?: boolean }) {
   const [pw, setPw] = useState('');
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
-  const hasAdmin = useStore((s) => s.users.some((u) => u.role === 'admin'));
+  const hasAdmin = useIsAdmin();
   const submit = async () => {
     setBusy(true); setErr('');
     const r = await services.auth.loginAdmin(email, pw);
@@ -28,7 +29,7 @@ export function AdminLogin({ forbidden }: { forbidden?: boolean }) {
     if (!r.ok) return setErr(t('admin.invalid'));
     if (!hasAdmin) return setErr(t('admin.forbidden'));
     useLocal.getState().set({ adminSession: true });
-    if (backendEnabled) await Promise.all(['users', 'requests'].map(name => useStore.getState().reload(name as 'users' | 'requests')));
+    if (backendEnabled) await Promise.all([refreshAdminSession(), ...['users', 'requests'].map(name => useStore.getState().reload(name as 'users' | 'requests'))]);
   };
   return (
     <View className="flex-1 bg-bg items-center justify-center p-5">

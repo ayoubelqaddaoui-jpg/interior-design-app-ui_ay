@@ -17,23 +17,24 @@ export function remoteSpace<T extends HistoryItem | Conversation>(kind: 'history
   };
 }
 
-/** Server clients have UUID ids; seeded/demo users are `usr_*` and live in local storage only. */
+/** Server clients have UUID ids. */
 export const isClientId = (id: string) => /^[a-f0-9]{8}-[a-f0-9-]{27}$/i.test(id);
 
-/** Keep seed/admin records and their existing logic, but route real client edits (credits, block, delete) to the backend. */
-export function remoteUsers(local: CollectionRepo<AppUser>): CollectionRepo<AppUser> {
+/** Users are the clients stored in the database; only an admin session can list or edit them. */
+export function remoteUsers(): CollectionRepo<AppUser> {
   return {
-    ...local,
     async list() {
-      const rows = await local.list();
-      if (!useLocal.getState().adminSession) return rows;
-      let clients: AppUser[];
-      try { clients = await api<AppUser[]>('/admin/clients'); }
-      catch (error) { if (error instanceof BackendError && error.status === 401 && !useLocal.getState().adminOffline) { useLocal.getState().set({ adminSession: false }); return rows; } return rows; }
-      return [...rows, ...clients];
+      if (!useLocal.getState().adminSession) return [];
+      try { return await api<AppUser[]>('/admin/clients'); }
+      catch (error) {
+        if (error instanceof BackendError && error.status === 401 && !useLocal.getState().adminOffline) useLocal.getState().set({ adminSession: false });
+        else if (!(error instanceof BackendError)) throw error;
+        return [];
+      }
     },
+    get: async id => (await api<AppUser[]>('/admin/clients')).find(row => row.id === id),
+    create: async () => { throw new BackendError(405, 'CLIENTS_SIGN_UP_THEMSELVES'); },
     async update(id, patch) {
-      if (!isClientId(id)) return local.update(id, patch);
       // Only the fields an admin may change are sent; the server validates them again.
       const body: { credits?: number; blocked?: boolean } = {};
       if (patch.credits !== undefined) body.credits = patch.credits;
@@ -42,15 +43,7 @@ export function remoteUsers(local: CollectionRepo<AppUser>): CollectionRepo<AppU
       if (useUserSession.getState().user?.id === id) useUserSession.setState({ user: row });
       return row;
     },
-    async remove(id) {
-      if (!isClientId(id)) return local.remove(id);
-      await api(`/admin/clients/${encodeURIComponent(id)}`, { method: 'DELETE' });
-    },
-    async removeMany(ids) {
-      const clients = ids.filter(isClientId);
-      if (clients.length) await api('/admin/clients/bulk', { method: 'POST', body: { ids: clients, action: 'delete' } });
-      const rest = ids.filter((id) => !isClientId(id));
-      if (rest.length) await local.removeMany(rest);
-    },
+    remove: async id => { await api(`/admin/clients/${encodeURIComponent(id)}`, { method: 'DELETE' }); },
+    async removeMany(ids) { if (ids.length) await api('/admin/clients/bulk', { method: 'POST', body: { ids, action: 'delete' } }); },
   };
 }
