@@ -11,6 +11,7 @@ import { useL, useT } from '@/i18n';
 import { useDraftDoc } from '@/hooks/useDraftDoc';
 import { FontSelector } from '@/components/admin/FontSelector';
 import { ExhibitionLayouts } from '@/components/admin/ExhibitionLayouts';
+import { LoaderSettings } from '@/components/admin/LoaderSettings';
 import { toast } from '@/store/useToast';
 import { Field } from '@/components/admin/FormModal';
 import { useStore } from '@/store/useStore';
@@ -51,6 +52,7 @@ export default function InterfaceAdmin() {
         <Txt className="font-bold text-[17px] my-3">{t('improve.exitSettings')}</Txt>
         {(['exitTitle', 'exitMessage'] as const).map((key) => <Field key={key} f={{ key, kind: 'ltext', label: t(`improve.${key}`), multiline: key === 'exitMessage' }} value={settings[key]} ctx={{ s: store, L, t }} onChange={(value) => set({ [key]: value })} />)}
       </Card>
+      <LoaderSettings settings={settings} set={set} />
       <Card className="p-3 mb-3">
         <Txt className="font-extrabold text-[17px]">{t('admin.iface.userNav')}</Txt>
         <Txt className="text-muted text-[13px] mb-4">{t('admin.iface.userNavDesc')}</Txt>

@@ -39,3 +39,10 @@ Docs: https://docs.expo.dev/eas/index.md
 - If `ios/` and `android/` directories do not exist, they are generated (Continuous Native Generation). Never create or edit them by hand — configure native behavior in `app.json` and config plugins.
 - Expo Go only includes its bundled native modules. After adding a library with native code, the app needs a development build: `npx expo run:ios|android` locally, or `eas build --profile development`.
 - Prefer recommended Expo modules over third-party libraries, and check your available skills before adding dependencies. Docs: https://docs.expo.dev/versions/latest/index.md
+
+## Releases (Android APK)
+
+Every change shipped to users must also be released for Android: after the PR is merged into `main`, publish the next
+version with a tag `vX.Y.Z` (higher than the latest one; feature → minor, fix → patch). The workflow
+`.github/workflows/android-release.yml` (source copy: `scripts/ci/android-release.yml`, keep both identical) builds the signed APK and attaches it to the GitHub Release. See
+`docs/ANDROID_RELEASES.md`. Never commit `android/` or signing keys.

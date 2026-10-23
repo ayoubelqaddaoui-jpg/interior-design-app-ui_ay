@@ -152,6 +152,9 @@ export interface AssistantConfig {
   welcome: LText;
 }
 export type UserNavStyle = 'classic' | 'floating' | 'minimal';
+/** Startup loading screen: four built-in animations or the admin's own image (GIF / SVG / PNG / WebP). */
+export type LoaderStyle = 'ring' | 'dots' | 'pulse' | 'bars' | 'custom';
+export type LoaderAnim = 'none' | 'spin' | 'pulse';
 export type AdminNavMode = 'rail' | 'drawer' | 'top';
 export interface AppSettings {
   appSearchEnabled?: boolean;
@@ -170,6 +173,16 @@ export interface AppSettings {
   arabicFont?: string;
   frenchFont?: string;
   galleryLayout?: GalleryLayout;
+  /** Startup loading screen. Off = the app paints directly (no overlay). */
+  loaderEnabled?: boolean;
+  loaderStyle?: LoaderStyle;
+  /** Hex colour; empty = the theme's ink colour. */
+  loaderColor?: string;
+  /** Image for the 'custom' style. */
+  loaderCustomUri?: string;
+  loaderCustomAnim?: LoaderAnim;
+  /** 0 = automatic: removed as soon as the first two Home cards are on screen. Otherwise the loader stays this many ms. */
+  loaderDelayMs?: number;
   /** Bulk/reorder operations must be explicitly enabled per content panel. */
   bulkPanels?: string[];
 }

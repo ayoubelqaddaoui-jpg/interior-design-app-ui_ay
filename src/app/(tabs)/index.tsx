@@ -1,5 +1,5 @@
 import { RememberScroll, useViewState } from '@/hooks/useViewState';
-import React, { useMemo } from 'react';
+import React, { useEffect, useMemo } from 'react';
 import { Pressable, View } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
 import { router } from '@/hooks/useLeaveGuard';
@@ -13,6 +13,9 @@ import { Screen } from '@/components/ui/Screen';
 import { Txt } from '@/components/ui/Txt';
 import { BrandHeader } from '@/components/BrandHeader';
 import { ToolCard } from '@/components/ToolCard';
+import { Skeleton } from '@/components/ui/Skeleton';
+import { Spinner } from '@/components/ui/Spinner';
+import { boot } from '@/lib/boot';
 
 const ALL = '__all__';
 
@@ -23,6 +26,7 @@ export default function Home() {
   const { desktop, pick } = useBp();
   const tabs = useStore((s) => s.tabs);
   const tools = useStore((s) => s.tools);
+  const contentReady = useStore((s) => s.contentReady);
   const branding = useStore((s) => s.doc.branding);
   const visibleTabs = useMemo(() => sorted(tabs).filter((x) => x.visible), [tabs]);
   const tabsVisible = useStore((s) => s.doc.settings.homeTabsVisible) !== false;
@@ -33,6 +37,10 @@ export default function Home() {
   const list = sorted(tools).filter((x) => x.visible && (x.id === target || tabId === ALL || x.tabId === tabId));
   const pills = useMemo(() => [{ id: ALL, label: t('home.all') }].concat(visibleTabs.map((x) => ({ id: x.id, label: L(x.title) }))), [visibleTabs, t, L]);
   const cols = pick(1, 2, 3);
+
+  // Startup loader (automatic mode) goes away once the first two cards have painted.
+  const count = list.length === 0 && !contentReady ? -1 : list.length;
+  useEffect(() => { boot.cards(count); }, [count]);
 
   const open = (id: string) => { useWizard.getState().start(id); router.push({ pathname: '/tool/[id]', params: { id } }); };
 
@@ -57,13 +65,20 @@ export default function Home() {
   return (
     <Screen header={header} bottomInset={16}>
       <View className="pt-3">
-        {list.length === 0 ? (
+        {list.length === 0 && !contentReady ? (
+          // Content is still on its way (first visit, nothing cached): same-size placeholders, never a false "empty" message.
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginHorizontal: -8 }}>
+            {Array.from({ length: cols }, (_, i) => (
+              <View key={i} style={{ width: `${100 / cols}%`, padding: 8 }}><Skeleton h={cols === 1 ? 200 : 230} r={16} /><View pointerEvents="none" style={{ position: 'absolute', top: 8, left: 8, right: 8, bottom: 8, alignItems: 'center', justifyContent: 'center' }}><Spinner size={36} /></View></View>
+            ))}
+          </View>
+        ) : list.length === 0 ? (
           <EmptyState icon="tools" title={t('home.empty')} />
         ) : (
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginHorizontal: -8 }}>
             {list.map((tool, i) => (
               <View key={tool.id} style={{ width: `${100 / cols}%`, padding: 8 }}>
-                <ToolCard tool={tool} index={i} height={cols === 1 ? 200 : 230} onPress={() => open(tool.id)} />
+                <ToolCard tool={tool} index={i} height={cols === 1 ? 200 : 230} onPress={() => open(tool.id)} onReady={i < 2 ? () => boot.cardPainted(i) : undefined} />
               </View>
             ))}
           </View>

@@ -1,9 +1,9 @@
 import '../global.css';
 import '@/lib/interop';
 import React, { useEffect, useState } from 'react';
-import { View, ActivityIndicator } from 'react-native';
+import { View } from 'react-native';
 import { Stack, usePathname } from 'expo-router';
-import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { GestureRoot } from '@/components/GestureRoot';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { ensureFont } from '@/lib/fonts';
 import { loadIcons } from '@/components/ui/Icon';
@@ -21,49 +21,85 @@ import { ToastHost } from '@/components/ui/Toast';
 import { startPreferenceBindings, startSync } from '@/lib/sync';
 import { setCurrentPath } from '@/lib/route';
 import { backendEnabled } from '@/lib/backend';
-import { prefetchContent } from '@/data/repositories/remoteContent';
+import { prefetchContent, primeContent } from '@/data/repositories/remoteContent';
+import { boot, loaderConfig } from '@/lib/boot';
+import { resolveTokens } from '@/theme/tokens';
+import { BootOverlay } from '@/components/BootOverlay';
+import { defaultSettings, defaultTheme } from '@/data/mock/seed';
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
+// Native / dev: until the real settings arrive the React loader uses the defaults (web production uses index.html's loader).
+{ const tokens = resolveTokens(defaultTheme()); boot.preset(loaderConfig(defaultSettings(), tokens)); }
 // Public content does not depend on who is signed in: download it now, not after the session answers.
 if (backendEnabled) prefetchContent();
 
-/** All content comes from the database: when the server cannot be reached yet, keep trying instead of showing an empty app. */
+/** Startup reads are retried a few times with a short pause; after that the app opens anyway and the sync loop keeps checking. */
+const INIT_ATTEMPTS = 4;
+const INIT_DELAY_MS = 800;
+/** A font still missing after this long never holds the first paint: text swaps to it when it arrives (font-display: swap). */
+const FONT_WAIT_MS = 800;
 async function initWithRetry() {
-  for (let attempt = 0; ; attempt++) {
-    try { await useStore.getState().init(); return; }
-    catch { await new Promise((resolve) => setTimeout(resolve, Math.min(1000 * 2 ** attempt, 8000))); }
+  for (let attempt = 0; attempt < INIT_ATTEMPTS; attempt++) {
+    try { await useStore.getState().init(); return true; }
+    catch { if (attempt < INIT_ATTEMPTS - 1) await new Promise((resolve) => setTimeout(resolve, INIT_DELAY_MS * (attempt + 1))); }
   }
+  return false;
 }
+const withTimeout = (work: Promise<unknown>, ms: number) => Promise.race([work.catch(() => {}), new Promise((resolve) => setTimeout(resolve, ms))]);
+/** Home and the public catalogue screens open on cached/downloaded content; every other screen is built from the signed-in person's data. */
+const catalogueOnly = (path: string) => path === '/' || path === '' || path.startsWith('/tool') || path.startsWith('/explore');
 
 export default function RootLayout() {
   const initialPath = usePathname();
   setCurrentPath(initialPath);
-  const [booted, setBooted] = useState(false);
+  const [shown, setShown] = useState(false);
+  // True once startup reads finished, or gave up after the bounded retries (the sync loop keeps trying afterwards).
+  const [settled, setSettled] = useState(false);
   const ready = useStore((s) => s.ready);
+  const contentReady = useStore((s) => s.contentReady);
   const loaded = useLocal((s) => s.loaded);
   const lang = useLang((s) => s.lang);
+  const home = initialPath === '/' || initialPath === '';
 
   useEffect(() => {
-    // Icons and the default fonts download while data loads, so nothing waits for them afterwards.
-    void initLang().then(() => ensureFont(useLang.getState().lang === 'fr' ? 'Inter' : 'Tajawal')).catch(() => {});
     void ensureFont('Lora').catch(() => {});
     void loadIcons().catch(() => {});
     (async () => {
-      // Device flags first: init() decides from them whether to load the admin-only lists.
-      await Promise.all([initLang(), useLocal.getState().load().then(() => useUserSession.getState().refresh()).then(initWithRetry)]);
-      const { settings, branding } = useStore.getState().doc;
+      // Device-only reads (storage): no network.
+      await Promise.all([initLang(), useLocal.getState().load()]);
+      if (backendEnabled) {
+        // Cached / HTML-shell copy of the public content, if any: real content on the very first frame.
+        try { if (await primeContent()) await useStore.getState().applyContent(); } catch { /* no cached copy: placeholders */ }
+      }
+      // Session and full data load in the background; nothing below waits for them on Home.
+      void (async () => {
+        await useUserSession.getState().refresh();
+        const done = await initWithRetry();
+        if (!done) useStore.setState({ contentReady: true });
+        setSettled(true);
+      })();
+      const settings = useStore.getState().doc.settings;
       const family = useLang.getState().lang === 'fr' ? settings.frenchFont || 'Inter' : settings.arabicFont || 'Tajawal';
-      // Resolve actual persisted fonts once, before text mounts: no fallback/swap layout shift.
-      await Promise.allSettled([ensureFont(family), ensureFont(branding.logoFont || 'Inter'), loadIcons(), ...(initialPath.startsWith('/admin') ? [ensureFont(settings.arabicFont || 'Tajawal'), ensureFont(settings.frenchFont || 'Inter')] : [])]);
-      setBooted(true);
+      await withTimeout(Promise.all([ensureFont(family), ensureFont(useStore.getState().doc.branding.logoFont || 'Inter'), ...(initialPath.startsWith('/admin') ? [ensureFont(settings.arabicFont || 'Tajawal'), ensureFont(settings.frenchFont || 'Inter')] : [])]), FONT_WAIT_MS);
+      setShown(true);
       SplashScreen.hideAsync().catch(() => {});
     })();
   // Startup route is captured once; later navigation must never restart initialization.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const ok = ready && loaded && booted;
-  // Real-time sync + database-backed preferences start once the first data is on screen.
+  // Home never waits for the network. Deep links wait only for what that screen reads.
+  const ok = shown && loaded && (home || ready || settled || (catalogueOnly(initialPath) && contentReady));
+  // Startup loader (admin: Interface > Loading screen): follows the saved settings and theme, and learns when the first screen is up.
+  const settings = useStore((s) => s.doc.settings);
+  const theme = useStore((s) => s.doc.theme);
+  useEffect(() => {
+    if (!contentReady) return;
+    const tokens = resolveTokens(theme);
+    boot.configure(loaderConfig(settings, tokens));
+  }, [contentReady, settings, theme]);
+  useEffect(() => { if (ok) boot.shown(home); }, [ok, home]);
+  // Real-time sync + database-backed preferences start as soon as the first screen is up.
   useEffect(() => {
     if (!ok) return;
     const stopPrefs = startPreferenceBindings();
@@ -71,12 +107,12 @@ export default function RootLayout() {
     return () => { stopSync(); stopPrefs(); };
   }, [ok]);
   return (
-    <GestureHandlerRootView style={{ flex: 1 }}>
+    <GestureRoot style={{ flex: 1 }}>
       <SafeAreaProvider>
         <ThemeProvider>
           {/* `direction` flips every flex-row on native + web: Darija/Arabic = RTL, French = LTR. */}
           <View style={{ flex: 1, direction: isRtl(lang) ? 'rtl' : 'ltr' } as any}>
-            {ready && loaded ? (
+            {ok ? (
               <>
               <Stack screenOptions={{ headerShown: false, animation: 'slide_from_right', contentStyle: { backgroundColor: 'transparent' } }}>
                 <Stack.Screen name="(tabs)" />
@@ -87,13 +123,14 @@ export default function RootLayout() {
               <PushNavigationHost />
               </>
             ) : null}
-            {/* The first screen's code downloads behind this loader while fonts settle: no text ever flashes in a fallback font. */}
-            {!ok ? <View pointerEvents="auto" className="absolute inset-0 items-center justify-center bg-bg"><ActivityIndicator /></View> : null}
+            {/* Deep links to screens built from signed-in data wait behind a plain background; the loader (if enabled) covers it. */}
+            {!ok ? <View pointerEvents="auto" className="absolute inset-0 bg-bg" /> : null}
+            <BootOverlay />
             <ToastHost />
             <UnsavedChangesHost />
           </View>
         </ThemeProvider>
       </SafeAreaProvider>
-    </GestureHandlerRootView>
+    </GestureRoot>
   );
 }

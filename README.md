@@ -3,6 +3,10 @@
 One Expo codebase (SDK 57, Expo Router, TypeScript, NativeWind, Zustand, i18next, Reanimated).
 Hybrid app: content repositories retain their existing mock/local implementation. User sessions, credits, image spaces, requests and admin notifications use the Postgres-backed API in `server/` (served on Vercel through `api/index.js`).
 
+## Android app (APK)
+Download the latest APK from **[GitHub Releases](https://github.com/elqaddaoui/interior-design-app-ui/releases/latest)**.
+**Every update is released as a new version:** after merging into `main`, push a tag `vX.Y.Z` (or Actions → *Android release* → *Run workflow*); the workflow builds the signed APK and publishes the release. One-time setup (move the workflow file into `.github/workflows/`, signing key): [`docs/ANDROID_RELEASES.md`](docs/ANDROID_RELEASES.md).
+
 ## Run
 ```bash
 npm install
@@ -47,6 +51,9 @@ The starter content in `server/seed-content.json` (generated from `src/data/mock
 ### Real-time sync
 `GET /api/sync` returns a version counter per kind of data (`content`, `requests`, `clients`, one per client, one per admin). Every device polls it every 4 s (and on focus/visibility/reconnect) and reloads only what changed: admin edits appear on all admin and client devices, new leads/requests appear on every admin device, credits/blocks/history reach the owning client on all of their devices. Unsaved admin drafts are never overwritten. (Websockets are not available on Vercel serverless; polling is the portable real-time channel. The same poll also retries failed notifications.)
 
+### Uploaded images
+Admin uploads (data URLs) larger than 4 KB are stored in the `media` table and replaced by `/api/media/<hash>.<ext>` (immutable, CDN-cacheable), so `/api/content` stays small. Rows saved before this are migrated once on the next start (`media_migrated` marker).
+
 ## Services to replace later (`Services`)
 `render` (AI image generation), `chat` (assistant LLM), `upload` (file storage), `whatsapp` (send design) are still mock services; `auth` is the real admin login.
 
@@ -59,6 +66,15 @@ The starter content in `server/seed-content.json` (generated from `src/data/mock
 5. Optional environment variables: `CRON_SECRET` (protects `/api/push/pump`), `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` / `VAPID_SUBJECT` (otherwise generated and stored in the database), `FCM_SERVICE_ACCOUNT_JSON` (native Android app). See `server/.env.example`.
 6. Node 22.13+ is required (`engines` in `package.json`).
 
+### Performance (first load)
+What keeps the first load fast, and where to change it:
+- **The UI never waits for the network.** Home renders as soon as the device-only reads (language, local flags) are done. Public content comes from, in order: the HTML shell's early request (`scripts/postexport.js` injects a `fetch('/api/content')` that starts before the JavaScript has downloaded), the copy cached on the device (`dwira:v1:content-cache`, public content only, never an admin copy), then the network. With nothing cached, Home shows same-size placeholders (never a false "empty" message). The session check runs in the background. Startup reads retry at most 4 times (0.8 s, 1.6 s, 2.4 s) and then the app stays open; the 4 s sync loop keeps trying.
+- **API.** `vercel.json` pins the function to `fra1` (next to the Neon database in Frankfurt). `/api/health` and the public `/api/content` skip the session/auth lookup (an admin credential or `?a=1` is the only thing that triggers it). Tables are created only when the stored schema marker (`settings.schema_version`, a hash of the schema) differs, not on every cold start.
+- **`/api/content` caching.** Public responses carry `Cache-Control: public, max-age=0, s-maxage=<CONTENT_S_MAXAGE>, stale-while-revalidate=<10x>`; `CONTENT_S_MAXAGE` defaults to 30 seconds, is capped at 300 and `0` disables shared caching. Admin requests (`?a=1`, or any credential) are always `private, no-store`: that copy contains provider API keys. After an admin edit, devices reload with `?v=<version>` so the short CDN window never delays a change they were told about.
+- **Bundle.** The gesture library (before/after slider, admin drag handle) is an on-demand chunk; the web gesture root no longer imports it. The Home route chunks are preloaded from the shell. Unused packages were removed.
+- **Assets.** The web icon font is subset to the glyphs the app can use (`python3 scripts/subset-icons.py`, needs `fonttools` + `brotli`; re-run it if you add icons to `ICON_CHOICES` or the seed). The first Home card image is `fetchpriority=high`/eager and preloaded by the shell once the content names it. Hashed files under `/_expo` and `/assets` are immutable for a year; icons/favicon are cached for 30 days, the manifest for a day, `index.html` always revalidates (same policy in `vercel.json` and the Node server).
+- **Measure it.** `node scripts/measure-lcp.js <url> --runs=5 [--images=allow] [--cpu=4]` runs a cold-cache load on emulated Slow-4G (1.6 Mbit/s, 150 ms RTT) and prints LCP/FCP/bytes. It is a lab figure from your machine; use PageSpeed Insights for the real one.
+
 ### Notifications
 - **Admins** get a push for every **new lead** (a client signing up) and every **new render request**, on every device where notifications are enabled. Open `/admin` -> **Activer les notifications** then **Envoyer un test**.
 - **Clients** get a push when their design is **ready** (the admin marks the request delivered), on every device where they enabled notifications.
@@ -70,10 +86,11 @@ Why `scripts/postexport.js`? Vercel never serves paths containing a `node_module
 (icon font, router icons) to `dist/assets/node_modules/...`. The script moves them to `dist/assets/vendor/...` and rewrites all references, injects the web app manifest/iOS meta tags, and fails the build if any are left.
 
 ## Admin: interface options
+- **Loading screen** (`/admin/interface`): on/off, 4 built-in styles (ring, dots, pulse, bars) + a custom image (GIF/SVG/PNG/WebP, optional spin/pulse), colour, and display time. **Auto** (default) removes it as soon as the first two Home cards have painted; a fixed time (0.5-10 s) keeps it that long after opening. The same loader is shown whatever page the app opens on, and every in-app spinner (buttons, loading placeholders, large images) uses it too (`<Spinner/>`). On web it is plain HTML/SVG in `index.html` (painted before any JavaScript, see `src/lib/loaderShell.js`); native draws the same styles in React (`BootOverlay`).
 - **Dashboard**: 7/30/90-day KPIs with trend vs the previous period, activity chart, search (requests, users, tools, styles, rooms), best features, recent activity, quick actions.
 - **Interface & menus** (`/admin/interface`): choose the user bottom bar (Classic / Floating / Minimal) and the admin menu (icon rail / collapsible drawer / grouped horizontal menu). Stored in `settings.userNavStyle` / `settings.adminNavMode`.
 - **Home tabs** (`/admin/tabs`): switch "show all tools by default" (`settings.homeShowAll`). When on, Home opens on an "All" pill and tabs are an optional filter.
-- **Theme** (`/admin/theme`): 20 presets in 6 categories + custom (5 colours, the rest derived with contrast checks).
+- **Theme** (`/admin/theme`): 20 presets in 6 categories + custom (5 colours, the rest derived with contrast checks). The phone status bar and Android navigation bar take the theme background colour (`SystemBars`).
 - The AI model is chosen by the admin per tool (default model fallback); end users never see a model picker.
 
 ## Local full stack

@@ -4,6 +4,7 @@
  *  - local development and automated tests: PGlite (real Postgres compiled to WASM, no install, in-process)
  * Both speak the same SQL, so tests exercise the exact queries production runs.
  */
+const crypto = require('node:crypto');
 const connectionString = env => env.DATABASE_URL || env.POSTGRES_URL || env.POSTGRES_PRISMA_URL || env.POSTGRES_URL_NON_POOLING || '';
 
 const SCHEMA = `
@@ -36,6 +37,7 @@ CREATE TABLE IF NOT EXISTS content_items (coll TEXT NOT NULL, id TEXT NOT NULL, 
 CREATE TABLE IF NOT EXISTS content_docs (name TEXT PRIMARY KEY, data TEXT NOT NULL, updated_at BIGINT NOT NULL);
 CREATE TABLE IF NOT EXISTS admin_prefs (admin_id TEXT PRIMARY KEY, data TEXT NOT NULL DEFAULT '{}');
 CREATE TABLE IF NOT EXISTS sync_state (key TEXT PRIMARY KEY, version BIGINT NOT NULL);
+CREATE TABLE IF NOT EXISTS media (id TEXT PRIMARY KEY, mime TEXT NOT NULL, data TEXT NOT NULL, created_at BIGINT NOT NULL);
 `;
 
 async function openPg(url) {
@@ -76,6 +78,21 @@ async function openLite(dataDir) {
   };
 }
 
+/**
+ * Marker row written after the schema was applied. Its value is a hash of SCHEMA, so editing the schema above makes the
+ * next start re-apply it once, while every other cold start only pays for ONE cheap SELECT instead of ~40 DDL statements
+ * (each of which takes a lock on a database that may have just woken up).
+ */
+const SCHEMA_VERSION = crypto.createHash('sha1').update(SCHEMA).digest('hex').slice(0, 12);
+async function ensureSchema(db) {
+  try {
+    const marker = (await db.query("SELECT value FROM settings WHERE key='schema_version'"))[0];
+    if (marker?.value === SCHEMA_VERSION) return;
+  } catch { /* no settings table yet: fresh database */ }
+  await db.exec(SCHEMA);
+  await db.query("INSERT INTO settings(key,value) VALUES('schema_version',$1) ON CONFLICT (key) DO UPDATE SET value=EXCLUDED.value", [SCHEMA_VERSION]);
+}
+
 /** Lazily opened and schema-initialised once per process (one cold start on Vercel). */
 function createDb(env = process.env) {
   const url = connectionString(env);
@@ -85,7 +102,7 @@ function createDb(env = process.env) {
     // because serverless instances have no durable disk.
     if (!url && env.VERCEL) throw Object.assign(new Error('DATABASE_NOT_CONFIGURED'), { status: 503 });
     const db = url ? await openPg(url) : await openLite(env.PGLITE_DIR === ':memory:' ? undefined : env.PGLITE_DIR || (env.NODE_ENV === 'test' ? undefined : require('node:path').join(__dirname, 'data', 'pglite')));
-    await db.exec(SCHEMA);
+    await ensureSchema(db);
     return db;
   })().catch(error => { ready = undefined; throw error; });
   return {

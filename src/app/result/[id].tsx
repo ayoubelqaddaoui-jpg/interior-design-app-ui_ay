@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { Suspense, useState } from 'react';
 import { Pressable, View } from 'react-native';
 import { Redirect, useLocalSearchParams } from 'expo-router';
 import { useUserSession } from '@/store/useUserSession';
@@ -12,7 +12,8 @@ import { Icon } from '@/components/ui/Icon';
 import { PageHeader } from '@/components/ui/StepHeader';
 import { Screen } from '@/components/ui/Screen';
 import { Txt } from '@/components/ui/Txt';
-import { BeforeAfter } from '@/components/result/BeforeAfter';
+// Own chunk (with the gesture library): the slider code is only downloaded when a result is opened.
+const BeforeAfter = React.lazy(() => import('@/components/GestureKit').then((m) => ({ default: m.BeforeAfter })));
 import { saveImage, shareImage } from '@/lib/share';
 import { toast } from '@/store/useToast';
 import { freshUser } from '@/lib/credits';
@@ -66,7 +67,9 @@ export default function Result() {
     <Screen max={desktop ? 760 : 620} header={<PageHeader title={L(tool?.title) || t('result.title')} onBack={goBack} />}
       footer={<View className="flex-row gap-2.5"><Button testID="btn-regen" title={t('result.regenerate')} icon="refresh" variant="outline" onPress={regenerate} className="flex-1" /><Button testID="btn-new" title={t('result.newDesign')} onPress={newDesign} className="flex-1" /></View>}>
       <Animated.View entering={FadeInDown.duration(400)}>
-        <BeforeAfter before={item.before} after={item.after} hold={hold} aspect={desktop ? 1.25 : 0.9} />
+        <Suspense fallback={<View style={{ aspectRatio: desktop ? 1.25 : 0.9, width: '100%' }} className="rounded-3xl overflow-hidden bg-surface2" />}>
+          <BeforeAfter before={item.before} after={item.after} hold={hold} aspect={desktop ? 1.25 : 0.9} />
+        </Suspense>
       </Animated.View>
       <View className="flex-row items-center justify-between mt-4">
         <Pressable testID="btn-before" onPressIn={() => setHold(true)} onPressOut={() => setHold(false)} {...NO_CONTEXT_MENU} style={NO_SELECT} className={`flex-row items-center gap-2 h-11 px-5 rounded-full border ${hold ? 'bg-ink border-ink' : 'bg-surface border-line'} active:opacity-90`}>

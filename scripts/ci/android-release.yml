@@ -1,0 +1,137 @@
+# INSTALL: this file must live at .github/workflows/android-release.yml to run (see docs/ANDROID_RELEASES.md, "Activate").
+# Builds a signed Android APK and publishes it on GitHub Releases.
+#
+# New release: bump nothing by hand, just push a tag   ->   git tag v1.2.0 && git push origin v1.2.0
+# (or run it from the Actions tab: "Android release" -> Run workflow -> version 1.2.0).
+# Every release gets its own page with the APK attached; Android installs it as an update of the previous one.
+name: Android release
+
+on:
+  push:
+    tags: ['v*.*.*']
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version (e.g. 1.2.0). The tag v<version> and its release are created.'
+        required: true
+
+permissions:
+  contents: write
+
+concurrency:
+  group: android-release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      # The phone app talks to the deployed API (same database as the website). Override with a repository variable.
+      EXPO_PUBLIC_API_URL: ${{ vars.EXPO_PUBLIC_API_URL || 'https://interior-design-app-ui-7rjz.vercel.app/api' }}
+      NODE_OPTIONS: --max-old-space-size=6144
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Version
+        id: v
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then VERSION="${{ github.event.inputs.version }}"; else VERSION="${GITHUB_REF_NAME#v}"; fi
+          if ! echo "$VERSION" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'; then echo "Invalid version: $VERSION (expected X.Y.Z)"; exit 1; fi
+          IFS=. read -r MA MI PA <<< "$VERSION"
+          # Android only installs an update whose versionCode is higher: 1.2.3 -> 1020300, plus the run number so a rebuild
+          # of the same version is still accepted.
+          CODE=$(( MA * 1000000 + MI * 10000 + PA * 100 + (GITHUB_RUN_NUMBER % 100) ))
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "code=$CODE" >> "$GITHUB_OUTPUT"
+          echo "tag=v$VERSION" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - uses: android-actions/setup-android@v3
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Generate the native Android project
+        env:
+          APP_VERSION: ${{ steps.v.outputs.version }}
+          APP_VERSION_CODE: ${{ steps.v.outputs.code }}
+        run: npx expo prebuild --platform android --clean --no-install
+
+      - name: Signing key
+        id: key
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          # A stable key is required for phones to accept new versions as updates. Without the secrets the build still
+          # succeeds with a temporary key, but every such APK must be uninstalled before installing the next one.
+          if [ -n "$KEYSTORE_BASE64" ]; then
+            echo "$KEYSTORE_BASE64" | base64 -d > android/app/release.keystore
+            echo "stable=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::warning::ANDROID_KEYSTORE_BASE64 is not set: using a temporary signing key (see docs/ANDROID_RELEASES.md)."
+            KEYSTORE_PASSWORD=dwira-temp KEY_ALIAS=dwira KEY_PASSWORD=dwira-temp
+            keytool -genkeypair -v -keystore android/app/release.keystore -storepass "$KEYSTORE_PASSWORD" -keypass "$KEY_PASSWORD" \
+              -alias "$KEY_ALIAS" -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Dwira, O=Dwira, C=MA"
+            echo "stable=false" >> "$GITHUB_OUTPUT"
+          fi
+          {
+            echo "DWIRA_STORE_FILE=release.keystore"
+            echo "DWIRA_STORE_PASSWORD=$KEYSTORE_PASSWORD"
+            echo "DWIRA_KEY_ALIAS=$KEY_ALIAS"
+            echo "DWIRA_KEY_PASSWORD=$KEY_PASSWORD"
+          } >> android/gradle.properties
+          # Release signing config (the generated project signs release builds with the debug key by default).
+          node scripts/android-signing.js android/app/build.gradle
+
+      - name: Build APK
+        working-directory: android
+        run: ./gradlew assembleRelease --no-daemon -PreactNativeArchitectures=arm64-v8a,armeabi-v7a
+
+      - name: Collect APK
+        id: apk
+        run: |
+          OUT="Dwira-${{ steps.v.outputs.version }}.apk"
+          cp android/app/build/outputs/apk/release/app-release.apk "$OUT"
+          echo "file=$OUT" >> "$GITHUB_OUTPUT"
+          ls -la "$OUT"
+
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.v.outputs.tag }}
+          VERSION: ${{ steps.v.outputs.version }}
+          FILE: ${{ steps.apk.outputs.file }}
+          STABLE: ${{ steps.key.outputs.stable }}
+        run: |
+          NOTE="Android APK for Dwira $VERSION.
+
+          **Install:** open this page on the phone, download \`$FILE\`, then allow *Install unknown apps* for your browser when Android asks."
+          if [ "$STABLE" != "true" ]; then NOTE="$NOTE
+
+          > Signed with a temporary key: uninstall the previous Dwira APK before installing this one."; fi
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" "$FILE" --clobber
+          else
+            # Creates the tag too when started manually from the Actions tab.
+            gh release create "$TAG" "$FILE" --title "Dwira $VERSION" --notes "$NOTE" --generate-notes --target "$GITHUB_SHA" --latest
+          fi
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.apk.outputs.file }}
+          path: ${{ steps.apk.outputs.file }}

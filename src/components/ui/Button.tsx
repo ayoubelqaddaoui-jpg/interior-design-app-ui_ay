@@ -1,5 +1,6 @@
 import React from 'react';
-import { ActivityIndicator, Pressable } from 'react-native';
+import { Pressable } from 'react-native';
+import { Spinner } from './Spinner';
 import { Txt } from './Txt';
 import { Icon } from './Icon';
 
@@ -25,7 +26,7 @@ export function Button({ title, onPress, variant = 'primary', size = 'md', disab
       onPress={off ? undefined : onPress}
       className={`${SIZE[size]} rounded-full items-center justify-center flex-row gap-2 active:opacity-80 ${off && variant !== 'ghost' && variant !== 'outline' ? 'bg-surface2' : BG[variant]} ${full ? 'self-stretch' : ''} ${className}`}
     >
-      {loading ? <ActivityIndicator size="small" /> : icon ? <Icon name={icon} size={18} color={variant === 'danger' && !off ? '#FFFFFF' : undefined} tone={off ? 'muted' : variant === 'primary' ? 'onprimary' : variant === 'ink' ? 'onink' : 'fg'} /> : null}
+      {loading ? <Spinner size={size === 'sm' ? 18 : 22} /> : icon ? <Icon name={icon} size={18} color={variant === 'danger' && !off ? '#FFFFFF' : undefined} tone={off ? 'muted' : variant === 'primary' ? 'onprimary' : variant === 'ink' ? 'onink' : 'fg'} /> : null}
       <Txt className={`font-bold ${size === 'sm' ? 'text-[13px]' : 'text-[16px]'} ${off ? 'text-muted' : FG[variant]}`}>{title}</Txt>
     </Pressable>
   );

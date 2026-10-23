@@ -1,6 +1,6 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Dimensions, Platform, Text, View, type StyleProp, type ViewStyle } from 'react-native';
-import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import type { DragLatest } from './DragHandleDetector';
 import Animated, { useAnimatedStyle, useSharedValue, withTiming, type SharedValue } from 'react-native-reanimated';
 import { Icon } from '@/components/ui/Icon';
 import { useVerticalScroller } from '@/hooks/useViewState';
@@ -36,6 +36,8 @@ export interface Reorder {
  * - The page auto-scrolls near the window edges, and the dragged row keeps following the pointer while it scrolls.
  * `commit(ids, targetId)` is called once on drop; the caller owns the actual ordering.
  */
+/** Loaded on demand (own chunk with the gesture library); until it arrives the handle is shown, just not draggable yet. */
+const DragHandleDetector = React.lazy(() => import('@/components/GestureKit').then((m) => ({ default: m.DragHandleDetector })));
 let lastDragEnd = 0;
 /** True for a moment after a drag ends, so the release is not also treated as a tap on the row. */
 export function justDragged() { return Date.now() - lastDragEnd < 350; }
@@ -152,32 +154,6 @@ export function DragRow({ id, reorder, layout = 'list', handleStyle, handleTone 
   const reset = useCallback(() => { tx.set(0); ty.set(0); lift.set(withTiming(0, { duration: 120 })); }, [tx, ty, lift]);
   useEffect(() => { latest.reorder = reorder; });
 
-  const pan = useMemo(() => {
-    const gesture = Gesture.Pan().runOnJS(true).enabled(reorder.enabled).shouldCancelWhenOutside(false).minDistance(Platform.OS === 'web' ? 2 : 0)
-      .onStart(() => {
-        latest.committed = false;
-        last.x = 0; last.y = 0;
-        latest.reorder.follow.current = place;
-        lift.set(withTiming(1, { duration: 120 }));
-        void latest.reorder.begin(id);
-      })
-      .onUpdate((e) => {
-        last.x = e.translationX; last.y = e.translationY;
-        tx.set(e.translationX);
-        place();
-        latest.reorder.update(e.absoluteX, e.absoluteY);
-      })
-      .onEnd((_e, success) => { latest.committed = success; })
-      .onFinalize(() => {
-        if (latest.reorder.follow.current === place) latest.reorder.follow.current = null;
-        reset();
-        // Only a drag that really started has an active state to finish.
-        if (latest.reorder.drag?.id === id) latest.reorder.finish(latest.committed);
-      });
-    // On touch screens the handle waits briefly so a swipe that merely starts on it still scrolls the page.
-    return Platform.OS === 'web' ? gesture : gesture.activateAfterLongPress(140);
-  }, [reorder.enabled, id, place, reset, lift, tx, last, latest]);
-
   const motion = useAnimatedStyle(() => ({
     transform: [{ translateX: tx.value }, { translateY: ty.value }, { scale: 1 + 0.03 * lift.value }],
     opacity: 1 - 0.06 * lift.value,
@@ -191,16 +167,19 @@ export function DragRow({ id, reorder, layout = 'list', handleStyle, handleTone 
     },
   } : {};
 
+  const handleView = (
+    <View testID={`drag-${id}`} accessible accessibilityRole="adjustable" accessibilityLabel={t('improve.dragHandle')}
+      accessibilityActions={onMove ? [{ name: 'increment', label: t('admin.crud.up') }, { name: 'decrement', label: t('admin.crud.down') }] : undefined}
+      onAccessibilityAction={(e) => { if (e.nativeEvent.actionName === 'increment') onMove?.(-1); else if (e.nativeEvent.actionName === 'decrement') onMove?.(1); }}
+      {...(keys as object)} {...NO_CONTEXT_MENU}
+      style={[NO_SELECT, { width: 32, height: 40, alignItems: 'center', justifyContent: 'center', borderRadius: 12, cursor: active ? 'grabbing' : 'grab', touchAction: 'none' } as unknown as ViewStyle, handleTone === 'light' ? { backgroundColor: 'rgba(0,0,0,0.45)', height: 32, borderRadius: 16 } : null, handleStyle]}>
+      <Icon name="drag" size={22} color={handleTone === 'light' ? '#fff' : undefined} tone="muted" />
+    </View>
+  );
   const handle = reorder.enabled ? (
-    <GestureDetector gesture={pan}>
-      <View testID={`drag-${id}`} accessible accessibilityRole="adjustable" accessibilityLabel={t('improve.dragHandle')}
-        accessibilityActions={onMove ? [{ name: 'increment', label: t('admin.crud.up') }, { name: 'decrement', label: t('admin.crud.down') }] : undefined}
-        onAccessibilityAction={(e) => { if (e.nativeEvent.actionName === 'increment') onMove?.(-1); else if (e.nativeEvent.actionName === 'decrement') onMove?.(1); }}
-        {...(keys as object)} {...NO_CONTEXT_MENU}
-        style={[NO_SELECT, { width: 32, height: 40, alignItems: 'center', justifyContent: 'center', borderRadius: 12, cursor: active ? 'grabbing' : 'grab', touchAction: 'none' } as unknown as ViewStyle, handleTone === 'light' ? { backgroundColor: 'rgba(0,0,0,0.45)', height: 32, borderRadius: 16 } : null, handleStyle]}>
-        <Icon name="drag" size={22} color={handleTone === 'light' ? '#fff' : undefined} tone="muted" />
-      </View>
-    </GestureDetector>
+    <Suspense fallback={handleView}>
+      <DragHandleDetector id={id} reorder={reorder} place={place} reset={reset} lift={lift} tx={tx} last={last} latest={latest as DragLatest}>{handleView}</DragHandleDetector>
+    </Suspense>
   ) : null;
 
   return (

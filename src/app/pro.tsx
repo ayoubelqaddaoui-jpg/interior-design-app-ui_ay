@@ -16,6 +16,9 @@ import { toast } from '@/store/useToast';
 import { sorted, useMe, useStore } from '@/store/useStore';
 import { freshUser, needsPro } from '@/lib/credits';
 
+/** While a generation waits on this paywall, the server balance is re-read this often. */
+const CREDIT_POLL_MS = 3000;
+
 /** Paywall UI only: no real payment. */
 export default function Pro() {
   const { t } = useT();
@@ -26,16 +29,27 @@ export default function Pro() {
   const plans = sorted(useStore((s) => s.plans)).filter((p) => p.visible);
   const { generation } = useLocalSearchParams<{ generation?: string }>();
   const canContinue = generation === '1' && !!useWizard.getState().photoUri && (me?.credits ?? 0) > 0;
-  // Credits may have been granted by the admin after this screen was reached: re-check and leave the paywall if so.
+  // Credits granted by the admin WHILE this screen is open resume the same generation automatically:
+  //  - the balance is watched live (the sync loop refreshes the session when the admin changes this client),
+  //  - and re-read from the server every few seconds while waiting, so nothing depends on the person tapping.
+  const waiting = generation === '1';
+  const resumed = useRef(false);
+  const credits = me?.credits ?? 0;
+  const freeUsed = !!me?.freeUsed;
+  const signedIn = !!me;
   useEffect(() => {
-    let alive = true;
-    void freshUser().then((u) => {
-      if (!alive || !u || needsPro(u) || generation !== '1' || !useWizard.getState().photoUri) return;
-      useWizard.setState({ proSeen: true });
-      router.replace('/render');
-    });
-    return () => { alive = false; };
-  }, [generation]);
+    if (!waiting || resumed.current || !signedIn || needsPro({ credits, freeUsed: freeUsed ? 1 : 0 }) || !useWizard.getState().photoUri) return;
+    resumed.current = true;
+    useWizard.setState({ proSeen: true });
+    toast(t('improve.creditsArrived'));
+    router.replace('/render');
+  }, [waiting, signedIn, credits, freeUsed, t]);
+  useEffect(() => {
+    if (!waiting) return;
+    void freshUser();
+    const timer = setInterval(() => { if (!resumed.current) void freshUser(); }, CREDIT_POLL_MS);
+    return () => clearInterval(timer);
+  }, [waiting]);
   const [picked, setPlan] = useViewState<string>('plan', '');
   const plan = plans.some((p) => p.id === picked) ? picked : (plans.find((p) => p.popular) ?? plans[0])?.id;
   const [confirming, setConfirming] = useState(false);

@@ -103,7 +103,7 @@ function createBackend({ env = process.env, db = createDb(env), senders } = {}) 
     const origin = req.headers.origin;
     res.setHeader('X-Content-Type-Options', 'nosniff');
     res.setHeader('Referrer-Policy', 'no-referrer');
-    const json = (status, value) => sendBuffer(req, res, status, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }, Buffer.from(JSON.stringify(value)));
+    const json = (status, value, extra) => sendBuffer(req, res, status, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', ...extra }, Buffer.from(JSON.stringify(value)));
     try {
       const url = new URL(req.url, 'http://localhost');
       if (url.pathname.startsWith('/api/')) {
@@ -114,6 +114,15 @@ function createBackend({ env = process.env, db = createDb(env), senders } = {}) 
         res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Demand-Token, X-Dwira-Native, X-User-Token');
         res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PATCH, DELETE, OPTIONS');
         if (req.method === 'OPTIONS') { res.writeHead(204); return res.end(); }
+        // Uploaded images (moved out of the content JSON): content-addressed, so cached forever by browsers and the CDN.
+        // Served before rate limiting: one Home screen can show dozens of them.
+        if (url.pathname.startsWith('/api/media/') && (req.method === 'GET' || req.method === 'HEAD')) {
+          if (!db.configured()) throw fail(503, 'DATABASE_NOT_CONFIGURED');
+          await content.ensureSeed();
+          const file = await content.media.read(url.pathname.slice('/api/media/'.length));
+          if (!file) throw fail(404, 'NOT_FOUND');
+          return sendBuffer(req, res, 200, { 'Content-Type': file.mime, 'Cache-Control': 'public, max-age=31536000, s-maxage=31536000, immutable', ...(file.mime === 'image/svg+xml' ? { 'Content-Security-Policy': "default-src 'none'; style-src 'unsafe-inline'" } : {}) }, file.body);
+        }
         const bucketName = url.pathname === '/api/admin/login' ? 'login' : url.pathname === '/api/sync' ? 'sync' : 'api';
         const key = `${address(req)}:${bucketName}`;
         const now = Date.now();
@@ -133,6 +142,22 @@ function createBackend({ env = process.env, db = createDb(env), senders } = {}) 
 
         const rawCookie = req.headers.cookie?.split(';').map(value => value.trim()).find(value => value.startsWith('dwira_admin='))?.slice(12);
         const sessionToken = req.headers.authorization?.replace(/^Bearer /, '') || rawCookie;
+
+        // Public content: no session, no client lookup. Only a request that carries an admin credential (or says it is an
+        // admin panel request with ?a=1) pays for the session query, because only admins may see provider API keys.
+        if (url.pathname === '/api/content' && req.method === 'GET') {
+          const adminAsked = !!sessionToken || url.searchParams.has('a');
+          const admin = !!sessionToken && !!(await db.query('SELECT 1 FROM admin_sessions WHERE token_hash=$1 AND expires_at>$2', [hash(sessionToken), now]))[0];
+          const snapshot = await content.snapshot(admin);
+          // The shared CDN may keep the PUBLIC copy briefly (CONTENT_S_MAXAGE seconds, default 30, 0 disables) and serve a stale one while it
+          // refreshes in the background, so visitors rarely wait on a database that may be waking up. Browsers always revalidate
+          // (max-age=0). Admin copies (which contain secrets) and admin-panel requests are never stored. Edits stay visible quickly:
+          // /api/sync bumps the content version and the app then asks for /api/content?v=<version>, a distinct cache key.
+          const maxAge = Math.max(0, Math.min(300, Number(env.CONTENT_S_MAXAGE ?? 30) || 0));
+          const cacheable = !adminAsked && maxAge > 0;
+          return json(200, snapshot, { 'Cache-Control': cacheable ? `public, max-age=0, s-maxage=${maxAge}, stale-while-revalidate=${maxAge * 10}` : 'private, no-store' });
+        }
+
         const session = sessionToken && (await db.query('SELECT token_hash,admin_id FROM admin_sessions WHERE token_hash=$1 AND expires_at>$2', [hash(sessionToken), now]))[0];
         const adminId = session?.admin_id;
         const admin = () => { if (!session) throw fail(401, 'Admin login required'); };
@@ -167,7 +192,6 @@ function createBackend({ env = process.env, db = createDb(env), senders } = {}) 
           if (waiting) await withTimeout(pump(), 9000);
           return json(200, { content: versions.content, requests: session ? versions.requests : null, clients: session ? versions.clients : null, admin: session ? versions[`a:${adminId}`] : null, client: client ? versions[`c:${client.id}`] : null, user: client ? { id: client.id, blocked: !!client.blocked } : null, isAdmin: !!session });
         }
-        if (url.pathname === '/api/content' && req.method === 'GET') return json(200, await content.snapshot(!!session));
         if (url.pathname === '/api/prefs') {
           const asAdmin = url.searchParams.get('as') === 'admin';
           if (asAdmin) admin(); else requireUser();
@@ -367,8 +391,10 @@ function createBackend({ env = process.env, db = createDb(env), senders } = {}) 
         if (/^\/(assets|_expo)\//.test(pathname) || /\.(js|json|ico|webmanifest|png)$/.test(pathname)) throw fail(404, 'Asset not found');
         file = path.join(root, 'index.html');
       }
-      const types = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.webmanifest': 'application/manifest+json', '.png': 'image/png', '.ico': 'image/x-icon', '.woff2': 'font/woff2', '.ttf': 'font/ttf', '.svg': 'image/svg+xml' };
-      sendFile(req, res, file, { 'Content-Type': types[path.extname(file)] || 'application/octet-stream', 'Cache-Control': /^\/(assets|_expo)\//.test(pathname) ? 'public, max-age=31536000, immutable' : 'no-cache' });
+      const types = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.webmanifest': 'application/manifest+json', '.png': 'image/png', '.ico': 'image/x-icon', '.woff2': 'font/woff2', '.ttf': 'font/ttf', '.svg': 'image/svg+xml', '.webp': 'image/webp', '.avif': 'image/avif', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg' };
+      // Same policy as vercel.json: hashed bundles/fonts never change; icons, favicon and manifest are long-lived; the HTML shell always revalidates.
+      const cache = /^\/(assets|_expo)\//.test(pathname) ? 'public, max-age=31536000, immutable' : /^\/(icons\/|favicon\.ico$)/.test(pathname) ? 'public, max-age=2592000, stale-while-revalidate=86400' : pathname === '/manifest.webmanifest' ? 'public, max-age=86400, stale-while-revalidate=604800' : 'no-cache';
+      sendFile(req, res, file, { 'Content-Type': types[path.extname(file)] || 'application/octet-stream', 'Cache-Control': file.endsWith('index.html') ? 'no-cache' : cache });
     } catch (error) {
       if (!error.status) console.warn('API error', error.code || error.message);
       if (!res.headersSent) json(error.status || 500, { error: error.status ? error.message : 'Server error' }); else res.end();

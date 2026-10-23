@@ -47,7 +47,7 @@ export async function syncOnce() {
     if (seen.content === undefined) seen.content = contentVersion();
     const jobs: Promise<unknown>[] = [];
 
-    if (changed('content')) jobs.push(store.reloadContent());
+    if (changed('content')) jobs.push(store.reloadContent(state.content));
     // The server forgot the admin session (expired / signed out elsewhere): leave the admin panel.
     if (local.adminSession && !local.adminOffline && !state.isAdmin) { useLocal.getState().set({ adminSession: false }); usePrefs.getState().clear('admin'); }
     if (state.isAdmin && local.adminSession) {

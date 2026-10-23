@@ -7,6 +7,16 @@ import { useLocal } from '@/store/useLocal';
 // Native builds still need an absolute URL. Demo mode must be explicitly requested.
 const BASE = (process.env.EXPO_PUBLIC_API_URL?.trim() || (Platform.OS === 'web' ? '/api' : '')).replace(/\/+$/, '');
 export const backendEnabled = process.env.EXPO_PUBLIC_BACKEND_MODE !== 'demo' && !!BASE;
+/** True when the API lives on the same origin as the page (web default): only then can the HTML shell prefetch it. */
+export const sameOriginApi = Platform.OS === 'web' && BASE === '/api';
+/** Uploaded images are served by the API at `/api/media/...`. The web resolves that against the page; native apps need the API host. */
+const MEDIA_ORIGIN = Platform.OS === 'web' ? '' : BASE.replace(/\/api$/, '');
+export const resolveMediaUrls = <T,>(value: T): T => {
+  if (!MEDIA_ORIGIN) return value;
+  const walk = (node: unknown): unknown => typeof node === 'string' ? (node.startsWith('/api/media/') ? MEDIA_ORIGIN + node : node)
+    : Array.isArray(node) ? node.map(walk) : node && typeof node === 'object' ? Object.fromEntries(Object.entries(node).map(([k, v]) => [k, walk(v)])) : node;
+  return walk(value) as T;
+};
 export class BackendError extends Error { constructor(public status: number, public code = '') { super(code || `Backend HTTP ${status}`); } }
 export const isBackendUnavailable = (error: unknown) => error instanceof BackendError && (error.code === 'BACKEND_UNAVAILABLE' || error.status >= 500);
 let deviceToken: string | null = null;

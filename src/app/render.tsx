@@ -90,6 +90,23 @@ export default function RenderPage() {
   // One generation per mount; retries explicitly call run with the same claim ID.
   }, []);
 
+  // A failed attempt (e.g. no credits yet, network) recovers by itself: the balance is re-read while the error is shown, and
+  // as soon as the admin's credits arrive (live sync or this check) the same generation restarts without any tap.
+  const credits = me?.credits ?? 0;
+  const lastCredits = useRef(credits);
+  useEffect(() => {
+    const grew = credits > lastCredits.current;
+    lastCredits.current = credits;
+    if (failed && grew) { setState({ progress: 0, stage: 0 }); void run(); }
+  // run() reads everything from the stores; re-run only when the balance changes.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [credits, failed]);
+  useEffect(() => {
+    if (!failed) return;
+    const timer = setInterval(() => { void freshUser(); }, 3000);
+    return () => clearInterval(timer);
+  }, [failed]);
+
   if (!w.photoUri || !me) return <Redirect href="/" />;
 
   const cancel = () => router.dismissTo('/');
