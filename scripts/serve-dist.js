@@ -6,7 +6,7 @@ const path = require('path');
 const { sendFile } = require('../server/compress');
 const root = path.resolve(__dirname, '..', 'dist');
 const port = Number(process.env.PORT || process.argv[2] || 4173);
-const types = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.png': 'image/png', '.jpg': 'image/jpeg', '.ico': 'image/x-icon', '.woff2': 'font/woff2', '.ttf': 'font/ttf', '.svg': 'image/svg+xml', '.mp4': 'video/mp4' };
+const types = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.png': 'image/png', '.jpg': 'image/jpeg', '.ico': 'image/x-icon', '.woff2': 'font/woff2', '.ttf': 'font/ttf', '.svg': 'image/svg+xml', '.mp4': 'video/mp4', '.webp': 'image/webp', '.avif': 'image/avif', '.webmanifest': 'application/manifest+json' };
 http.createServer((req, res) => {
   let url;
   try { url = decodeURIComponent(req.url.split('?')[0]); } catch { res.writeHead(400); return res.end('Invalid URL'); }
@@ -21,5 +21,6 @@ http.createServer((req, res) => {
   const headers = { 'Content-Type': types[path.extname(file)] || 'application/octet-stream' };
   if (path.extname(file) === '.html') headers['Cache-Control'] = 'no-cache';
   else if (/^\/(?:_expo|assets)\//.test(url)) headers['Cache-Control'] = 'public, max-age=31536000, immutable';
+  else if (/^\/(?:icons\/|favicon\.ico$)/.test(url)) headers['Cache-Control'] = 'public, max-age=2592000, stale-while-revalidate=86400';
   sendFile(req, res, file, headers);
 }).listen(port, '0.0.0.0', () => console.log(`dist served on http://localhost:${port}`));

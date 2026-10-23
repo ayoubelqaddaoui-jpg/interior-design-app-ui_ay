@@ -2,6 +2,7 @@ import React, { createContext, useContext, useEffect, useMemo } from 'react';
 import { Platform, View } from 'react-native';
 import { vars } from 'nativewind';
 import { StatusBar } from 'expo-status-bar';
+import { SystemBars } from '@/components/SystemBars';
 import { useStore } from '@/store/useStore';
 import { resolveTokens, toVars, type Tokens } from './tokens';
 import type { ThemeConfig } from '@/data/types';
@@ -42,6 +43,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     <ThemeCtx.Provider value={ctx}>
       <View style={ctx.style} className="flex-1 bg-bg">
         <StatusBar style={ctx.dark ? 'light' : 'dark'} />
+        <SystemBars />
         {children}
       </View>
     </ThemeCtx.Provider>

@@ -14,10 +14,14 @@ type Colls = { [K in CollName]: CollMap[K][] };
 interface State extends Colls {
   doc: DocMap;
   ready: boolean;
+  /** True once real content (cached copy or network) is in the store. Until then screens show placeholders, never an "empty" state. */
+  contentReady: boolean;
   init(): Promise<void>;
+  /** Puts the content snapshot already held in memory (cache / HTML shell / last download) into the store without any network call. */
+  applyContent(): Promise<void>;
   reload(name: CollName): Promise<void>;
   /** Re-reads the shared content (collections + settings documents) from the database, keeping unsaved admin drafts. */
-  reloadContent(): Promise<void>;
+  reloadContent(version?: number): Promise<void>;
   create<K extends CollName>(name: K, input: Omit<CollMap[K], 'id'> & { id?: string }): Promise<CollMap[K]>;
   update<K extends CollName>(name: K, id: string, patch: Partial<CollMap[K]>): Promise<void>;
   remove(name: CollName, id: string): Promise<void>;
@@ -42,6 +46,15 @@ export const useStore = create<State>((set, get) => ({
   ...empty,
   doc: { branding: defaultBranding(), theme: defaultTheme(), assistant: defaultAssistant(), settings: defaultSettings() },
   ready: false,
+  contentReady: false,
+  async applyContent() {
+    const snapshot = await contentSnapshot(false);
+    const patch: Record<string, unknown> = {};
+    for (const name of CONTENT_COLLS) if (!collectionBaselines.has(name)) patch[name] = [...(snapshot.collections[name] ?? [])];
+    const doc = { ...get().doc };
+    for (const name of DOC_NAMES) if (!docBaselines.has(name)) (doc as any)[name] = await docs[name].get();
+    set({ ...(patch as Partial<State>), doc, contentReady: true });
+  },
   async init() {
     if (get().ready) return;
     if (initializing) return initializing;
@@ -53,23 +66,24 @@ export const useStore = create<State>((set, get) => ({
     const [branding, theme, assistant, settings] = await docsPromise;
     const patch: Record<string, unknown> = {};
     COLLS.forEach((c, i) => (patch[c] = lists[i]));
-    set({ ...(patch as Colls), doc: { branding, theme, assistant, settings }, ready: true });
+    set({ ...(patch as Colls), doc: { branding, theme, assistant, settings }, ready: true, contentReady: true });
     })().finally(() => { initializing = null; });
     return initializing;
   },
   async reload(name) {
     set({ [name]: await repos[name].list() } as Partial<State>);
   },
-  async reloadContent() {
+  async reloadContent(version) {
     const startedAt = Date.now();
-    const [snapshot] = await Promise.all([contentSnapshot(true)]);
+    // `version` is the counter the server announced through /api/sync: asking for that exact version bypasses any short-lived shared cache.
+    const [snapshot] = await Promise.all([contentSnapshot(true, version)]);
     // An admin save finished while this was in flight: the snapshot may predate it, the next sync tick fixes it.
     if (lastContentWrite() >= startedAt) return;
     const patch: Record<string, unknown> = {};
     for (const name of CONTENT_COLLS) if (!collectionBaselines.has(name)) patch[name] = [...(snapshot.collections[name] ?? [])];
     const doc = { ...get().doc };
     for (const name of DOC_NAMES) if (!docBaselines.has(name)) (doc as any)[name] = await docs[name].get();
-    set({ ...(patch as Partial<State>), doc });
+    set({ ...(patch as Partial<State>), doc, contentReady: true });
   },
   async create(name, input) {
     const item = await (repos[name] as any).create(input);

@@ -1,5 +1,6 @@
 const fs = require('node:fs');
 const path = require('node:path');
+const { createMedia } = require('./media');
 const fail = (status, message) => Object.assign(new Error(message), { status });
 
 /** Collections and documents that make up the app content. The database is their only source of truth. */
@@ -26,7 +27,27 @@ function createContent(db, sync) {
       for (const [coll, rows] of Object.entries(seed.collections)) for (const row of rows) await q('INSERT INTO content_items(coll,id,data,updated_at) VALUES($1,$2,$3,$4) ON CONFLICT DO NOTHING', [coll, row.id, JSON.stringify(row), now]);
       for (const [name, doc] of Object.entries(seed.docs)) await q('INSERT INTO content_docs(name,data,updated_at) VALUES($1,$2,$3) ON CONFLICT DO NOTHING', [name, JSON.stringify(doc), now]);
     });
-  })().catch(error => { seeded = undefined; throw error; });
+  })().then(migrateMedia).catch(error => { seeded = undefined; throw error; });
+
+  /**
+   * Once per database: rows saved before media storage existed may hold multi-megabyte inline images. Move them out so the
+   * public content JSON stays small (the 1.7 MB /api/content measured on the preview came from one uploaded room image).
+   */
+  const media = createMedia(db);
+  async function migrateMedia() {
+    if ((await db.query("SELECT 1 FROM settings WHERE key='media_migrated'"))[0]) return;
+    let moved = 0;
+    for (const row of await db.query("SELECT coll,id,data FROM content_items WHERE data LIKE '%data:image/%'")) {
+      const { value, changed } = await media.externalize(JSON.parse(row.data));
+      if (changed) { await db.query('UPDATE content_items SET data=$1 WHERE coll=$2 AND id=$3', [JSON.stringify(value), row.coll, row.id]); moved++; }
+    }
+    for (const row of await db.query("SELECT name,data FROM content_docs WHERE data LIKE '%data:image/%'")) {
+      const { value, changed } = await media.externalize(JSON.parse(row.data));
+      if (changed) { await db.query('UPDATE content_docs SET data=$1 WHERE name=$2', [JSON.stringify(value), row.name]); moved++; }
+    }
+    await db.query("INSERT INTO settings(key,value) VALUES('media_migrated',$1) ON CONFLICT (key) DO NOTHING", [String(Date.now())]);
+    if (moved) await sync.bump('content');
+  }
 
   /** Provider API keys are only ever returned to an authenticated admin. */
   const hideSecrets = row => ({ ...row, apiKey: '' });
@@ -34,15 +55,16 @@ function createContent(db, sync) {
   async function snapshot(isAdmin) {
     await ensureSeed();
     const collections = Object.fromEntries(COLLECTIONS.map(name => [name, []]));
-    for (const row of await db.query('SELECT coll,data FROM content_items')) {
+    // Three independent reads: one round trip of waiting instead of three in a row.
+    const [itemRows, docRows, versions] = await Promise.all([db.query('SELECT coll,data FROM content_items'), db.query('SELECT name,data FROM content_docs'), sync.read(['content'])]);
+    for (const row of itemRows) {
       if (!collections[row.coll]) continue;
       const item = JSON.parse(row.data);
       collections[row.coll].push(row.coll === 'models' && !isAdmin ? hideSecrets(item) : item);
     }
     const docs = {};
-    for (const row of await db.query('SELECT name,data FROM content_docs')) docs[row.name] = JSON.parse(row.data);
-    const version = (await sync.read(['content'])).content;
-    return { version, collections, docs };
+    for (const row of docRows) docs[row.name] = JSON.parse(row.data);
+    return { version: versions.content, collections, docs };
   }
 
   async function putItem(coll, id, body) {
@@ -50,7 +72,7 @@ function createContent(db, sync) {
     if (!ID.test(id)) throw fail(400, 'Invalid id');
     if (!body || typeof body !== 'object' || Array.isArray(body)) throw fail(400, 'Invalid item');
     await ensureSeed();
-    const item = { ...body, id };
+    const item = { ...(await media.externalize(body)).value, id };
     if (coll === 'models' && item.apiKey === undefined) {
       const old = (await db.query('SELECT data FROM content_items WHERE coll=$1 AND id=$2', [coll, id]))[0];
       if (old) item.apiKey = JSON.parse(old.data).apiKey ?? '';
@@ -70,9 +92,10 @@ function createContent(db, sync) {
     if (!DOCS.includes(name)) throw fail(404, 'Unknown document');
     if (!patch || typeof patch !== 'object' || Array.isArray(patch)) throw fail(400, 'Invalid document');
     await ensureSeed();
+    const clean = (await media.externalize(patch)).value; // outside the transaction: it writes media rows itself
     const next = await db.tx(async q => {
       const row = (await q('SELECT data FROM content_docs WHERE name=$1 FOR UPDATE', [name]))[0];
-      const merged = { ...(row ? JSON.parse(row.data) : {}), ...patch };
+      const merged = { ...(row ? JSON.parse(row.data) : {}), ...clean };
       await q('INSERT INTO content_docs(name,data,updated_at) VALUES($1,$2,$3) ON CONFLICT (name) DO UPDATE SET data=EXCLUDED.data, updated_at=EXCLUDED.updated_at', [name, JSON.stringify(merged), Date.now()]);
       return merged;
     });
@@ -111,6 +134,6 @@ function createContent(db, sync) {
     return next;
   }
   const getDoc = async name => { await ensureSeed(); const row = (await db.query('SELECT data FROM content_docs WHERE name=$1', [name]))[0]; return row ? JSON.parse(row.data) : {}; };
-  return { getDoc, snapshot, putItem, deleteItems, patchDoc, adminPrefs, clientPrefs, setAdminPrefs, setClientPrefs, ensureSeed };
+  return { media, getDoc, snapshot, putItem, deleteItems, patchDoc, adminPrefs, clientPrefs, setAdminPrefs, setClientPrefs, ensureSeed };
 }
 module.exports = { createContent, COLLECTIONS, DOCS };

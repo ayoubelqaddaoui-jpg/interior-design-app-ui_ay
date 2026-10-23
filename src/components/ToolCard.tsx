@@ -10,13 +10,14 @@ import { Txt } from '@/components/ui/Txt';
 import { useL, useT } from '@/i18n';
 
 /** Home tool card: media (image or autoplay video) + title/subtitle + Try button. */
-export function ToolCard({ tool, onPress, index = 0, height = 190 }: { tool: Tool; onPress: () => void; index?: number; height?: number }) {
+export function ToolCard({ tool, onPress, index = 0, height = 190, onReady }: { tool: Tool; onPress: () => void; index?: number; height?: number; onReady?: () => void }) {
   const L = useL();
   const { t } = useT();
   return (
-    <SearchTarget id={tool.id}><Animated.View entering={FadeInDown.delay(Math.min(index, 8) * 70).duration(380)}>
+    // The first two cards are the page's largest content: they appear immediately (an opacity fade would push back LCP).
+    <SearchTarget id={tool.id}><Animated.View entering={index < 2 ? undefined : FadeInDown.delay(Math.min(index, 8) * 70).duration(380)}>
       <PressableScale testID={`tool-${tool.id}`} onPress={onPress}>
-        <MediaView media={tool.media} className="rounded-2xl" style={{ height }}>
+        <MediaView media={tool.media} className="rounded-2xl" style={{ height }} priority={index < 2 ? 'high' : undefined} onReady={onReady}>
           <LinearGradient colors={['rgba(0,0,0,0.72)', 'rgba(0,0,0,0.35)', 'rgba(0,0,0,0)']} locations={[0, 0.45, 0.85]} start={{ x: 0.5, y: 0 }} end={{ x: 0.5, y: 1 }} style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }} />
           <View className="absolute top-3 start-3 end-3 flex-row items-start justify-between gap-2">
             <View className="flex-1">
