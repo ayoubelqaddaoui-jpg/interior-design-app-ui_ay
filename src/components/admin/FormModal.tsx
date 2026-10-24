@@ -101,7 +101,8 @@ export function Field({ f, value, onChange, ctx, error }: { f: FieldDef; value: 
           {m.type === 'image'
             ? <ImageField label={t('admin.f.mediaUrl')} value={m.uri} onChange={(v) => onChange({ ...m, uri: v })} />
             : <><Input label={`${t('admin.f.mediaUrl')} (.mp4)`} value={m.uri} onChangeText={(v) => onChange({ ...m, uri: v })} autoCapitalize="none" placeholder="https://…/video.mp4" />
-                {mediaUploadsEnabled ? <VideoUpload onUploaded={(uri) => onChange({ ...m, uri })} /> : null}
+                {mediaUploadsEnabled ? <VideoUpload onUploaded={(uri, poster) => onChange({ ...m, uri, poster: poster || m.poster })} /> : null}
+                {mediaUploadsEnabled ? <AutoPoster media={m} onChange={onChange} /> : null}
                 <ImageField label={t('admin.f.poster')} value={m.poster ?? ''} onChange={(v) => onChange({ ...m, poster: v })} /></>}
         </View>
       );
@@ -124,16 +125,44 @@ export function Field({ f, value, onChange, ctx, error }: { f: FieldDef; value: 
 }
 
 /** Direct (presigned) upload of a video file to R2; the field receives its /api/media URL. */
-function VideoUpload({ onUploaded }: { onUploaded: (uri: string) => void }) {
+function VideoUpload({ onUploaded }: { onUploaded: (uri: string, poster: string) => void }) {
   const { t } = useT();
   const [busy, setBusy] = React.useState(false);
   const up = async () => {
     setBusy(true);
-    try { const uri = await pickAndUploadVideo(); if (uri) onUploaded(uri); }
+    try { const { uri, poster } = await pickAndUploadVideo(); if (uri) onUploaded(uri, poster); }
     catch (error) { toast(error instanceof Error && /TOO_LARGE/.test(error.message) ? t('admin.f.videoTooLarge') : t('admin.f.uploadFailed')); }
     finally { setBusy(false); }
   };
   return <View className="flex-row -mt-1 mb-3"><Button title={t('admin.f.uploadVideo')} icon="upload" variant="soft" size="sm" onPress={up} loading={busy} /></View>;
+}
+
+/**
+ * A video without a preview image gets its first frame as the thumbnail, automatically (once per video). Uploads already bring
+ * theirs; this covers pasted URLs. A server that does not allow reading the video simply leaves the preview empty (the admin can still add one).
+ */
+function AutoPoster({ media, onChange }: { media: { type: string; uri: string; poster?: string }; onChange: (v: any) => void }) {
+  const latest = React.useRef(media);
+  React.useEffect(() => { latest.current = media; });
+  const tried = React.useRef('');
+  const [busy, setBusy] = React.useState(false);
+  const { t } = useT();
+  React.useEffect(() => {
+    const uri = media.uri.trim();
+    if (media.poster || !/^https?:\/\/|^\/api\/media\//i.test(uri) || tried.current === uri) return;
+    // Wait for the typing to stop before touching the network.
+    const timer = setTimeout(async () => {
+      tried.current = uri;
+      setBusy(true);
+      const { posterForVideo } = await import('@/lib/videoPoster');
+      const poster = await posterForVideo(uri);
+      setBusy(false);
+      const now = latest.current;
+      if (poster && now.uri.trim() === uri && !now.poster) onChange({ ...now, poster });
+    }, 700);
+    return () => clearTimeout(timer);
+  }, [media.uri, media.poster, onChange]);
+  return busy ? <Txt testID="poster-busy" className="text-muted text-[12px] -mt-1 mb-3">{t('inbox.posterBusy')}</Txt> : null;
 }
 
 export function validate(fields: FieldDef[], v: any, t: Ctx['t']) {

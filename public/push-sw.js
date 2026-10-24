@@ -1,12 +1,13 @@
 /* Push-only worker: deliberately does not intercept fetch or cache private app/admin data. */
 self.addEventListener('install', event => event.waitUntil(self.skipWaiting()));
 self.addEventListener('activate', event => event.waitUntil(self.clients.claim()));
-// Admin requests/leads and the client's own history ("design ready") are the only pages a notification may open.
-const OPENABLE = ['/admin/requests', '/admin/users', '/history'];
+// Admin requests/leads/chats, the client's own history ("design ready") and one of the client's chat threads are the only pages a notification may open.
+const OPENABLE = ['/admin/requests', '/admin/users', '/admin/chats', '/history'];
+const CHAT_THREAD = /^\/chat\/[A-Za-z0-9_-]{1,100}$/;
 function safeUrl(value) {
   try {
     const url = new URL(value, self.location.origin);
-    return url.origin === self.location.origin && OPENABLE.includes(url.pathname) ? url.href : new URL('/admin/requests', self.location.origin).href;
+    return url.origin === self.location.origin && (OPENABLE.includes(url.pathname) || CHAT_THREAD.test(url.pathname)) ? url.href : new URL('/admin/requests', self.location.origin).href;
   } catch { return new URL('/admin/requests', self.location.origin).href; }
 }
 self.addEventListener('push', event => {

@@ -20,7 +20,7 @@ export function PushNavigationHost() {
         const data = response.notification.request.content.data || {};
         const phone = String(data.phone || '').replace(/[^\d+]/g, '').slice(0, 32);
         if (response.actionIdentifier === 'call' && /^\+?\d{6,20}$/.test(phone)) { void Linking.openURL(`tel:${phone}`); return; }
-        if (typeof data.url === 'string' && /^\/(?:admin\/requests|admin\/users|history)(?:\?|$)/.test(data.url)) router.push(data.url as Href);
+        if (typeof data.url === 'string' && /^\/(?:admin\/requests|admin\/users|admin\/chats|history|chat\/[A-Za-z0-9_-]{1,100})(?:\?|$)/.test(data.url)) router.push(data.url as Href);
       };
       const response = n.addNotificationResponseReceivedListener(handle);
       const token = n.addPushTokenListener(device => {

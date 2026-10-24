@@ -7,6 +7,7 @@ import { storage } from '@/data/mock/storage';
 import type { Lang, LText } from '@/data/types';
 import { pushTexts } from './locales/push';
 import { improvements } from './locales/improvements';
+import { inboxTexts } from './locales/inbox';
 import fr from './locales/fr';
 import ar from './locales/ar';
 import dar from './locales/dar';
@@ -15,7 +16,7 @@ export const LANGS: Lang[] = ['dar', 'ar', 'fr'];
 export const isRtl = (l: Lang) => l === 'dar' || l === 'ar';
 
 i18n.use(initReactI18next).init({
-  resources: { fr: { translation: { ...fr, admin: fr.admin, improve: improvements.fr, push: pushTexts.fr } }, ar: { translation: { ...ar, admin: ar.admin, improve: improvements.ar, push: pushTexts.ar } }, dar: { translation: { ...dar, admin: dar.admin, improve: improvements.dar, push: pushTexts.dar } } },
+  resources: { fr: { translation: { ...fr, admin: fr.admin, improve: improvements.fr, push: pushTexts.fr, inbox: inboxTexts.fr } }, ar: { translation: { ...ar, admin: ar.admin, improve: improvements.ar, push: pushTexts.ar, inbox: inboxTexts.ar } }, dar: { translation: { ...dar, admin: dar.admin, improve: improvements.dar, push: pushTexts.dar, inbox: inboxTexts.dar } } },
   lng: 'dar',
   fallbackLng: 'fr',
   interpolation: { escapeValue: false },

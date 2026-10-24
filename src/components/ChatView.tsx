@@ -110,7 +110,8 @@ export function ChatView({ conversationId, onCreated, header }: { conversationId
         }
         renderItem={({ item: m }) => (
           <Animated.View entering={FadeInDown.duration(250)} className={`mb-2.5 max-w-[82%] ${m.role === 'user' ? 'self-end' : 'self-start'}`}>
-            <View className={`rounded-2xl px-3.5 py-2.5 ${m.role === 'user' ? 'bg-primary rounded-ee-md' : 'bg-surface2 rounded-es-md'}`}>
+            {m.role === 'admin' ? <View testID={`chat-admin-${m.id}`} className="flex-row items-center gap-1 mb-1 ms-1"><Icon name="face-agent" size={14} tone="primary" /><Txt className="text-[11px] font-bold text-primary">{t('inbox.team')}</Txt></View> : null}
+            <View className={`rounded-2xl px-3.5 py-2.5 ${m.role === 'user' ? 'bg-primary rounded-ee-md' : m.role === 'admin' ? 'bg-surface2 rounded-es-md border border-primary/40' : 'bg-surface2 rounded-es-md'}`}>
               {m.image ? <Image source={{ uri: m.image }} style={{ width: 200, height: 140, borderRadius: 12, marginBottom: m.text ? 8 : 0 }} contentFit="cover" /> : null}
               {m.text ? <Txt className={`text-[15px] leading-[22px] ${m.role === 'user' ? 'text-onprimary' : ''}`}>{m.text}</Txt> : null}
             </View>

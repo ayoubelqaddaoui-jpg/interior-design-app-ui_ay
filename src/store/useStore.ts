@@ -129,9 +129,23 @@ export const useMe = (): AppUser | undefined => {
   const guest = useStore(s => (backendEnabled ? undefined : s.users.find(u => u.id === ME)));
   return user ?? guest;
 };
+const SPACE_COLLS = ['history', 'conversations', 'requests'] as const;
+/**
+ * Reload the signed-in person's own chats, designs and requests. A response that arrives after the person changed
+ * (sign-out, another account) is dropped, so one account's data can never land in another's session.
+ */
 export async function reloadUserSpace() {
-  await Promise.all(['history', 'conversations', 'requests'].map(name => useStore.getState().reload(name as CollName)));
+  const who = useUserSession.getState().user?.id ?? '';
+  const lists = await Promise.all(SPACE_COLLS.map(name => repos[name].list()));
+  if ((useUserSession.getState().user?.id ?? '') !== who) return;
+  useStore.setState(Object.fromEntries(SPACE_COLLS.map((name, i) => [name, lists[i]])) as Partial<State>);
 }
+/** Whoever the data on screen belongs to changed (sign-in, sign-out, expired or blocked session): start from an empty space, then load theirs. */
+useUserSession.subscribe((state, previous) => {
+  if ((state.user?.id ?? '') === (previous.user?.id ?? '')) return;
+  useStore.setState({ history: [], conversations: [], requests: [] });
+  void reloadUserSpace().catch(() => {});
+});
 /** Admin panel access: a server-validated admin session (backend) or the seeded admin profile (demo). */
 export const useIsAdmin = () => useStore((s) => backendEnabled || s.users.some((u) => u.role === 'admin'));
 export { uid };

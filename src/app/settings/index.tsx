@@ -33,6 +33,8 @@ export default function Settings() {
   const setLang = useLang((s) => s.set);
   const prefs = usePrefs((s) => s.client);
   const devicePush = useOwnerPushStatus('client');
+  // The administrator can pause user notifications for everyone; the person's own choice is kept and applies again afterwards.
+  const pausedByAdmin = useStore((state) => state.doc.settings.notifyUsers === false);
   const me = useMe();
   const user = useUserSession(s => s.user);
   const [loggingOut, setLoggingOut] = useState(false);
@@ -68,8 +70,8 @@ export default function Settings() {
         <Row icon="star-four-points-outline" title={t('settings.credits')} sub={t('settings.creditsLeft', { count: me?.credits ?? 0 })} onPress={() => router.push('/pro')} testID="row-credits"
           right={<View className="bg-primary rounded-lg px-3 py-1"><Txt className="text-onprimary font-extrabold text-[12px]">{t('settings.pro')}</Txt></View>} />
         <View className="h-px bg-line mx-4" />
-        <Row icon="bell-outline" title={t('settings.notifications')} sub={t('settings.notificationsDesc')}
-          right={<Toggle testID="switch-notif" label={t('settings.notifications')} value={prefs?.notifications === true || (prefs?.notifications !== false && devicePush === 'enabled')} onValueChange={(v) => { void changeNotifications(v); }} />} />
+        <Row icon="bell-outline" title={t('settings.notifications')} sub={pausedByAdmin ? t('inbox.offByAdmin') : t('settings.notificationsDesc')}
+          right={<Toggle testID="switch-notif" label={t('settings.notifications')} disabled={pausedByAdmin} value={prefs?.notifications === true || (prefs?.notifications !== false && devicePush === 'enabled')} onValueChange={(v) => { void changeNotifications(v); }} />} />
       </Card>
 
       <Card className="overflow-hidden mb-5">
