@@ -20,7 +20,7 @@ import { storage } from '@/data/mock/storage';
  *  - delay N ms            -> N ms after the page started opening, and never before the first screen is ready.
  */
 export interface LoaderConfig { enabled: boolean; style: LoaderStyle; color: string; bg: string; uri: string; anim: LoaderAnim; delayMs: number }
-export const LOADER_STYLES: LoaderStyle[] = ['ring', 'dots', 'pulse', 'bars', 'custom'];
+export const LOADER_STYLES: LoaderStyle[] = ['ring', 'dots', 'pulse', 'bars', 'zellige', 'arch', 'lantern', 'mosaic', 'custom'];
 export const LOADER_DELAYS = [0, 500, 1000, 1500, 2000, 3000, 5000];
 /** Delay values above this are clamped: a loading screen must never hide the app for long. */
 export const MAX_LOADER_DELAY = 10000;

@@ -76,7 +76,7 @@ const tools: EntityConfig<'tools'> = {
   view: (c) => (r) => {
     const tab = c.L(c.s.tabs.find((x) => x.id === r.tabId)?.title);
     return {
-      lead: <MediaView uri={r.media.type === 'video' ? r.media.poster : r.media.uri} className="rounded-2xl" style={{ width: 56, height: 56 }}>{r.media.type === 'video' ? <View className="absolute inset-0 items-center justify-center bg-black/25"><Icon name="play" size={20} color="#fff" /></View> : null}</MediaView>,
+      lead: <MediaView media={r.media.type === 'video' && r.media.poster ? { type: 'image', uri: r.media.poster } : r.media} className="rounded-2xl" style={{ width: 56, height: 56 }}>{r.media.type === 'video' ? <View className="absolute inset-0 items-center justify-center bg-black/25"><Icon name="play" size={20} color="#fff" /></View> : null}</MediaView>,
       cover: r.media,
       title: c.L(r.title) || '—',
       subtitle: c.L(r.subtitle),

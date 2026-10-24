@@ -61,7 +61,22 @@ function createClients(db) {
     await db.query('INSERT INTO space VALUES($1,$2,$3,$4) ON CONFLICT (id) DO UPDATE SET value=EXCLUDED.value', [id, client.id, kind, JSON.stringify(next)]);
     return next;
   }
+  /** Admin view of every client's assistant conversation (with who wrote it). */
+  const adminConversations = async () => (await db.query("SELECT s.value, c.name, c.phone FROM space s JOIN clients c ON c.id=s.client_id WHERE s.kind='conversations'"))
+    .map(row => ({ ...JSON.parse(row.value), clientName: row.name, whatsapp: row.phone }))
+    .filter(row => Array.isArray(row.messages) && row.messages.length)
+    .sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0)).slice(0, 300);
+  /** An admin answers inside the client's own conversation: the thread stays in that client's space only. */
+  async function adminReply(id, text, message) {
+    const row = (await db.query("SELECT s.client_id, s.value, c.name, c.phone FROM space s JOIN clients c ON c.id=s.client_id WHERE s.id=$1 AND s.kind='conversations'", [id]))[0];
+    if (!row) throw fail(404, 'NOT_FOUND');
+    const value = JSON.parse(row.value);
+    const next = { ...value, messages: [...value.messages, message], updatedAt: message.createdAt };
+    await db.query('UPDATE space SET value=$1 WHERE id=$2', [JSON.stringify(next), id]);
+    return { conversation: { ...next, clientName: row.name, whatsapp: row.phone }, clientId: row.client_id };
+  }
   return {
+    adminConversations, adminReply,
     login, authenticate, claim, listSpace, putSpace,
     hasClaim: async (id, clientId) => !!(await db.query('SELECT 1 FROM claims WHERE id=$1 AND client_id=$2', [id, clientId]))[0],
     user: async id => toUser(await byId(id)),

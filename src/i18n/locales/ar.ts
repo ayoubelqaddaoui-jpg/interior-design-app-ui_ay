@@ -288,6 +288,8 @@ const ar: Dict = {
       branding: 'الهوية',
       theme: 'السمة',
       interface: 'الواجهة والقوائم',
+      chats: 'المحادثات',
+      notifications: 'الإشعارات',
     },
     f: {
       title: 'العنوان',

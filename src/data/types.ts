@@ -128,7 +128,7 @@ export interface RenderRequest {
   createdAt: number;
 }
 
-export interface ChatMessage { id: Id; role: 'user' | 'assistant'; text: string; image?: string; createdAt: number }
+export interface ChatMessage { id: Id; role: 'user' | 'assistant' | 'admin'; text: string; image?: string; createdAt: number }
 export interface Conversation { id: Id; userId: Id; title: string; messages: ChatMessage[]; updatedAt: number }
 
 /* ---- single documents ---- */
@@ -153,10 +153,13 @@ export interface AssistantConfig {
 }
 export type UserNavStyle = 'classic' | 'floating' | 'minimal';
 /** Startup loading screen: four built-in animations or the admin's own image (GIF / SVG / PNG / WebP). */
-export type LoaderStyle = 'ring' | 'dots' | 'pulse' | 'bars' | 'custom';
+export type LoaderStyle = 'ring' | 'dots' | 'pulse' | 'bars' | 'zellige' | 'arch' | 'lantern' | 'mosaic' | 'custom';
 export type LoaderAnim = 'none' | 'spin' | 'pulse';
 export type AdminNavMode = 'rail' | 'drawer' | 'top';
 export interface AppSettings {
+  /** Master switches for push notifications, independent of each other (on unless false). */
+  notifyAdmins?: boolean;
+  notifyUsers?: boolean;
   appSearchEnabled?: boolean;
   adminSearchEnabled?: boolean;
   exitConfirmationEnabled?: boolean;

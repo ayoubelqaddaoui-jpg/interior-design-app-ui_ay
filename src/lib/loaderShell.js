@@ -12,6 +12,11 @@ const MARKUP = {
   dots: '<svg class="db-dots" viewBox="0 0 64 20" width="64" height="20" aria-hidden="true"><circle cx="10" cy="10" r="6" fill="currentColor"/><circle cx="32" cy="10" r="6" fill="currentColor"/><circle cx="54" cy="10" r="6" fill="currentColor"/></svg>',
   pulse: '<svg class="db-pulse" viewBox="0 0 50 50" width="56" height="56" aria-hidden="true"><circle cx="25" cy="25" r="22" fill="currentColor"/><circle cx="25" cy="25" r="22" fill="currentColor"/></svg>',
   bars: '<svg class="db-bars" viewBox="0 0 50 40" width="50" height="40" aria-hidden="true"><rect x="3" y="0" width="7" height="40" rx="3" fill="currentColor"/><rect x="15" y="0" width="7" height="40" rx="3" fill="currentColor"/><rect x="27" y="0" width="7" height="40" rx="3" fill="currentColor"/><rect x="39" y="0" width="7" height="40" rx="3" fill="currentColor"/></svg>',
+  // Moroccan interior collection: zellige star, horseshoe arches, fanous lantern and a zellige tile wave.
+  zellige: '<svg class="db-zellige" viewBox="0 0 60 60" width="60" height="60" aria-hidden="true"><circle cx="30" cy="30" r="27" fill="none" stroke="currentColor" stroke-opacity=".15" stroke-width="2"/><rect class="db-za" x="15" y="15" width="30" height="30" rx="2" fill="none" stroke="currentColor" stroke-width="3" stroke-linejoin="round"/><rect class="db-zb" x="15" y="15" width="30" height="30" rx="2" fill="none" stroke="currentColor" stroke-width="3" stroke-linejoin="round"/><circle class="db-zc" cx="30" cy="30" r="5" fill="currentColor"/></svg>',
+  arch: '<svg class="db-arch" viewBox="0 0 60 60" width="60" height="60" aria-hidden="true"><path d="M10 56V32C4 22 14 4 30 4C46 4 56 22 50 32V56" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M19 56V34C15 28 21 15 30 15C39 15 45 28 41 34V56" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M26 56V39C24 35 27 29 30 29C33 29 36 35 34 39V56" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  lantern: '<svg class="db-lanternsvg" viewBox="0 0 50 64" width="48" height="62" aria-hidden="true"><g class="db-lantern"><line x1="25" y1="1" x2="25" y2="9" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/><path d="M18 17L25 9L32 17Z" fill="currentColor"/><path d="M14 17H36V38C36 47 31 51 25 57C19 51 14 47 14 38Z" fill="none" stroke="currentColor" stroke-width="3" stroke-linejoin="round"/><circle class="db-glow" cx="25" cy="35" r="12" fill="currentColor" fill-opacity=".14"/><ellipse class="db-flame" cx="25" cy="38" rx="4" ry="7" fill="currentColor"/></g></svg>',
+  mosaic: '<svg class="db-mosaic" viewBox="0 0 60 60" width="60" height="60" aria-hidden="true"><polygon points="12,4 20,12 12,20 4,12" fill="currentColor"/><polygon points="30,4 38,12 30,20 22,12" fill="currentColor"/><polygon points="48,4 56,12 48,20 40,12" fill="currentColor"/><polygon points="12,22 20,30 12,38 4,30" fill="currentColor"/><polygon points="30,22 38,30 30,38 22,30" fill="currentColor"/><polygon points="48,22 56,30 48,38 40,30" fill="currentColor"/><polygon points="12,40 20,48 12,56 4,48" fill="currentColor"/><polygon points="30,40 38,48 30,56 22,48" fill="currentColor"/><polygon points="48,40 56,48 48,56 40,48" fill="currentColor"/></svg>',
 };
 
 const CSS = [
@@ -32,13 +37,24 @@ const CSS = [
   '@keyframes db-pulse{0%{transform:scale(.1);opacity:.9}100%{transform:scale(1);opacity:0}}',
   '@keyframes db-bar{0%,100%{transform:scaleY(.35)}50%{transform:scaleY(1)}}',
   '@keyframes db-breathe{0%,100%{transform:scale(.85);opacity:.7}50%{transform:scale(1);opacity:1}}',
+  // Moroccan collection
+  '.db-za{animation:db-spin 4s linear infinite}.db-zb{animation:db-spin-r 4s linear infinite}.db-zc{animation:db-breathe 1.6s ease-in-out infinite}',
+  '.db-arch path{animation:db-arch 1.8s ease-in-out infinite}.db-arch path:nth-child(2){animation-delay:.25s}.db-arch path:nth-child(3){animation-delay:.5s}',
+  '.db-lanternsvg{overflow:visible}.db-box .db-lantern{transform-origin:50% 0;animation:db-swing 2.4s ease-in-out infinite}.db-flame{animation:db-flicker .9s ease-in-out infinite}.db-glow{animation:db-breathe 1.8s ease-in-out infinite}',
+  '.db-mosaic polygon{animation:db-tile 1.5s ease-in-out infinite}',
+  '.db-mosaic polygon:nth-child(2),.db-mosaic polygon:nth-child(4){animation-delay:.15s}.db-mosaic polygon:nth-child(3),.db-mosaic polygon:nth-child(5),.db-mosaic polygon:nth-child(7){animation-delay:.3s}.db-mosaic polygon:nth-child(6),.db-mosaic polygon:nth-child(8){animation-delay:.45s}.db-mosaic polygon:nth-child(9){animation-delay:.6s}',
+  '@keyframes db-spin-r{from{transform:rotate(45deg)}to{transform:rotate(-315deg)}}',
+  '@keyframes db-arch{0%,100%{opacity:.18}35%,60%{opacity:1}}',
+  '@keyframes db-swing{0%,100%{transform:rotate(-9deg)}50%{transform:rotate(9deg)}}',
+  '@keyframes db-flicker{0%,100%{transform:scale(1,1);opacity:1}30%{transform:scale(.85,1.18);opacity:.85}60%{transform:scale(1.1,.9);opacity:1}}',
+  '@keyframes db-tile{0%,100%{transform:scale(.3);opacity:.3}50%{transform:scale(1);opacity:1}}',
   '@media (prefers-reduced-motion:reduce){.db-box *{animation-duration:2.4s!important}}',
 ].join('');
 
 /** Only image URLs the page may load: http(s), same-origin paths and inline images. */
 const SAFE_URI = /^(https?:\/\/|\/(?!\/)|data:image\/(png|jpeg|gif|webp|svg\+xml|avif);base64,)/;
 
-const KEYS = ['ring', 'dots', 'pulse', 'bars', 'custom'];
+const KEYS = ['ring', 'dots', 'pulse', 'bars', 'zellige', 'arch', 'lantern', 'mosaic', 'custom'];
 /**
  * Returns render(box, cfg): fills `box` (a DOM element) with the loader for `cfg`. A factory with explicit parameters so the
  * same source runs in the app and, stringified, inside index.html. Custom images are created with DOM APIs, never through

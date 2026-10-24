@@ -1,17 +1,23 @@
 const crypto = require('node:crypto');
 const webpush = require('web-push');
 const TEXT = {
-  en: { title: 'New demand', lead: 'New lead', ready: 'Your design is ready', readyBody: 'Open the app to see it.', open: 'Open', call: 'Call' },
-  fr: { title: 'Nouvelle demande', lead: 'Nouveau client', ready: 'Votre design est prêt', readyBody: 'Ouvrez l’app pour le voir.', open: 'Ouvrir', call: 'Appeler' },
-  ar: { title: 'طلب جديد', lead: 'عميل جديد', ready: 'تصميمك جاهز', readyBody: 'افتح التطبيق لمشاهدته.', open: 'فتح', call: 'اتصال' },
-  dar: { title: 'طلب جديد', lead: 'كليون جديد', ready: 'التصميم ديالك واجد', readyBody: 'حل التطبيق باش تشوفو.', open: 'فتح', call: 'اتصال' },
+  en: { title: 'New demand', lead: 'New lead', ready: 'Your design is ready', readyBody: 'Open the app to see it.', open: 'Open', call: 'Call', chat: 'New message', reply: 'New reply', replyBody: 'Open the chat to read it.' },
+  fr: { title: 'Nouvelle demande', lead: 'Nouveau client', ready: 'Votre design est prêt', readyBody: 'Ouvrez l’app pour le voir.', open: 'Ouvrir', call: 'Appeler', chat: 'Nouveau message', reply: 'Nouvelle réponse', replyBody: 'Ouvrez la conversation pour la lire.' },
+  ar: { title: 'طلب جديد', lead: 'عميل جديد', ready: 'تصميمك جاهز', readyBody: 'افتح التطبيق لمشاهدته.', open: 'فتح', call: 'اتصال', chat: 'رسالة جديدة', reply: 'رد جديد', replyBody: 'افتح المحادثة لقراءته.' },
+  dar: { title: 'طلب جديد', lead: 'كليون جديد', ready: 'التصميم ديالك واجد', readyBody: 'حل التطبيق باش تشوفو.', open: 'فتح', call: 'اتصال', chat: 'ميساج جديد', reply: 'جواب جديد', replyBody: 'حل المحادثة باش تقراه.' },
 };
 const trim = (value, max) => Array.from(String(value ?? '').replace(/[\u0000-\u001f\u007f\u202a-\u202e\u2066-\u2069]/g, '').trim()).slice(0, max).join('');
 const phone = value => trim(value, 32).replace(/[^\d+]/g, '').replace(/(?!^)\+/g, '');
 const locale = value => Object.hasOwn(TEXT, value) ? value : 'en';
-/** event: 'request' (new render request, to admins) | 'lead' (new client account, to admins) | 'ready' (design delivered, to its owner). */
+/** event: 'request' (new render request, to admins) | 'lead' (new client account, to admins) | 'chat' (client message, to admins) | 'ready' (design delivered, to its owner) | 'reply' (admin chat reply, to its owner). */
 function payloadFor(request, language, event = 'request') {
   const lang = locale(language), text = TEXT[lang], dir = lang === 'ar' || lang === 'dar' ? 'rtl' : 'ltr';
+  // Assistant chat: a client wrote (-> admins, opens that conversation) or an admin replied (-> the client, opens the chat).
+  if (event === 'reply') return { title: text.reply, body: trim(request.text, 120) || text.replyBody, requestId: String(request.id), phone: '', lang, dir, url: `/chat/${encodeURIComponent(request.id)}`, actions: [{ action: 'open', title: text.open }] };
+  if (event === 'chat') {
+    const preview = trim(request.text, 100) || '📷';
+    return { title: text.chat, body: `${trim(request.name, 60)}: ${preview}`, requestId: String(request.id), phone: phone(request.whatsapp), lang, dir, url: `/admin/chats?target=${encodeURIComponent(request.id)}&open=${encodeURIComponent(request.id)}`, actions: [{ action: 'open', title: text.open }, { action: 'call', title: text.call }] };
+  }
   if (event === 'ready') return { title: text.ready, body: text.readyBody, requestId: String(request.id), phone: '', lang, dir, url: '/history', actions: [{ action: 'open', title: text.open }] };
   const base = { body: `${trim(request.name, 80)} - ${phone(request.whatsapp)}`, requestId: String(request.id), phone: phone(request.whatsapp), lang, dir, actions: [{ action: 'open', title: text.open }, { action: 'call', title: text.call }] };
   if (event === 'lead') return { ...base, title: text.lead, url: `/admin/users?target=${encodeURIComponent(request.id)}` };
@@ -85,13 +91,23 @@ async function loadVapid(db, env) {
   return { ...keys, subject: env.VAPID_SUBJECT || 'mailto:admin@example.com' };
 }
 
-function createNotifier(db, env, adapters = {}) {
+/**
+ * `options.settings()` returns the shared settings document. Two independent master switches live there:
+ * `notifyAdmins` and `notifyUsers` (both on unless explicitly false). Every delivery path goes through `recipients()`, so a
+ * switch that is off, or a person who turned their own notifications off, receives nothing.
+ */
+function createNotifier(db, env, adapters = {}, options = {}) {
   let vapid;
   const keys = async () => vapid ||= await loadVapid(db, env);
   const fcmSender = adapters.fcm || (env.FCM_SERVICE_ACCOUNT_JSON ? createFcm(env.FCM_SERVICE_ACCOUNT_JSON) : null);
   const ADMIN = { type: 'admin' };
   /** Devices of one audience whose owner has not switched notifications off (the preference lives in the database). */
+  const enabled = async type => {
+    const settings = options.settings ? await options.settings().catch(() => ({})) : {};
+    return (type === 'client' ? settings?.notifyUsers : settings?.notifyAdmins) !== false;
+  };
   async function recipients(audience = ADMIN) {
+    if (!(await enabled(audience.type))) return [];
     if (audience.type === 'client') {
       const rows = await db.query("SELECT id,data,owner_id FROM subscriptions WHERE owner_type='client' AND owner_id=$1", [audience.id]);
       if (!rows.length) return [];
@@ -138,6 +154,19 @@ function createNotifier(db, env, adapters = {}) {
     remove: (deviceId, owner) => owner
       ? db.query('DELETE FROM subscriptions WHERE COALESCE(device_id,id)=$1 AND owner_type=$2 AND owner_id=$3', [deviceId, owner.type, owner.id])
       : removeDevice(deviceId),
+    enabled,
+    /** Clients that registered at least one device, with the state of their notifications (admin list). */
+    clientSubscribers: async () => {
+      const rows = await db.query("SELECT s.owner_id, s.data, c.name, c.phone, c.prefs FROM subscriptions s JOIN clients c ON c.id=s.owner_id WHERE s.owner_type='client'");
+      const byClient = new Map();
+      for (const row of rows) {
+        const entry = byClient.get(row.owner_id) || { id: row.owner_id, name: row.name, whatsapp: row.phone, off: JSON.parse(row.prefs || '{}').notifications === false, browsers: 0, apps: 0 };
+        if (JSON.parse(row.data).kind === 'fcm') entry.apps++; else entry.browsers++;
+        byClient.set(row.owner_id, entry);
+      }
+      const on = await enabled('client');
+      return [...byClient.values()].map(({ off, ...entry }) => ({ ...entry, devices: entry.browsers + entry.apps, status: !on ? 'paused' : off ? 'off' : 'on' })).sort((a, b) => a.name.localeCompare(b.name));
+    },
     count: async () => (await db.query("SELECT COUNT(*)::int AS n FROM subscriptions WHERE owner_type='admin'"))[0].n,
     removeOwner: (type, id) => db.query('DELETE FROM subscriptions WHERE owner_type=$1 AND owner_id=$2', [type, id]),
   };

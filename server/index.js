@@ -53,7 +53,7 @@ const withTimeout = (promise, ms) => Promise.race([promise, new Promise(resolve 
 
 /** `media` (tests): { storage, download } overrides for the R2 adapter and the external downloader. */
 function createBackend({ env = process.env, db = createDb(env), senders, media: mediaOptions = {} } = {}) {
-  const notifier = createNotifier(db, env, senders);
+  const notifier = createNotifier(db, env, senders, { settings: () => content.getDoc('settings') });
   const clients = createClients(db);
   const sync = createSync(db);
   const content = createContent(db, sync, { env, ...mediaOptions });
@@ -192,12 +192,12 @@ function createBackend({ env = process.env, db = createDb(env), senders, media: 
         if (url.pathname === '/api/user/session' && req.method === 'GET') return json(200, { user: requireUser(), prefs: await content.clientPrefs(client.id) });
         // ---- Sync, shared content and preferences ----
         if (url.pathname === '/api/sync' && req.method === 'GET') {
-          const keys = ['content', ...(session ? ['requests', 'clients', `a:${adminId}`] : []), ...(client ? [`c:${client.id}`] : [])];
+          const keys = ['content', ...(session ? ['requests', 'clients', 'chats', `a:${adminId}`] : []), ...(client ? [`c:${client.id}`] : [])];
           const versions = await sync.read(keys);
           // Opportunistic retry of failed notifications (serverless has no background timer; cron is only daily).
           const waiting = (await db.query('SELECT 1 FROM outbox WHERE next_at<=$1 LIMIT 1', [now]))[0];
           if (waiting) await withTimeout(pump(), 9000);
-          return json(200, { content: versions.content, requests: session ? versions.requests : null, clients: session ? versions.clients : null, admin: session ? versions[`a:${adminId}`] : null, client: client ? versions[`c:${client.id}`] : null, user: client ? { id: client.id, blocked: !!client.blocked } : null, isAdmin: !!session });
+          return json(200, { content: versions.content, requests: session ? versions.requests : null, clients: session ? versions.clients : null, chats: session ? versions.chats : null, admin: session ? versions[`a:${adminId}`] : null, client: client ? versions[`c:${client.id}`] : null, user: client ? { id: client.id, blocked: !!client.blocked } : null, isAdmin: !!session });
         }
         if (url.pathname === '/api/prefs') {
           const asAdmin = url.searchParams.get('as') === 'admin';
@@ -242,8 +242,24 @@ function createBackend({ env = process.env, db = createDb(env), senders, media: 
             const value = { ...existing, ...(await media.externalize(body, { remote: 'report', svg: false })).value };
             if (kind === 'history' && (!value.draft?.toolId || typeof value.before !== 'string' || !['pending', 'done'].includes(value.status))) throw fail(400, 'INVALID_HISTORY');
             if (kind === 'conversations' && (!Array.isArray(value.messages) || value.messages.length > 1000 || typeof value.title !== 'string')) throw fail(400, 'INVALID_CONVERSATION');
+            let fresh = [];
+            if (kind === 'conversations') {
+              // Admin answers belong to the server: a client can neither forge nor erase them (and a stale copy never drops a new reply).
+              const known = new Map((existing?.messages || []).map(m => [m.id, m]));
+              const sent = value.messages.filter(m => m && typeof m.id === 'string' && typeof m.text === 'string' && m.text.length <= 4000 && ['user', 'assistant'].includes(m.role));
+              const kept = (existing?.messages || []).filter(m => m.role === 'admin');
+              fresh = sent.filter(m => m.role === 'user' && !known.has(m.id));
+              value.messages = [...sent, ...kept].sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
+            }
             const saved = await clients.putSpace(client, kind, value, id || (kind === 'history' ? body.claimId : crypto.randomUUID()));
             await sync.bump(`c:${client.id}`, 'clients');
+            if (fresh.length) {
+              // Tell the admins about the newest message; the link opens exactly this conversation.
+              const last = fresh[fresh.length - 1], jobId = `chat:${saved.id}:${last.id}`;
+              await enqueue('chat', jobId, { id: saved.id, name: client.name, whatsapp: client.whatsapp, text: last.text });
+              await sync.bump('chats');
+              await withTimeout(pump(jobId), Number(env.PUSH_WAIT_MS) || 8000);
+            }
             return json(200, saved);
           }
           throw fail(405, 'Method not allowed');
@@ -251,6 +267,24 @@ function createBackend({ env = process.env, db = createDb(env), senders, media: 
 
         // ---- Admin ----
         if (url.pathname === '/api/admin/clients' && req.method === 'GET') { admin(); return json(200, await clients.users()); }
+        if (url.pathname === '/api/admin/conversations' && req.method === 'GET') { admin(); return json(200, await clients.adminConversations()); }
+        const adminChat = url.pathname.match(/^\/api\/admin\/conversations\/([A-Za-z0-9_-]{1,100})$/);
+        if (adminChat && req.method === 'POST') {
+          admin();
+          const body = await readBody(req), text = typeof body.text === 'string' ? body.text.trim() : '';
+          if (!text || text.length > 4000) throw fail(400, 'INVALID_MESSAGE');
+          const message = { id: `a_${crypto.randomUUID()}`, role: 'admin', text, createdAt: Date.now() };
+          const { conversation, clientId } = await clients.adminReply(adminChat[1], text, message);
+          await sync.bump(`c:${clientId}`, 'chats');
+          const jobId = `reply:${conversation.id}:${message.id}`;
+          await enqueue('reply', jobId, { id: conversation.id, text, audience: { type: 'client', id: clientId } });
+          await withTimeout(pump(jobId), Number(env.PUSH_WAIT_MS) || 8000);
+          return json(200, conversation);
+        }
+        if (url.pathname === '/api/admin/notification-subscribers' && req.method === 'GET') {
+          admin();
+          return json(200, { adminsEnabled: await notifier.enabled('admin'), usersEnabled: await notifier.enabled('client'), users: await notifier.clientSubscribers() });
+        }
         if (url.pathname === '/api/admin/clients/bulk' && req.method === 'POST') {
           admin();
           const body = await readBody(req), result = await clients.bulk(body);
@@ -343,6 +377,7 @@ function createBackend({ env = process.env, db = createDb(env), senders, media: 
         }
         if (url.pathname === '/api/push/test' && req.method === 'POST') {
           admin();
+          if (!(await notifier.enabled('admin'))) throw fail(409, 'NOTIFICATIONS_OFF');
           const total = await notifier.count();
           if (!total) throw fail(409, 'NO_SUBSCRIPTION');
           const result = await withTimeout(notifier.deliver({ id: 'test', name: 'Test', whatsapp: '+212600000000' }, []), 12000);

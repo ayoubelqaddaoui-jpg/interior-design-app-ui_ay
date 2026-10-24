@@ -62,10 +62,12 @@ function blobToDataUrl(file: Blob): Promise<string> {
   });
 }
 
-/** Lets the admin pick a video file and uploads it directly to R2. Resolves '' when cancelled. */
-export async function pickAndUploadVideo(): Promise<string> {
+/** Lets the admin pick a video file and uploads it directly to R2, together with its first frame as the preview image. Resolves `{ uri: '' }` when cancelled. */
+export async function pickAndUploadVideo(): Promise<{ uri: string; poster: string }> {
+  const none = { uri: '', poster: '' };
+  const { posterForVideo } = await import('@/lib/videoPoster');
   if (Platform.OS === 'web') {
-    if (typeof document === 'undefined') return '';
+    if (typeof document === 'undefined') return none;
     const file = await new Promise<File | null>((resolve) => {
       const input = document.createElement('input');
       input.type = 'file';
@@ -76,12 +78,14 @@ export async function pickAndUploadVideo(): Promise<string> {
       document.body.appendChild(input);
       input.click();
     });
-    return file ? uploadBlob(file) : '';
+    if (!file) return none;
+    const [uri, poster] = await Promise.all([uploadBlob(file), posterForVideo(file)]);
+    return { uri, poster };
   }
   const ImagePicker = await import('expo-image-picker');
   const res = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['videos'], allowsMultipleSelection: false, quality: 1 });
   const asset = res.canceled ? undefined : res.assets?.[0];
-  if (!asset) return '';
+  if (!asset) return none;
   let size = asset.fileSize;
   if (!size) {
     const { File } = await import('expo-file-system');
@@ -89,5 +93,6 @@ export async function pickAndUploadVideo(): Promise<string> {
   }
   const lower = asset.uri.toLowerCase();
   const type = asset.mimeType || (lower.endsWith('.mov') ? 'video/quicktime' : lower.endsWith('.webm') ? 'video/webm' : 'video/mp4');
-  return uploadLocalFile(asset.uri, type, size);
+  const [uri, poster] = await Promise.all([uploadLocalFile(asset.uri, type, size), posterForVideo(asset.uri)]);
+  return { uri, poster };
 }
