@@ -52,7 +52,7 @@ The starter content in `server/seed-content.json` (generated from `src/data/mock
 `GET /api/sync` returns a version counter per kind of data (`content`, `requests`, `clients`, one per client, one per admin). Every device polls it every 4 s (and on focus/visibility/reconnect) and reloads only what changed: admin edits appear on all admin and client devices, new leads/requests appear on every admin device, credits/blocks/history reach the owning client on all of their devices. Unsaved admin drafts are never overwritten. (Websockets are not available on Vercel serverless; polling is the portable real-time channel. The same poll also retries failed notifications.)
 
 ### Uploaded images
-Admin uploads (data URLs) larger than 4 KB are stored in the `media` table and replaced by `/api/media/<hash>.<ext>` (immutable, CDN-cacheable), so `/api/content` stays small. Rows saved before this are migrated once on the next start (`media_migrated` marker).
+All media (admin images and videos, client photos, AI results, chat images, external image links) is stored in **Cloudflare R2** through `server/media.js` and referenced by stable `/api/media/<hash>.<ext>` URLs (a redirect to the public R2 object). Videos use admin-only presigned uploads; external https images are downloaded once. Without the `R2_*` variables, files fall back to raw bytes in the `media` table; base64 is never stored. Setup and migration (`scripts/migrate-media-to-r2.js`): see [docs/r2-setup.md](docs/r2-setup.md).
 
 ## Services to replace later (`Services`)
 `render` (AI image generation), `chat` (assistant LLM), `upload` (file storage), `whatsapp` (send design) are still mock services; `auth` is the real admin login.

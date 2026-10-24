@@ -52,7 +52,8 @@ export async function api<T>(path: string, options: { method?: string; body?: un
     if (!response.headers.get('content-type')?.toLowerCase().includes('application/json')) throw new BackendError(503, 'BACKEND_UNAVAILABLE');
     const body = await response.json().catch(() => { throw new BackendError(502, 'BACKEND_UNAVAILABLE'); });
     if (!response.ok) throw new BackendError(response.status, body.error);
-    return body as T;
+    // Every response (content, requests, history, chats, uploads) may carry /api/media URLs: native apps need them absolute.
+    return resolveMediaUrls(body) as T;
   } catch (error) {
     if (error instanceof BackendError) throw error;
     throw new BackendError(503, 'BACKEND_UNAVAILABLE');

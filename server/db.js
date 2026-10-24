@@ -38,6 +38,11 @@ CREATE TABLE IF NOT EXISTS content_docs (name TEXT PRIMARY KEY, data TEXT NOT NU
 CREATE TABLE IF NOT EXISTS admin_prefs (admin_id TEXT PRIMARY KEY, data TEXT NOT NULL DEFAULT '{}');
 CREATE TABLE IF NOT EXISTS sync_state (key TEXT PRIMARY KEY, version BIGINT NOT NULL);
 CREATE TABLE IF NOT EXISTS media (id TEXT PRIMARY KEY, mime TEXT NOT NULL, data TEXT NOT NULL, created_at BIGINT NOT NULL);
+-- Media metadata. storage: 'r2' (bytes in Cloudflare R2), 'db' (fallback without R2: raw bytes in body; legacy rows: base64 in data,
+-- read-only), 'pending' (presigned direct upload not confirmed yet). New rows never put base64 in data.
+ALTER TABLE media ADD COLUMN IF NOT EXISTS body BYTEA;
+ALTER TABLE media ADD COLUMN IF NOT EXISTS size BIGINT;
+ALTER TABLE media ADD COLUMN IF NOT EXISTS storage TEXT NOT NULL DEFAULT 'db';
 `;
 
 async function openPg(url) {

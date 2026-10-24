@@ -8,6 +8,7 @@ const { sendBuffer, sendFile } = require('./compress');
 const { createClients } = require('./clients');
 const { createSync } = require('./sync');
 const { createContent } = require('./content');
+const { r2Status } = require('./media');
 const { createNotifier, validateSubscription, trim, phone } = require('./notifications');
 const hash = value => crypto.createHash('sha256').update(value).digest('hex');
 const fail = (status, message) => Object.assign(new Error(message), { status });
@@ -37,7 +38,7 @@ async function readBody(req) {
 function validateDemand(value) {
   const name = trim(value?.name, 120), whatsapp = phone(value?.whatsapp);
   if (name.length < 2 || !/^\+?\d{6,20}$/.test(whatsapp)) throw fail(400, 'Name and phone required');
-  if (typeof value.photoUri !== 'string' || value.photoUri.length > 3000000 || !/^(data:image\/(png|jpeg|webp);base64,|https?:\/\/)/.test(value.photoUri)) throw fail(400, 'Invalid photo');
+  if (typeof value.photoUri !== 'string' || value.photoUri.length > 3000000 || !/^(data:image\/(png|jpeg|webp);base64,|https?:\/\/|\/api\/media\/[a-f0-9]{32}\.[a-z0-9]+$)/.test(value.photoUri)) throw fail(400, 'Invalid photo');
   const draft = {};
   for (const key of ['toolId', 'roomTypeId', 'styleId', 'paletteId', 'modelId', 'mode']) {
     if (value.draft?.[key] != null) {
@@ -50,11 +51,13 @@ function validateDemand(value) {
 }
 const withTimeout = (promise, ms) => Promise.race([promise, new Promise(resolve => setTimeout(resolve, ms))]);
 
-function createBackend({ env = process.env, db = createDb(env), senders } = {}) {
+/** `media` (tests): { storage, download } overrides for the R2 adapter and the external downloader. */
+function createBackend({ env = process.env, db = createDb(env), senders, media: mediaOptions = {} } = {}) {
   const notifier = createNotifier(db, env, senders);
   const clients = createClients(db);
   const sync = createSync(db);
-  const content = createContent(db, sync);
+  const content = createContent(db, sync, { env, ...mediaOptions });
+  const media = content.media;
   const trustedProxies = new Set(String(env.TRUSTED_PROXY_IPS || '').split(',').map(value => value.trim()).filter(Boolean));
   const address = req => {
     const remote = req.socket?.remoteAddress || 'unknown';
@@ -114,13 +117,16 @@ function createBackend({ env = process.env, db = createDb(env), senders } = {}) 
         res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Demand-Token, X-Dwira-Native, X-User-Token');
         res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PATCH, DELETE, OPTIONS');
         if (req.method === 'OPTIONS') { res.writeHead(204); return res.end(); }
-        // Uploaded images (moved out of the content JSON): content-addressed, so cached forever by browsers and the CDN.
+        // Media (images and videos): stable content-addressed /api/media/<hash>.<ext> URLs. Files stored in R2 are a redirect
+        // to the public R2 URL (bytes never pass through the function); the database fallback serves the bytes, cached forever.
         // Served before rate limiting: one Home screen can show dozens of them.
         if (url.pathname.startsWith('/api/media/') && (req.method === 'GET' || req.method === 'HEAD')) {
           if (!db.configured()) throw fail(503, 'DATABASE_NOT_CONFIGURED');
           await content.ensureSeed();
-          const file = await content.media.read(url.pathname.slice('/api/media/'.length));
+          const file = await media.readMedia(url.pathname.slice('/api/media/'.length));
           if (!file) throw fail(404, 'NOT_FOUND');
+          // The target never changes for a name, but a day-long cache lets a change of R2_PUBLIC_BASE_URL take effect.
+          if (file.redirect) { res.writeHead(302, { Location: file.redirect, 'Cache-Control': 'public, max-age=86400, s-maxage=86400' }); return res.end(); }
           return sendBuffer(req, res, 200, { 'Content-Type': file.mime, 'Cache-Control': 'public, max-age=31536000, s-maxage=31536000, immutable', ...(file.mime === 'image/svg+xml' ? { 'Content-Security-Policy': "default-src 'none'; style-src 'unsafe-inline'" } : {}) }, file.body);
         }
         const bucketName = url.pathname === '/api/admin/login' ? 'login' : url.pathname === '/api/sync' ? 'sync' : 'api';
@@ -136,7 +142,8 @@ function createBackend({ env = process.env, db = createDb(env), senders } = {}) 
           // Never exposes secrets: only whether the database is reachable.
           let database = 'missing';
           try { if (db.configured()) database = await db.info(); } catch { database = 'error'; }
-          return json(database === 'error' || database === 'missing' ? 503 : 200, { ok: database !== 'error' && database !== 'missing', runtime: process.versions.bun ? 'bun' : 'node', database, adminConfigured: !!(env.ADMIN_EMAIL && env.ADMIN_PASSWORD_HASH) });
+          // media: 'r2' | 'database' (no R2 variables) | 'incomplete' (some missing). Only the mode, never a value.
+          return json(database === 'error' || database === 'missing' ? 503 : 200, { ok: database !== 'error' && database !== 'missing', runtime: process.versions.bun ? 'bun' : 'node', database, media: r2Status(env), adminConfigured: !!(env.ADMIN_EMAIL && env.ADMIN_PASSWORD_HASH) });
         }
         if (!db.configured()) throw fail(503, 'DATABASE_NOT_CONFIGURED');
 
@@ -231,7 +238,8 @@ function createBackend({ env = process.env, db = createDb(env), senders } = {}) 
             const existing = id && (await clients.listSpace(client, kind)).find(row => row.id === id);
             if (id && !existing) throw fail(404, 'NOT_FOUND');
             if (req.method === 'POST' && kind === 'history' && !(await clients.hasClaim(body.claimId, client.id))) throw fail(403, 'CLAIM_REQUIRED');
-            const value = { ...existing, ...body };
+            // Inline uploads (data URLs) and external pictures go to media storage; a failed download keeps the URL so a design is never lost.
+            const value = { ...existing, ...(await media.externalize(body, { remote: 'report', svg: false })).value };
             if (kind === 'history' && (!value.draft?.toolId || typeof value.before !== 'string' || !['pending', 'done'].includes(value.status))) throw fail(400, 'INVALID_HISTORY');
             if (kind === 'conversations' && (!Array.isArray(value.messages) || value.messages.length > 1000 || typeof value.title !== 'string')) throw fail(400, 'INVALID_CONVERSATION');
             const saved = await clients.putSpace(client, kind, value, id || (kind === 'history' ? body.claimId : crypto.randomUUID()));
@@ -273,6 +281,33 @@ function createBackend({ env = process.env, db = createDb(env), senders } = {}) 
           await notifier.removeOwner('client', creditClient[1]);
           await sync.bump('clients', 'requests', `c:${creditClient[1]}`);
           return json(200, { ok: true });
+        }
+        // ---- Admin media uploads ----
+        // Small files (images picked in the admin): JSON { data: 'data:<type>;base64,...' } -> stored via media.storeMedia.
+        if (url.pathname === '/api/admin/media' && req.method === 'POST') {
+          admin();
+          const body = await readBody(req);
+          if (typeof body.data !== 'string' || !/^data:[a-z]+\/[a-z0-9.+-]+;base64,/i.test(body.data)) throw fail(400, 'INVALID_MEDIA');
+          const { value } = await media.externalize({ file: body.data });
+          return json(200, { url: value.file });
+        }
+        // External image URL -> downloaded once into storage (https, public hosts, 10 s, 10 MB, image/* only).
+        if (url.pathname === '/api/admin/media/import' && req.method === 'POST') {
+          admin();
+          const body = await readBody(req);
+          if (typeof body.url !== 'string' || body.url.length > 2048) throw fail(400, 'INVALID_URL');
+          try { return json(200, { url: await media.importRemote(body.url) }); }
+          catch (error) { throw fail(error.policy ? 400 : 502, `MEDIA_URL_${error.code || 'FAILED'}`); }
+        }
+        // Large files and videos: presigned PUT straight to R2 (5 minutes). The server picks the key, type and exact size.
+        if (url.pathname === '/api/admin/media/presign' && req.method === 'POST') {
+          admin();
+          const body = await readBody(req);
+          return json(200, await media.presignUpload({ contentType: body.contentType, size: body.size }));
+        }
+        if (url.pathname === '/api/admin/media/complete' && req.method === 'POST') {
+          admin();
+          return json(200, await media.completeUpload((await readBody(req)).id));
         }
         if (req.method === 'POST' && url.pathname === '/api/admin/login') {
           const body = await readBody(req);
@@ -327,6 +362,10 @@ function createBackend({ env = process.env, db = createDb(env), senders } = {}) 
           const body = await readBody(req), input = validateDemand({ ...body, userId: client.id, name: client.name, whatsapp: client.whatsapp });
           if (typeof body.id !== 'string' || !/^[A-Za-z0-9_-]{8,100}$/.test(body.id)) throw fail(400, 'Stable request ID required');
           await clients.claim(client, body.id);
+          // The photo is stored as media (R2 or the database fallback); the request row keeps only its /api/media URL.
+          // Skipped for a retry of a request that already exists (idempotent, no duplicate upload work).
+          const known = (await db.query('SELECT 1 FROM requests WHERE user_id=$1 AND client_request_id=$2', [client.id, body.id]))[0];
+          if (!known) input.photoUri = (await media.externalize({ photoUri: input.photoUri }, { remote: 'report', svg: false })).value.photoUri;
           const request = { ...input, id: crypto.randomUUID(), clientHash, clientRequestId: body.id };
           const inserted = await db.query('INSERT INTO requests(id,user_id,client_request_id,created_at,data) VALUES($1,$2,$3,$4,$5) ON CONFLICT (user_id, client_request_id) DO NOTHING RETURNING id', [request.id, client.id, body.id, request.createdAt, JSON.stringify(request)]);
           if (inserted.length) { await enqueue('request', request.id); await sync.bump('requests', 'clients', `c:${client.id}`); }
@@ -356,6 +395,8 @@ function createBackend({ env = process.env, db = createDb(env), senders } = {}) 
               else if (field === 'autoSent') { if (typeof body[field] !== 'boolean') throw fail(400, 'Invalid value'); patch[field] = body[field]; }
               else { if (typeof body[field] !== 'string' || body[field].length > 3000000) throw fail(400, 'Invalid value'); patch[field] = body[field]; }
             }
+            // AI results and final designs (data URLs or provider/CDN URLs) are copied into media storage.
+            Object.assign(patch, (await media.externalize(patch, { remote: 'report', svg: false })).value);
             // The client's own auto-send workflow may only mark its own completed render.
             if (!session && body.status === 'delivered' && body.autoSent === true && body.aiResult) { patch.status = 'delivered'; patch.autoSent = true; }
             let wasDelivered = false;
