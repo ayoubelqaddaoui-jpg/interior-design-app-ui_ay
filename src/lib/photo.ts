@@ -1,6 +1,7 @@
 import * as ImagePicker from 'expo-image-picker';
 import * as Manipulator from 'expo-image-manipulator';
 import { services } from '@/data/repositories';
+import { backendEnabled } from '@/lib/backend';
 import type { PickOptions, PickResult } from './photoTypes';
 
 export type { PickOptions, PickResult } from './photoTypes';
@@ -32,6 +33,12 @@ export async function pickPhoto(source: 'camera' | 'gallery', options: PickOptio
       const out = await Manipulator.manipulateAsync(uri, res.assets[0].width > 1024 ? [{ resize: { width: 1024 } }] : [], { compress: 0.6, format: options.preserveTransparency ? Manipulator.SaveFormat.PNG : Manipulator.SaveFormat.JPEG });
       uri = out.uri;
     } catch { /* keep original */ }
+    // With the backend, send the (downscaled) bytes: the server stores them in media storage (R2) and keeps only the
+    // /api/media URL. A device-local file:// path would mean nothing to the server or to other devices.
+    if (backendEnabled) {
+      const { File } = await import('expo-file-system');
+      return { uri: `data:image/${options.preserveTransparency ? 'png' : 'jpeg'};base64,${await new File(uri).base64()}` };
+    }
     return { uri: await services.upload.upload(uri, 'photos') };
   } catch {
     return { error: 'failed' };

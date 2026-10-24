@@ -16,7 +16,7 @@ function call(backend, url, { method = 'GET', body, headers = {} } = {}) {
   });
 }
 const native = { 'x-dwira-native': '1' };
-const demand = id => ({ id, photoUri: 'data:image/png;base64,aW1hZ2U=', draft: { toolId: 'tool_interior' } });
+const demand = id => ({ id, photoUri: 'data:image/png;base64,iVBORw0KGgoAAAAA', draft: { toolId: 'tool_interior' } });
 
 test('lead form flow: phone login -> free claim -> request, exactly as /lead + /render do it', async () => {
   const backend = createBackend({ env: { ...memory }, db: await freshDb() });
@@ -88,7 +88,9 @@ test('atomic racing claims, ownership isolation, history and credit grants', asy
 });
 
 test('admin delivery updates the client history; clients cannot self-deliver or read other requests', async () => {
-  const backend = createBackend({ env: { ...memory }, db: await freshDb() });
+  // No network in tests: the external final-design URL "cannot be downloaded" and is kept as it is.
+  const offline = async () => { throw Object.assign(new Error('offline'), { code: 'OFFLINE', policy: false }); };
+  const backend = createBackend({ env: { ...memory }, db: await freshDb(), media: { download: offline } });
   try {
     const login = await backend.clients.login('Test Person', '+212612345678');
     const auth = { 'x-user-token': login.token, 'x-demand-token': 'a'.repeat(64) };

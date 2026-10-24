@@ -64,7 +64,7 @@ test('zero-config VAPID, real encryption, isolated failures, 410 cleanup, retry 
     // A new demand notifies every device before the response returns (serverless functions freeze afterwards).
     const client = await backend.clients.login('  Test Client  ', ' +212 612345678 ');
     failure = true;
-    const demand = { id: 'stable-demand-1234', photoUri: 'data:image/png;base64,dGVzdA==', draft: { toolId: 'tool_interior' } };
+    const demand = { id: 'stable-demand-1234', photoUri: 'data:image/png;base64,iVBORw0KGgoAAAAA', draft: { toolId: 'tool_interior' } };
     const headers = { 'x-demand-token': 'a'.repeat(64), 'x-user-token': client.token };
     const created = await call(backend, '/api/requests', { method: 'POST', headers, body: demand });
     assert.equal(created.status, 201);

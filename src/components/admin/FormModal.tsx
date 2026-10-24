@@ -12,6 +12,7 @@ import { ImageField } from './ImageField';
 import { useStore } from '@/store/useStore';
 import { useL, useT } from '@/i18n';
 import { toast } from '@/store/useToast';
+import { mediaUploadsEnabled, pickAndUploadVideo } from '@/lib/media';
 import { requestLeave, useLeaveGuard } from '@/hooks/useLeaveGuard';
 import type { LText } from '@/data/types';
 
@@ -100,6 +101,7 @@ export function Field({ f, value, onChange, ctx, error }: { f: FieldDef; value: 
           {m.type === 'image'
             ? <ImageField label={t('admin.f.mediaUrl')} value={m.uri} onChange={(v) => onChange({ ...m, uri: v })} />
             : <><Input label={`${t('admin.f.mediaUrl')} (.mp4)`} value={m.uri} onChangeText={(v) => onChange({ ...m, uri: v })} autoCapitalize="none" placeholder="https://…/video.mp4" />
+                {mediaUploadsEnabled ? <VideoUpload onUploaded={(uri) => onChange({ ...m, uri })} /> : null}
                 <ImageField label={t('admin.f.poster')} value={m.poster ?? ''} onChange={(v) => onChange({ ...m, poster: v })} /></>}
         </View>
       );
@@ -119,6 +121,19 @@ export function Field({ f, value, onChange, ctx, error }: { f: FieldDef; value: 
       );
     }
   }
+}
+
+/** Direct (presigned) upload of a video file to R2; the field receives its /api/media URL. */
+function VideoUpload({ onUploaded }: { onUploaded: (uri: string) => void }) {
+  const { t } = useT();
+  const [busy, setBusy] = React.useState(false);
+  const up = async () => {
+    setBusy(true);
+    try { const uri = await pickAndUploadVideo(); if (uri) onUploaded(uri); }
+    catch (error) { toast(error instanceof Error && /TOO_LARGE/.test(error.message) ? t('admin.f.videoTooLarge') : t('admin.f.uploadFailed')); }
+    finally { setBusy(false); }
+  };
+  return <View className="flex-row -mt-1 mb-3"><Button title={t('admin.f.uploadVideo')} icon="upload" variant="soft" size="sm" onPress={up} loading={busy} /></View>;
 }
 
 export function validate(fields: FieldDef[], v: any, t: Ctx['t']) {

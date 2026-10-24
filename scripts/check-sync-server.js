@@ -20,7 +20,7 @@ function call(backend, url, { method = 'GET', body, headers = {} } = {}) {
 const native = { 'x-dwira-native': '1' };
 async function setup() {
   const sent = [];
-  const backend = createBackend({ env: { PGLITE_DIR: ':memory:', COOKIE_SECURE: 'false', PUSH_WAIT_MS: '4000' }, db: await freshDb(), senders: { web: async (s, payload) => { sent.push({ endpoint: s.endpoint, ...JSON.parse(payload) }); } } });
+  const backend = createBackend({ env: { PGLITE_DIR: ':memory:', COOKIE_SECURE: 'false', PUSH_WAIT_MS: '4000' }, db: await freshDb(), media: { download: async () => { throw Object.assign(new Error('offline'), { code: 'OFFLINE', policy: false }); } }, senders: { web: async (s, payload) => { sent.push({ endpoint: s.endpoint, ...JSON.parse(payload) }); } } });
   const login = await call(backend, '/api/admin/login', { method: 'POST', headers: native, body: { email: 'admin', password: 'admin' } });
   return { backend, sent, admin: { authorization: `Bearer ${login.body.token}` } };
 }
@@ -40,7 +40,7 @@ test('real lead flow notifies the admin: new client account, then every render r
     assert.equal(sent.filter(p => p.title === 'Nouveau client').length, 1);
     // First (free) render request.
     const auth = { 'x-user-token': login.body.token, 'x-demand-token': 'b'.repeat(64) };
-    const demand = id => ({ id, photoUri: 'data:image/png;base64,aW1hZ2U=', draft: { toolId: 'tool_interior' } });
+    const demand = id => ({ id, photoUri: 'data:image/png;base64,iVBORw0KGgoAAAAA', draft: { toolId: 'tool_interior' } });
     assert.equal((await call(backend, '/api/requests', { method: 'POST', headers: auth, body: demand('real-claim-0001') })).status, 201);
     assert.equal(sent.filter(p => p.title === 'Nouvelle demande').length, 1);
     // A later request from a client with credits also notifies.
@@ -78,7 +78,7 @@ test('client devices get a "design ready" push when the admin delivers; per-clie
     assert.equal((await call(backend, '/api/push/subscriptions', { method: 'POST', headers: authA, body: { ...sub('a-phone'), owner: 'client' } })).status, 200);
     assert.equal((await call(backend, '/api/push/subscriptions', { method: 'POST', headers: authB, body: { ...sub('b-phone'), owner: 'client' } })).status, 200);
     assert.equal((await call(backend, '/api/push/subscriptions', { method: 'POST', headers: authA, body: sub('x') })).status, 401, 'a client cannot register as an admin device');
-    const created = await call(backend, '/api/requests', { method: 'POST', headers: authA, body: { id: 'ready-claim-0001', photoUri: 'data:image/png;base64,aW1hZ2U=', draft: { toolId: 'tool_interior' } } });
+    const created = await call(backend, '/api/requests', { method: 'POST', headers: authA, body: { id: 'ready-claim-0001', photoUri: 'data:image/png;base64,iVBORw0KGgoAAAAA', draft: { toolId: 'tool_interior' } } });
     assert.equal(sent.length, 0, 'clients never receive admin notifications');
     await call(backend, `/api/requests/${created.body.id}`, { method: 'PATCH', headers: admin, body: { status: 'delivered', finalResult: 'https://example.com/final.jpg' } });
     const ready = sent.filter(p => p.title === 'Votre design est prêt');
@@ -138,7 +138,7 @@ test('sync versions: client changes reach admin lists and the owner on every dev
     assert.equal(a0.isAdmin, true);
     assert.equal(c0.isAdmin, false);
     assert.equal(c0.requests, null, 'clients never see admin versions');
-    const created = await call(backend, '/api/requests', { method: 'POST', headers: auth, body: { id: 'sync-claim-0001', photoUri: 'data:image/png;base64,aW1hZ2U=', draft: { toolId: 'tool_interior' } } });
+    const created = await call(backend, '/api/requests', { method: 'POST', headers: auth, body: { id: 'sync-claim-0001', photoUri: 'data:image/png;base64,iVBORw0KGgoAAAAA', draft: { toolId: 'tool_interior' } } });
     const a1 = await poll(admin), c1 = await poll(auth);
     assert(a1.requests > a0.requests && a1.clients > a0.clients, 'admin lists change');
     assert(c1.client > c0.client, "client's own data changes");
