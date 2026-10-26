@@ -123,7 +123,10 @@ function VideoUpload({ onUploaded }: { onUploaded: (uri: string, poster: string)
   const up = async () => {
     setBusy(true);
     try { const { uri, poster } = await pickAndUploadVideo(); if (uri) onUploaded(uri, poster); }
-    catch (error) { toast(error instanceof Error && /TOO_LARGE/.test(error.message) ? t('admin.f.videoTooLarge') : error instanceof Error && error.message === 'R2_REQUIRED' ? t('improve.videoNeedsR2') : t('admin.f.uploadFailed')); }
+    catch (error) {
+      const code = error instanceof Error ? error.message : '';
+      toast(/TOO_LARGE/.test(code) ? t('admin.f.videoTooLarge') : code === 'R2_REQUIRED' ? t('improve.videoNeedsR2') : /^UPLOAD_(BLOCKED|FAILED_403)$/.test(code) ? t('improve.uploadBlocked') : t('admin.f.uploadFailed'));
+    }
     finally { setBusy(false); }
   };
   return <View className="flex-row -mt-1 mb-3"><Button title={t('admin.f.uploadVideo')} icon="upload" variant="soft" size="sm" onPress={up} loading={busy} /></View>;

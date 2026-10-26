@@ -10,6 +10,10 @@ import { api, backendEnabled, BackendError } from '@/lib/backend';
  *  - external image URLs: POST /admin/media/import, the server downloads the image once
  */
 const INLINE_MAX = 2.5 * 1024 * 1024; // larger files take the direct (presigned) path; the JSON body limit is 4 MB
+/** Files up to this size can also travel through the API itself (Vercel functions accept ~4.5 MB request bodies). */
+const VIA_API_MAX = 4 * 1024 * 1024;
+/** Upload requests carry megabytes: the default 15 s API timeout would abort them on a slow mobile network. */
+const UPLOAD_TIMEOUT = 120000;
 const MEDIA_URL = /^(?:https?:\/\/[^/]+)?\/api\/media\/[a-f0-9]{32}\.[a-z0-9]+$/;
 
 export const isStoredMedia = (value: string) => MEDIA_URL.test(value);
@@ -38,14 +42,14 @@ export const trackUpload = track;
 type Presigned = { id: string; uploadUrl: string; method: 'PUT'; headers: Record<string, string>; url: string; maxBytes: number };
 
 /** A data URL (from the image picker) -> /api/media URL. */
-export const uploadDataUrl = (dataUrl: string): Promise<string> => track(async () => (await api<{ url: string }>('/admin/media', { method: 'POST', body: { data: dataUrl } })).url);
+export const uploadDataUrl = (dataUrl: string): Promise<string> => track(async () => (await api<{ url: string }>('/admin/media', { method: 'POST', body: { data: dataUrl }, timeoutMs: UPLOAD_TIMEOUT })).url);
 
 /** Copies an external https image into storage (admins pasting Unsplash or CDN links). */
-export const importMediaUrl = (url: string): Promise<string> => track(async () => (await api<{ url: string }>('/admin/media/import', { method: 'POST', body: { url } })).url);
+export const importMediaUrl = (url: string): Promise<string> => track(async () => (await api<{ url: string }>('/admin/media/import', { method: 'POST', body: { url }, timeoutMs: 30000 })).url);
 
 /** Database mode: the file itself is the request body (the server checks its real type and size, and stores the bytes). */
 async function rawUpload(file: Blob, contentType: string): Promise<string> {
-  try { return (await api<{ url: string }>('/admin/media/raw', { method: 'POST', raw: file, headers: { 'Content-Type': contentType } })).url; }
+  try { return (await api<{ url: string }>('/admin/media/raw', { method: 'POST', raw: file, headers: { 'Content-Type': contentType }, timeoutMs: UPLOAD_TIMEOUT })).url; }
   catch (error) { throw error instanceof BackendError && error.status === 413 ? new Error('MEDIA_TOO_LARGE') : error; }
 }
 
@@ -64,11 +68,18 @@ async function directUploadNow(size: number, contentType: string, put: (target: 
       if (raw) return rawUpload(await raw(), contentType);
       throw new Error('R2_REQUIRED');
     }
+    if (error instanceof BackendError && error.status === 413) throw new Error('MEDIA_TOO_LARGE');
     throw error;
   }
-  const status = await put(target);
-  if (status < 200 || status >= 300) throw new Error('UPLOAD_FAILED');
-  const done = await api<{ url: string }>('/admin/media/complete', { method: 'POST', body: { id: target.id } });
+  let status = 0;
+  // A network-level failure here (most often: the bucket's CORS policy does not allow this origin) must not lose the file:
+  // when it is small enough, it goes through the API instead, which stores it in R2 server-side (same checks, same URL scheme).
+  try { status = await put(target); } catch { status = 0; }
+  if (status < 200 || status >= 300) {
+    if (raw && size <= VIA_API_MAX) return rawUpload(await raw(), contentType);
+    throw new Error(status ? `UPLOAD_FAILED_${status}` : 'UPLOAD_BLOCKED');
+  }
+  const done = await api<{ url: string }>('/admin/media/complete', { method: 'POST', body: { id: target.id }, timeoutMs: 30000 });
   return done.url;
 }
 

@@ -45,6 +45,25 @@ function r2Status(env = process.env) {
   return set.length === R2_VARS.length ? 'r2' : set.length ? 'incomplete' : 'database';
 }
 
+/**
+ * S3 client options for R2. The SDK (>= 3.729) adds "flexible checksums" by default: a CRC32 of the body on every PUT and
+ * checksum validation on every GET. In a presigned PUT URL that CRC is computed for an EMPTY body (`x-amz-checksum-crc32=AAAAAA==`),
+ * so R2 rejects the real file, and a ranged GET (used to check what arrived) can fail validation. R2 does not need them:
+ * only send/validate checksums when an operation requires one.
+ */
+function r2ClientOptions(env) {
+  // R2_ENDPOINT is optional: EU-jurisdiction buckets use https://<account>.eu.r2.cloudflarestorage.com; local S3 emulators (tests) need path-style URLs.
+  const custom = String(env.R2_ENDPOINT || '').trim().replace(/\/+$/, '');
+  return {
+    region: 'auto',
+    endpoint: custom || `https://${env.R2_ACCOUNT_ID.trim()}.r2.cloudflarestorage.com`,
+    forcePathStyle: !!custom,
+    requestChecksumCalculation: 'WHEN_REQUIRED',
+    responseChecksumValidation: 'WHEN_REQUIRED',
+    credentials: { accessKeyId: env.R2_ACCESS_KEY_ID.trim(), secretAccessKey: env.R2_SECRET_ACCESS_KEY.trim() },
+  };
+}
+
 /** Cloudflare R2 through the S3 API (region "auto"). `client` may be injected (tests); otherwise the SDK is loaded lazily. */
 function createR2Storage(env = process.env, { client, presign } = {}) {
   if (r2Status(env) !== 'r2') return null;
@@ -53,11 +72,7 @@ function createR2Storage(env = process.env, { client, presign } = {}) {
   let sdk;
   const s3 = () => (sdk ||= require('@aws-sdk/client-s3'));
   let instance = client;
-  const connection = () => (instance ||= new (s3().S3Client)({
-    region: 'auto',
-    endpoint: `https://${env.R2_ACCOUNT_ID.trim()}.r2.cloudflarestorage.com`,
-    credentials: { accessKeyId: env.R2_ACCESS_KEY_ID.trim(), secretAccessKey: env.R2_SECRET_ACCESS_KEY.trim() },
-  }));
+  const connection = () => (instance ||= new (s3().S3Client)(r2ClientOptions(env)));
   const sign = presign || ((...args) => require('@aws-sdk/s3-request-presigner').getSignedUrl(...args));
   return {
     kind: 'r2',
@@ -275,4 +290,4 @@ function createMedia(db, { env = process.env, storage = createR2Storage(env), do
   return { storeMedia, storeRaw, rawLimit, readMedia, externalize, importRemote, presignUpload, completeUpload, moveRowToR2, stats, mode: storage ? 'r2' : 'database' };
 }
 
-module.exports = { createMedia, createR2Storage, r2Status, MEDIA_PREFIX: PREFIX, MEDIA_KEYS, R2_VARS, EXT };
+module.exports = { createMedia, createR2Storage, r2ClientOptions, r2Status, MEDIA_PREFIX: PREFIX, MEDIA_KEYS, R2_VARS, EXT };

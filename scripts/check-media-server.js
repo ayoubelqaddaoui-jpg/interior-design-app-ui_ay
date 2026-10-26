@@ -344,3 +344,69 @@ test('with R2: raw uploads go to R2 as well (one write path)', async () => {
     assert.equal((await call(backend, up.body.url)).status, 302);
   } finally { backend.server.emit('close'); }
 });
+
+test('real R2 adapter: presigned PUT URLs carry no SDK checksum for an empty body (it made R2 reject every direct video upload)', async () => {
+  const { r2ClientOptions } = require('../server/media');
+  const options = r2ClientOptions(R2_ENV);
+  assert.equal(options.requestChecksumCalculation, 'WHEN_REQUIRED');
+  assert.equal(options.responseChecksumValidation, 'WHEN_REQUIRED');
+  assert.equal(options.endpoint, 'https://acct.r2.cloudflarestorage.com');
+  assert.equal(options.forcePathStyle, false);
+  assert.equal(r2ClientOptions({ ...R2_ENV, R2_ENDPOINT: 'https://acct.eu.r2.cloudflarestorage.com/' }).endpoint, 'https://acct.eu.r2.cloudflarestorage.com');
+  // Real SDK + real presigner (signing only, no network).
+  const url = new URL(await createR2Storage(R2_ENV).presignPut('media/v.mp4', 'video/mp4', 1234));
+  // Same URL style as before (virtual-hosted bucket, supported by R2); only the checksum parameters are gone.
+  assert.equal(url.host, 'bucket.acct.r2.cloudflarestorage.com');
+  assert.equal(url.pathname, '/media/v.mp4');
+  for (const key of url.searchParams.keys()) assert.ok(!/checksum/i.test(key), `unexpected ${key} in the presigned URL`);
+  assert.equal(url.searchParams.get('X-Amz-SignedHeaders'), 'content-length;content-type;host');
+  assert.equal(url.searchParams.get('X-Amz-Expires'), '300');
+});
+
+/**
+ * Optional end-to-end check with the REAL S3 SDK against an S3-compatible server (R2 itself, MinIO, moto):
+ *   R2_TEST_ENDPOINT=http://127.0.0.1:5055 R2_TEST_BUCKET=dwira-media node --test scripts/check-media-server.js
+ * Admin image upload -> R2 object, presign -> browser-style PUT -> complete -> saved in content -> public content -> 302 -> bytes.
+ */
+test('end to end with a real S3-compatible endpoint (skipped unless R2_TEST_ENDPOINT is set)', { skip: !process.env.R2_TEST_ENDPOINT }, async () => {
+  const env = { ...R2_ENV, R2_ENDPOINT: process.env.R2_TEST_ENDPOINT, R2_BUCKET: process.env.R2_TEST_BUCKET || 'dwira-media', R2_PUBLIC_BASE_URL: `${process.env.R2_TEST_ENDPOINT}/${process.env.R2_TEST_BUCKET || 'dwira-media'}`, R2_ACCESS_KEY_ID: process.env.R2_TEST_KEY || 'test', R2_SECRET_ACCESS_KEY: process.env.R2_TEST_SECRET || 'test' };
+  const storage = createR2Storage(env);
+  const backend = createBackend({ env: { PGLITE_DIR: ':memory:', COOKIE_SECURE: 'false', PUSH_WAIT_MS: '50', ...env }, db: await freshDb(), media: { storage } });
+  const login = await call(backend, '/api/admin/login', { method: 'POST', headers: native, body: { email: 'admin', password: 'admin' } });
+  const admin = { authorization: `Bearer ${login.body.token}` };
+  try {
+    assert.equal((await call(backend, '/api/health')).body.media, 'r2');
+    // 1. Image picked in the admin (ImageField -> POST /api/admin/media).
+    const image = await call(backend, '/api/admin/media', { method: 'POST', headers: admin, body: { data: bigPng } });
+    assert.equal(image.status, 200, JSON.stringify(image.body));
+    // 2. Video: presign, PUT exactly like the browser does (fetch with the returned headers), complete.
+    const video = Buffer.concat([mp4Head, Buffer.alloc(4096, 5)]);
+    const presign = await call(backend, '/api/admin/media/presign', { method: 'POST', headers: admin, body: { contentType: 'video/mp4', size: video.length } });
+    assert.equal(presign.status, 200, JSON.stringify(presign.body));
+    const put = await fetch(presign.body.uploadUrl, { method: presign.body.method, headers: presign.body.headers, body: video });
+    assert.equal(put.status, 200, `direct PUT refused: ${await put.text()}`);
+    const done = await call(backend, '/api/admin/media/complete', { method: 'POST', headers: admin, body: { id: presign.body.id } });
+    assert.equal(done.status, 200, JSON.stringify(done.body));
+    // 3. Saved on a tool, visible in the public content.
+    const saved = await call(backend, '/api/admin/content/tools/tool_e2e', { method: 'PUT', headers: admin, body: { title: { fr: 'x', ar: 'x', dar: 'x' }, image: image.body.url, media: { type: 'video', uri: done.body.url, poster: image.body.url }, order: 1, visible: true } });
+    assert.equal(saved.status, 200);
+    const tool = (await call(backend, '/api/content')).body.collections.tools.find(t => t.id === 'tool_e2e');
+    assert.deepEqual([tool.image, tool.media.uri], [image.body.url, done.body.url]);
+    // 4. Display: /api/media redirects to the public object, which returns the exact bytes.
+    for (const [url, bytes, mime] of [[tool.image, Buffer.from(bigPng.split(',')[1], 'base64'), 'image/png'], [tool.media.uri, video, 'video/mp4']]) {
+      const read = await call(backend, url);
+      assert.equal(read.status, 302);
+      const file = await fetch(read.headers.location);
+      assert.equal(file.status, 200);
+      assert.equal(file.headers.get('content-type'), mime);
+      assert.ok(Buffer.from(await file.arrayBuffer()).equals(bytes), `${url} bytes match`);
+    }
+    // 5. Client render flow: the photo goes to R2 too.
+    const user = await call(backend, '/api/user/login', { method: 'POST', headers: { ...native, 'x-demand-token': 'a'.repeat(64) }, body: { name: 'Salma', phone: '+212600000001' } });
+    const request = await call(backend, '/api/requests', { method: 'POST', headers: { 'x-demand-token': 'a'.repeat(64), 'x-user-token': user.body.token }, body: { id: 'req_e2e_0001', photoUri: 'data:image/jpeg;base64,' + jpegBytes.toString('base64'), draft: { toolId: 'tool_e2e' } } });
+    assert.equal(request.status, 201, JSON.stringify(request.body));
+    const photo = await call(backend, request.body.photoUri);
+    assert.equal(photo.status, 302);
+    assert.equal((await fetch(photo.headers.location)).status, 200);
+  } finally { backend.server.emit('close'); }
+});
