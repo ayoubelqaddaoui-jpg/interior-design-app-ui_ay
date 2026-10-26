@@ -6,6 +6,7 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { Icon } from '@/components/ui/Icon';
 import { Input } from '@/components/ui/Field';
 import { ConfirmSheet, Sheet } from '@/components/ui/Sheet';
+import { Segmented } from '@/components/ui/Segmented';
 import { Toggle } from '@/components/ui/Toggle';
 import { Txt } from '@/components/ui/Txt';
 import { AdminPage } from '@/components/admin/AdminShell';
@@ -50,19 +51,6 @@ function BarAction({ icon, label, onPress, disabled, danger, testID }: { icon: s
       <Icon name={icon} size={20} tone={danger ? 'danger' : 'fg'} />
       <Txt className={`text-[11px] font-bold ${danger ? 'text-danger' : ''}`} numberOfLines={1}>{label}</Txt>
     </Pressable>
-  );
-}
-
-/** Segmented control: big touch targets, same look on phone and desktop. */
-function Segmented<T extends string>({ value, options, onChange, testID }: { value: T; options: { key: T; label: string }[]; onChange: (v: T) => void; testID?: string }) {
-  return (
-    <View testID={testID} className="flex-row bg-surface2 rounded-full p-1">
-      {options.map((o) => (
-        <Pressable key={o.key} testID={`${testID}-${o.key}`} accessibilityRole="radio" accessibilityState={{ selected: value === o.key }} onPress={() => onChange(o.key)} className={`flex-1 h-10 rounded-full items-center justify-center ${value === o.key ? 'bg-ink' : ''}`}>
-          <Txt className={`text-[13px] font-bold ${value === o.key ? 'text-onink' : ''}`} numberOfLines={1}>{o.label}</Txt>
-        </Pressable>
-      ))}
-    </View>
   );
 }
 
@@ -225,27 +213,27 @@ function EditUser({ user, busy, onClose, onSave, onDelete }: { user: AppUser | n
   const locked = !!user && isProtected(user);
   return (
     <Sheet visible={!!user} onClose={onClose} title={t('admin.um.editUser')}
-      footer={user ? <View className="flex-row gap-3"><Button testID="um-edit-cancel" variant="soft" className="flex-1" title={t('common.cancel')} onPress={onClose} /><Button testID="um-edit-save" className="flex-1" title={t('common.save')} disabled={!dirty} loading={busy} onPress={() => onSave(user, { credits: amount, blocked })} /></View> : undefined}>
+      footer={user ? <View className="flex-row gap-2.5"><Button testID="um-edit-cancel" variant="soft" className="flex-1" title={t('common.cancel')} onPress={onClose} /><Button testID="um-edit-save" className="flex-1" title={t('common.save')} disabled={!dirty} loading={busy} onPress={() => onSave(user, { credits: amount, blocked })} /></View> : undefined}>
       {user ? (
         <View>
-          <View className="flex-row items-center gap-3 mb-5">
-            <View className="w-12 h-12 rounded-full bg-primary items-center justify-center"><Txt className="text-onprimary font-extrabold text-[18px]">{initial(user)}</Txt></View>
+          <View className="flex-row items-center gap-3 mb-3">
+            <View className="w-10 h-10 rounded-full bg-primary items-center justify-center"><Txt className="text-onprimary font-extrabold text-[16px]">{initial(user)}</Txt></View>
             <View className="flex-1" style={{ minWidth: 0 }}>
-              <Txt className="font-extrabold text-[17px]" numberOfLines={1}>{user.name || '—'}</Txt>
-              <Txt className="text-muted text-[13px]" numberOfLines={1}>{user.whatsapp || '—'}</Txt>
+              <Txt className="font-extrabold text-[15px]" numberOfLines={1}>{user.name || '—'}</Txt>
+              <Txt className="text-muted text-[12px]" numberOfLines={1}>{user.whatsapp || '—'}</Txt>
             </View>
           </View>
           <Txt className="text-[13px] font-semibold text-muted mb-1.5">{t('admin.um.credits')}</Txt>
-          <View className="flex-row items-center gap-2 mb-5" style={{ direction: 'ltr' } as any}>
-            <Pressable testID="um-minus" accessibilityRole="button" accessibilityLabel="-1" onPress={() => step(-1)} className="w-12 h-12 rounded-full bg-surface2 items-center justify-center active:opacity-70"><Icon name="minus" size={22} /></Pressable>
+          <View className="flex-row items-center gap-2 mb-3" style={{ direction: 'ltr' } as any}>
+            <Pressable testID="um-minus" accessibilityRole="button" accessibilityLabel="-1" onPress={() => step(-1)} className="w-11 h-11 rounded-full bg-surface2 items-center justify-center active:opacity-70"><Icon name="minus" size={20} /></Pressable>
             <View className="flex-1"><Input testID="um-credits-input" value={credits} onChangeText={(v) => setCredits(digits(v))} keyboardType="number-pad" className="text-center font-extrabold" style={{ textAlign: 'center' }} /></View>
-            <Pressable testID="um-plus" accessibilityRole="button" accessibilityLabel="+1" onPress={() => step(1)} className="w-12 h-12 rounded-full bg-primary items-center justify-center active:opacity-70"><Icon name="plus" size={22} tone="onprimary" /></Pressable>
+            <Pressable testID="um-plus" accessibilityRole="button" accessibilityLabel="+1" onPress={() => step(1)} className="w-11 h-11 rounded-full bg-primary items-center justify-center active:opacity-70"><Icon name="plus" size={20} tone="onprimary" /></Pressable>
           </View>
-          <View className="flex-row items-center bg-surface2 rounded-2xl px-4 py-3 mb-3" style={{ opacity: locked ? 0.5 : 1 }}>
+          <View className="flex-row items-center bg-surface2 rounded-xl px-3 py-2 mb-2" style={{ opacity: locked ? 0.5 : 1 }}>
             <View className="flex-1 pe-3"><Txt className="font-bold">{t('admin.um.blockAccount')}</Txt><Txt className="text-muted text-[12px]">{t('admin.um.blockHint')}</Txt></View>
             <Toggle testID="um-blocked-toggle" value={blocked} disabled={locked} onValueChange={setBlocked} />
           </View>
-          {!locked ? <Pressable testID="um-edit-delete" accessibilityRole="button" onPress={() => onDelete(user)} className="mt-3 h-12 rounded-full border border-danger flex-row items-center justify-center gap-2 active:opacity-70"><Icon name="trash-can-outline" size={19} tone="danger" /><Txt className="font-bold text-danger">{t('common.delete')}</Txt></Pressable> : null}
+          {!locked ? <Pressable testID="um-edit-delete" accessibilityRole="button" onPress={() => onDelete(user)} className="mt-2 h-11 rounded-full border border-danger flex-row items-center justify-center gap-2 active:opacity-70"><Icon name="trash-can-outline" size={19} tone="danger" /><Txt className="font-bold text-danger">{t('common.delete')}</Txt></Pressable> : null}
         </View>
       ) : null}
     </Sheet>
@@ -261,16 +249,16 @@ function BulkCredits({ visible, users, busy, onClose, onApply }: { visible: bool
   const sample = users.slice(0, 3);
   return (
     <Sheet visible={visible} onClose={onClose} title={`${t('admin.um.editCredits')} · ${users.length}`}
-      footer={<View className="flex-row gap-3"><Button testID="um-credits-cancel" variant="soft" className="flex-1" title={t('common.cancel')} onPress={onClose} /><Button testID="um-credits-apply" className="flex-1" title={t('admin.um.apply', { count: users.length })} loading={busy} disabled={!users.length || (mode !== 'set' && amount === 0)} onPress={() => onApply(mode, amount)} /></View>}>
-      <Segmented testID="um-mode" value={mode} onChange={setMode} options={[{ key: 'add', label: t('admin.um.modeAdd') }, { key: 'subtract', label: t('admin.um.modeSubtract') }, { key: 'set', label: t('admin.um.modeSet') }]} />
-      <View className="mt-4"><Input testID="um-amount" label={t('admin.credits.amount')} value={value} onChangeText={(v) => setValue(digits(v))} keyboardType="number-pad" /></View>
-      <View className="flex-row flex-wrap gap-2 mb-4">
-        {quick.map((q) => <Pressable key={q} testID={`um-quick-${q}`} onPress={() => setValue(String(q))} className={`px-4 h-9 rounded-full items-center justify-center ${amount === q ? 'bg-primary' : 'bg-surface2'}`}><Txt className={`font-bold ${amount === q ? 'text-onprimary' : ''}`}>{q}</Txt></Pressable>)}
+      footer={<View className="flex-row gap-2.5"><Button testID="um-credits-cancel" variant="soft" className="flex-1" title={t('common.cancel')} onPress={onClose} /><Button testID="um-credits-apply" className="flex-1" title={t('admin.um.apply', { count: users.length })} loading={busy} disabled={!users.length || (mode !== 'set' && amount === 0)} onPress={() => onApply(mode, amount)} /></View>}>
+      <Segmented compact testID="um-mode" value={mode} onChange={setMode} options={[{ key: 'add', label: t('admin.um.modeAdd') }, { key: 'subtract', label: t('admin.um.modeSubtract') }, { key: 'set', label: t('admin.um.modeSet') }]} />
+      <View className="mt-3"><Input testID="um-amount" label={t('admin.credits.amount')} value={value} onChangeText={(v) => setValue(digits(v))} keyboardType="number-pad" /></View>
+      <View className="flex-row flex-wrap gap-2 mb-3">
+        {quick.map((q) => <Pressable key={q} testID={`um-quick-${q}`} onPress={() => setValue(String(q))} className={`px-3.5 h-8 rounded-full items-center justify-center ${amount === q ? 'bg-primary' : 'bg-surface2'}`}><Txt className={`font-bold ${amount === q ? 'text-onprimary' : ''}`}>{q}</Txt></Pressable>)}
       </View>
       <Txt className="text-[13px] font-semibold text-muted mb-1.5">{t('admin.um.preview')}</Txt>
       <Card className="overflow-hidden">
         {sample.map((u, i) => (
-          <View key={u.id} className={`flex-row items-center px-3 py-2.5 gap-3 ${i ? 'border-t border-line' : ''}`}>
+          <View key={u.id} className={`flex-row items-center px-3 py-2 gap-3 ${i ? 'border-t border-line' : ''}`}>
             <Txt className="flex-1 font-semibold" numberOfLines={1} style={{ textAlign: 'auto' }}>{u.name || u.whatsapp || '—'}</Txt>
             <View className="flex-row items-center gap-2" style={{ direction: 'ltr', flexShrink: 0 } as any}>
               <Txt className="text-muted">{u.credits}</Txt>

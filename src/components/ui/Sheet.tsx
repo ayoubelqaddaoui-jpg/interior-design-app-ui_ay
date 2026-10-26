@@ -28,17 +28,17 @@ export function Sheet({ visible, onClose, title, children, wide, footer, history
           <Pressable onPress={onClose} style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: tablet ? 'center' : 'flex-end', alignItems: 'center' }}>
             <Pressable
               onPress={() => {}}
-              className={`bg-bg w-full ${tablet ? `rounded-3xl ${wide ? 'max-w-[960px]' : 'max-w-[520px]'}` : 'rounded-t-3xl'}`}
-              style={{ maxHeight: height * 0.9, width: tablet ? '92%' : '100%', flexShrink: 1, minHeight: 0 }}
+              className={`bg-bg w-full ${tablet ? `rounded-2xl ${wide ? 'max-w-[880px]' : 'max-w-[460px]'}` : 'rounded-t-2xl'}`}
+              style={{ maxHeight: height * (tablet ? 0.88 : 0.92), width: tablet ? '92%' : '100%', flexShrink: 1, minHeight: 0 }}
             >
               {title ? (
-                <View testID="sheet-header" style={{ flexShrink: 0 }} className="flex-row items-center justify-between px-5 py-4 border-b border-line gap-3">
-                  <Txt className="text-[18px] leading-[26px] font-extrabold flex-1">{title}</Txt>
-                  <Pressable accessibilityRole="button" accessibilityLabel={t('common.close')} testID="sheet-close" onPress={onClose} hitSlop={10} className="w-9 h-9 rounded-full bg-surface2 items-center justify-center"><Icon name="close" size={20} /></Pressable>
+                <View testID="sheet-header" style={{ flexShrink: 0 }} className="flex-row items-center justify-between px-4 py-2.5 border-b border-line gap-3">
+                  <Txt className="text-[16px] leading-[22px] font-extrabold flex-1" numberOfLines={2}>{title}</Txt>
+                  <Pressable accessibilityRole="button" accessibilityLabel={t('common.close')} testID="sheet-close" onPress={onClose} hitSlop={8} className="w-8 h-8 rounded-full bg-surface2 items-center justify-center"><Icon name="close" size={18} /></Pressable>
                 </View>
               ) : null}
-              <ScrollView keyboardShouldPersistTaps="handled" style={{ flexShrink: 1, minHeight: 0 }} contentContainerStyle={{ padding: tablet ? 24 : 16, paddingTop: title ? 12 : 20, paddingBottom: footer ? 20 : Math.max(28, insets.bottom + 16) }}>{children}</ScrollView>
-              {footer ? <View className="px-4 pt-3 border-t border-line bg-bg" style={{ paddingBottom: Math.max(16, insets.bottom), flexShrink: 0 }}>{footer}</View> : null}
+              <ScrollView keyboardShouldPersistTaps="handled" style={{ flexShrink: 1, minHeight: 0 }} contentContainerStyle={{ padding: tablet ? 16 : 12, paddingTop: title ? 10 : 16, paddingBottom: footer ? 12 : Math.max(16, insets.bottom + 8) }}>{children}</ScrollView>
+              {footer ? <View className="px-3 pt-2.5 border-t border-line bg-bg" style={{ paddingBottom: Math.max(10, insets.bottom), flexShrink: 0 }}>{footer}</View> : null}
             </Pressable>
           </Pressable>
         </KeyboardAvoidingView>
@@ -50,10 +50,10 @@ export function Sheet({ visible, onClose, title, children, wide, footer, history
 export function ConfirmSheet({ visible, onClose, onConfirm, message, confirmLabel, cancelLabel }: { visible: boolean; onClose: () => void; onConfirm: () => void; message: string; confirmLabel: string; cancelLabel: string }) {
   return (
     <Sheet visible={visible} onClose={onClose}>
-      <Txt className="text-[17px] font-bold text-center mb-5">{message}</Txt>
-      <View className="flex-row gap-3">
-        <Pressable onPress={onClose} className="flex-1 h-12 rounded-full bg-surface2 items-center justify-center active:opacity-80"><Txt className="font-bold">{cancelLabel}</Txt></Pressable>
-        <Pressable onPress={() => { onClose(); onConfirm(); }} className="flex-1 h-12 rounded-full bg-danger items-center justify-center active:opacity-80"><Txt className="font-bold text-white">{confirmLabel}</Txt></Pressable>
+      <Txt className="text-[15px] leading-[22px] font-bold text-center mb-3 mt-1">{message}</Txt>
+      <View className="flex-row gap-2.5">
+        <Pressable onPress={onClose} className="flex-1 h-11 rounded-full bg-surface2 items-center justify-center active:opacity-80"><Txt className="font-bold">{cancelLabel}</Txt></Pressable>
+        <Pressable onPress={() => { onClose(); onConfirm(); }} className="flex-1 h-11 rounded-full bg-danger items-center justify-center active:opacity-80"><Txt className="font-bold text-white">{confirmLabel}</Txt></Pressable>
       </View>
     </Sheet>
   );

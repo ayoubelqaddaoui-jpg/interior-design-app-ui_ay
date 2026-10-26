@@ -1,8 +1,9 @@
 import { useEffect } from 'react';
-import { Platform } from 'react-native';
+import { AppState, Platform } from 'react-native';
 import * as SystemUI from 'expo-system-ui';
 import { NavigationBar } from 'expo-navigation-bar';
 import { useTheme } from '@/theme/ThemeProvider';
+import { luminance } from '@/theme/color';
 
 /**
  * Status bar + Android navigation bar follow the app background chosen by the admin (theme stored in the database),
@@ -13,15 +14,23 @@ import { useTheme } from '@/theme/ThemeProvider';
  */
 export function SystemBars() {
   const { colors, dark } = useTheme();
+  // Icon contrast comes from the real background colour the admin chose (not only the theme's dark flag).
+  const lightIcons = (() => { try { return luminance(colors.bg) < 0.5; } catch { return dark; } })();
   useEffect(() => {
-    void SystemUI.setBackgroundColorAsync(colors.bg).catch(() => {});
-    if (Platform.OS === 'android') { try { NavigationBar.setStyle(dark ? 'light' : 'dark'); } catch { /* older Android: keep default */ } }
+    const apply = () => {
+      void SystemUI.setBackgroundColorAsync(colors.bg).catch(() => {});
+      if (Platform.OS === 'android') { try { NavigationBar.setStyle(lightIcons ? 'light' : 'dark'); } catch { /* older Android: keep default */ } }
+    };
+    apply();
+    // Android can reset the bar style when the app returns from the background or after a system theme change.
+    const sub = Platform.OS === 'android' ? AppState.addEventListener('change', state => { if (state === 'active') apply(); }) : null;
     if (Platform.OS === 'web' && typeof document !== 'undefined') {
       let meta = document.querySelector('meta[name="theme-color"]') as HTMLMetaElement | null;
       if (!meta) { meta = document.createElement('meta'); meta.name = 'theme-color'; document.head.appendChild(meta); }
       meta.content = colors.bg;
       try { localStorage.setItem('dwira:v1:bar-color', colors.bg); } catch { /* private mode */ }
     }
-  }, [colors.bg, dark]);
+    return () => sub?.remove();
+  }, [colors.bg, lightIcons]);
   return null;
 }

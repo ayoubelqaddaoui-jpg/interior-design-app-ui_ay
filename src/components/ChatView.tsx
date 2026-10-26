@@ -7,7 +7,7 @@ import { useFocusEffect } from 'expo-router';
 import { useViewState } from '@/hooks/useViewState';
 import { useStore } from '@/store/useStore';
 import { useUserSession } from '@/store/useUserSession';
-import { services, ME } from '@/data/repositories';
+import { services, VISITOR } from '@/data/repositories';
 import { useL, useT } from '@/i18n';
 import { Icon } from '@/components/ui/Icon';
 import { Sheet } from '@/components/ui/Sheet';
@@ -31,7 +31,7 @@ export function ChatView({ conversationId, onCreated, header }: { conversationId
   const { colors } = useTheme();
   const fontFamily = useAppFont();
   const config = useStore((s) => s.doc.assistant);
-  const userId = useUserSession(s => s.user?.id) || ME;
+  const userId = useUserSession(s => s.user?.id) || VISITOR;
   const conv = useStore((s) => s.conversations.find((c) => c.id === conversationId && c.userId === userId));
   const [text, setText] = useViewState(`chat:${conversationId ?? 'new'}:text`, '');
   const [image, setImage] = useViewState(`chat:${conversationId ?? 'new'}:image`, '');

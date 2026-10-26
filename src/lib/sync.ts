@@ -11,10 +11,10 @@ import { useUserSession } from '@/store/useUserSession';
 import { useAdminChats } from '@/store/useAdminChats';
 
 /** What `GET /api/sync` returns: one monotonically increasing version per kind of data (null = not visible to this session). */
-interface SyncState { content: number; requests: number | null; clients: number | null; chats?: number | null; admin: number | null; client: number | null; user: { id: string; blocked: boolean } | null; isAdmin: boolean }
+interface SyncState { content: number; requests: number | null; clients: number | null; chats?: number | null; admin: number | null; client: number | null; guest?: number | null; user: { id: string; blocked: boolean } | null; isAdmin: boolean }
 const POLL_MS = 4000;
 
-type Seen = Partial<Record<'content' | 'requests' | 'clients' | 'chats' | 'admin' | 'client', number | null>>;
+type Seen = Partial<Record<'content' | 'requests' | 'clients' | 'chats' | 'admin' | 'client' | 'guest', number | null>>;
 let seen: Seen = {};
 let identity = '';
 let running = false;
@@ -60,6 +60,9 @@ export async function syncOnce() {
     if (session.user) {
       if (state.user?.blocked) jobs.push(session.refresh()); // signs this device out
       else if (changed('client')) jobs.push(session.refresh().then(reloadUserSpace));
+    } else if (state.guest != null && changed('guest')) {
+      // A signed-out visitor's chats are in the database too: an admin answer (or another tab) shows up here.
+      jobs.push(store.reload('conversations'));
     } else if (state.client != null && !state.user?.blocked) {
       // The server recognises a client session this device has not loaded (signed in from the cookie).
       // A blocked account is skipped: retrying it every poll would only re-announce the block.

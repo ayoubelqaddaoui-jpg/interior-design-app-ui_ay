@@ -11,7 +11,11 @@ import { useBp } from '@/hooks/useBp';
 import { SearchTarget, useViewState } from '@/hooks/useViewState';
 import { useT } from '@/i18n';
 import type { Chip, RowView } from '@/admin/entities';
+import { RevealTarget, useReveal } from '@/hooks/useReveal';
 import { DragRow, justDragged, useReorder } from './DragReorder';
+import { LangDots } from './LangField';
+import type { Lang } from '@/data/types';
+import type { LangState } from '@/lib/langStatus';
 
 const TONE: Record<NonNullable<Chip['tone']>, { box: string; text: string; icon: 'muted' | 'primary' | 'success' | 'danger' | 'fg' }> = {
   muted: { box: 'bg-surface2', text: 'text-muted', icon: 'muted' },
@@ -34,7 +38,9 @@ const Chips = ({ chips }: { chips?: Chip[] }) => chips?.length ? <View className
  * Admin collection view. Lists (rows with a leading visual) and grids (image tiles) are both built from the
  * entity's own `view(row)` description; reordering is always the drag handle, never arrow buttons.
  */
-export function CrudTable<T extends { id: string; visible?: boolean }>({ rows, view, onEdit, onDelete, onReorder, onMove, onToggle, rowTestID, selected, onSelect, onLongPress, visual = false }: {
+export function CrudTable<T extends { id: string; visible?: boolean }>({ rows, view, onEdit, onDelete, onReorder, onMove, onToggle, rowTestID, selected, onSelect, onLongPress, visual = false, langs }: {
+  /** Translation state of a row (DAR / AR / FR); shown on the row only when something is not complete. */
+  langs?: (r: T) => Record<Lang, LangState> | null;
   rows: T[]; view: (r: T, index: number) => RowView; visual?: boolean;
   onEdit?: (r: T) => void; onDelete?: (r: T) => void; onToggle?: (r: T) => void;
   /** Drag-and-drop: `ids` (one row or the whole selection) were dropped on `targetId`. */
@@ -57,6 +63,13 @@ export function CrudTable<T extends { id: string; visible?: boolean }>({ rows, v
     const timer = setTimeout(() => setPage(Math.floor(targetIndex / pageSize)), 0);
     return () => clearTimeout(timer);
   }, [targetIndex, target, focus, setPage]);
+  // Something was just added: show the page that holds it (the first of a group) so the highlight has a row to land on.
+  const revealed = useReveal((state) => state.current);
+  const revealIndex = revealed ? rows.findIndex((row) => row.id === revealed.ids[0]) : -1;
+  useEffect(() => {
+    if (revealIndex < 0 || !revealed || Date.now() - revealed.at > 8000) return;
+    setPage(Math.floor(revealIndex / pageSize));
+  }, [revealIndex, revealed, setPage]);
   const visibleRows = rows.slice(currentPage * pageSize, (currentPage + 1) * pageSize);
   const reorder = useReorder(rows.map((r) => r.id), selected ?? [], (ids, to) => onReorder?.(ids, to), !!onReorder);
   const measure = (event: import('react-native').LayoutChangeEvent) => setWidth(event.nativeEvent.layout.width);
@@ -79,6 +92,7 @@ export function CrudTable<T extends { id: string; visible?: boolean }>({ rows, v
     onLongPress: onLongPress ? () => { if (!justDragged()) onLongPress(r.id); } : undefined,
     onPress: onSelect && selected?.length ? () => { if (!justDragged()) onSelect(r.id); } : undefined,
   });
+  const langBadge = (r: T) => { const states = langs?.(r); return states && Object.values(states).some((x) => x !== 'complete') ? <LangDots states={states} /> : null; };
   const hiddenBadge = (r: T) => r.visible === false ? <View className="flex-row items-center gap-1 rounded-full px-2 h-5 bg-ink"><Icon name="eye-off-outline" size={11} tone="onink" /><Txt className="text-onink text-[10px] font-bold">{t('admin.crud.hidden')}</Txt></View> : null;
 
   if (visual) {
@@ -87,12 +101,12 @@ export function CrudTable<T extends { id: string; visible?: boolean }>({ rows, v
       {visibleRows.map((r, i) => {
         const v = view(r, currentPage * pageSize + i);
         return <DragRow key={r.id} id={r.id} reorder={reorder} layout="grid" handleTone="light" onMove={onMove ? (d) => onMove(r, d) : undefined} style={{ width: `${100 / columns}%`, padding: 5, minWidth: 0 }}>{(handle) => (
-          <SearchTarget id={r.id}>
+          <SearchTarget id={r.id}><RevealTarget id={r.id}>
               <Card className={`overflow-hidden rounded-3xl ${isOn(r) ? 'border-primary' : ''}`} style={{ borderWidth: isOn(r) ? 2 : 1 }}>
                 <Pressable testID={rowTestID ? `${rowTestID}-${r.id}` : undefined} {...press(r)} className={r.visible === false ? 'opacity-60' : ''}>
                   <MediaView media={v.cover} style={{ height: desktop ? 140 : 116 }} />
                   <View className="p-2.5">
-                    <Txt className="font-extrabold text-[14px]" numberOfLines={1}>{v.title}</Txt>
+                    <View className="flex-row items-center justify-between gap-2"><Txt className="font-extrabold text-[14px] flex-1" numberOfLines={1}>{v.title}</Txt>{langBadge(r)}</View>
                     {v.subtitle ? <Txt className="text-muted text-[12px] mt-0.5" numberOfLines={1}>{v.subtitle}</Txt> : null}
                     <Chips chips={v.chips} />
                   </View>
@@ -103,7 +117,7 @@ export function CrudTable<T extends { id: string; visible?: boolean }>({ rows, v
                 </View>
                 <View className="flex-row items-center justify-end px-1 pb-1 border-t border-line">{actions(r)}</View>
               </Card>
-          </SearchTarget>
+          </RevealTarget></SearchTarget>
         )}</DragRow>;
       })}
     </View>{pagination}</View>;
@@ -116,7 +130,7 @@ export function CrudTable<T extends { id: string; visible?: boolean }>({ rows, v
           const v = view(r, currentPage * pageSize + i);
           return (
             <DragRow key={r.id} id={r.id} reorder={reorder} layout="list" onMove={onMove ? (d) => onMove(r, d) : undefined}>{(handle) => (
-              <SearchTarget id={r.id}>
+              <SearchTarget id={r.id}><RevealTarget id={r.id}>
                 <Card className={`rounded-3xl ${isOn(r) ? 'border-primary bg-soft' : ''}`} style={{ borderWidth: isOn(r) ? 2 : 1 }}>
                   <Pressable testID={rowTestID ? `${rowTestID}-${r.id}` : undefined} {...press(r)} className={`flex-row items-center gap-2 ps-1.5 pe-2 py-2.5 ${r.visible === false ? 'opacity-60' : ''}`}>
                     {handle}
@@ -125,6 +139,7 @@ export function CrudTable<T extends { id: string; visible?: boolean }>({ rows, v
                       <View className="flex-row items-center gap-2">
                         <Txt className="font-extrabold text-[16px]" numberOfLines={1} style={{ flexShrink: 1 }}>{v.title}</Txt>
                         {hiddenBadge(r)}
+                        {langBadge(r)}
                       </View>
                       {v.subtitle ? <Txt className="text-muted text-[13px] mt-0.5" numberOfLines={1}>{v.subtitle}</Txt> : null}
                       <Chips chips={v.chips} />
@@ -134,7 +149,7 @@ export function CrudTable<T extends { id: string; visible?: boolean }>({ rows, v
                   </Pressable>
                   {!desktop ? <View className="flex-row items-center justify-between px-2 pb-1.5 -mt-1"><View className="flex-row items-center">{checkbox(r)}</View>{actions(r)}</View> : null}
                 </Card>
-              </SearchTarget>
+              </RevealTarget></SearchTarget>
             )}</DragRow>
           );
         })}

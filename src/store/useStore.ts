@@ -3,7 +3,7 @@ import { create } from 'zustand';
 import type { CollMap, CollName, DocMap, DocName, AppUser } from '@/data/types';
 import { repos, docs, ME } from '@/data/repositories';
 import { backendEnabled } from '@/lib/backend';
-import { contentSnapshot, lastContentWrite } from '@/data/repositories/remoteContent';
+import { contentSnapshot } from '@/data/repositories/remoteContent';
 import { collectionBaselines, docBaselines } from '@/store/drafts';
 import { moveSelection } from '@/lib/reorder';
 import { uid } from '@/lib/uid';
@@ -74,11 +74,9 @@ export const useStore = create<State>((set, get) => ({
     set({ [name]: await repos[name].list() } as Partial<State>);
   },
   async reloadContent(version) {
-    const startedAt = Date.now();
     // `version` is the counter the server announced through /api/sync: asking for that exact version bypasses any short-lived shared cache.
     const [snapshot] = await Promise.all([contentSnapshot(true, version)]);
-    // An admin save finished while this was in flight: the snapshot may predate it, the next sync tick fixes it.
-    if (lastContentWrite() >= startedAt) return;
+    // The repository re-bases the snapshot on any save of this device that finished after its request began, so it is safe to adopt as is.
     const patch: Record<string, unknown> = {};
     for (const name of CONTENT_COLLS) if (!collectionBaselines.has(name)) patch[name] = [...(snapshot.collections[name] ?? [])];
     const doc = { ...get().doc };
@@ -87,7 +85,9 @@ export const useStore = create<State>((set, get) => ({
   },
   async create(name, input) {
     const item = await (repos[name] as any).create(input);
-    set({ [name]: [...(get()[name] as any[]), item] } as Partial<State>);
+    // The row may already be here (a reload that raced this write adopted it): one id is one row, the saved copy wins.
+    const rows = get()[name] as any[];
+    set({ [name]: rows.some((x) => x.id === item.id) ? rows.map((x) => (x.id === item.id ? item : x)) : [...rows, item] } as Partial<State>);
     return item;
   },
   async update(name, id, p) {
@@ -143,7 +143,10 @@ export async function reloadUserSpace() {
 /** Whoever the data on screen belongs to changed (sign-in, sign-out, expired or blocked session): start from an empty space, then load theirs. */
 useUserSession.subscribe((state, previous) => {
   if ((state.user?.id ?? '') === (previous.user?.id ?? '')) return;
-  useStore.setState({ history: [], conversations: [], requests: [] });
+  // Signing in keeps the chats on screen: the server has just moved this device's visitor chats into the account and the reload below returns them.
+  useStore.setState(previous.user || !state.user
+    ? { history: [], conversations: [], requests: [] }
+    : { history: [], requests: [], conversations: useStore.getState().conversations.map(c => ({ ...c, userId: state.user!.id })) });
   void reloadUserSpace().catch(() => {});
 });
 /** Admin panel access: a server-validated admin session (backend) or the seeded admin profile (demo). */

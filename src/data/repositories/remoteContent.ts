@@ -28,6 +28,34 @@ function saveCache(snapshot: Snapshot) {
 }
 
 let inflight: Promise<Snapshot> | null = null;
+/**
+ * Writes this device completed recently. A download that STARTED before a write finished may have been answered by the
+ * server before that write was committed (slow network, cold database), so adopting it as-is would silently drop the
+ * new row until the next page load. Every adopted snapshot is therefore re-based on the writes that finished after
+ * its request began; a download that started later necessarily contains them and replays nothing.
+ */
+type Write = { coll: string; id: string; row: { id: string } | null; at: number };
+let writes: Write[] = [];
+let docWrites: { name: string; value: unknown; at: number }[] = [];
+const remember = (coll: string, ids: string[], rows: ({ id: string } | null)[]) => {
+  const at = Date.now();
+  writes = writes.filter(w => at - w.at < 120000);
+  ids.forEach((id, i) => writes.push({ coll, id, row: rows[i], at }));
+};
+function rebase(snapshot: Snapshot, startedAt: number): Snapshot {
+  const pending = writes.filter(w => w.at >= startedAt);
+  const docs = { ...snapshot.docs };
+  for (const w of docWrites) if (w.at >= startedAt) docs[w.name] = w.value;
+  if (!pending.length) return { ...snapshot, docs };
+  const collections = { ...snapshot.collections };
+  for (const w of pending) {
+    const list = (collections[w.coll] ??= []).filter(row => row.id !== w.id);
+    const old = snapshot.collections[w.coll]?.findIndex(row => row.id === w.id) ?? -1;
+    if (w.row) { if (old >= 0) list.splice(Math.min(old, list.length), 0, w.row); else list.push(w.row); }
+    collections[w.coll] = list;
+  }
+  return { ...snapshot, collections, docs };
+}
 let current: Snapshot | null = null;
 let fetchedAt = 0;
 /** Version of the last snapshot received; the sync loop compares it with the server counter. */
@@ -44,7 +72,8 @@ export function contentSnapshot(force = true, version?: number): Promise<Snapsho
   if (!firstReadAt && !force) firstReadAt = now;
   // A snapshot prefetched while the session was still loading serves the whole startup burst, however long that took.
   if (!force && current && (now - fetchedAt < 2000 || now - firstReadAt < 2000)) return Promise.resolve(current);
-  inflight = download(version).then(snapshot => { current = snapshot; fetchedAt = Date.now(); saveCache(snapshot); return snapshot; }).finally(() => { inflight = null; });
+  const startedAt = Date.now();
+  inflight = download(version).then(raw => { const snapshot = rebase(raw, startedAt); current = snapshot; fetchedAt = Date.now(); saveCache(snapshot); return snapshot; }).finally(() => { inflight = null; });
   return inflight;
 }
 
@@ -92,6 +121,7 @@ export function remoteCollection<K extends CollName>(name: K): CollectionRepo<Co
     lastWrite = Date.now();
     const saved = await api<T>(`/admin/content/${name}/${encodeURIComponent(item.id)}`, { method: 'PUT', body: item });
     lastWrite = Date.now();
+    remember(name, [saved.id], [saved]);
     if (current) {
       const list = (current.collections[name] ??= []) as T[];
       const index = list.findIndex(row => row.id === saved.id);
@@ -117,6 +147,7 @@ export function remoteCollection<K extends CollName>(name: K): CollectionRepo<Co
     lastWrite = Date.now();
     await api(`/admin/content/${name}`, { method: 'DELETE', body: { ids } });
     lastWrite = Date.now();
+    remember(name, ids, ids.map(() => null));
     if (current) current.collections[name] = (current.collections[name] ?? []).filter(row => !ids.includes(row.id));
   }
 }
@@ -129,6 +160,8 @@ export function remoteDoc<K extends DocName>(name: K, defaults: () => DocMap[K])
     lastWrite = Date.now();
     const saved = withDefaults(await api<T>(`/admin/doc/${name}`, { method: 'PATCH', body: value }));
     lastWrite = Date.now();
+    docWrites = docWrites.filter(w => Date.now() - w.at < 120000);
+    docWrites.push({ name, value: saved, at: Date.now() });
     if (current) current.docs[name] = saved;
     return saved;
   };

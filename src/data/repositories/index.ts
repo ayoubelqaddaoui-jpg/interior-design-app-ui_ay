@@ -7,7 +7,7 @@ import type { DocRepositories, Repositories, Services } from './types';
 import { createMockCollection, createMockDoc } from '../mock/collection';
 import * as S from '../mock/seed';
 import { backendEnabled, backendLogin } from '@/lib/backend';
-import { remoteSpace, remoteUsers } from './remoteSpace';
+import { guestConversations, remoteSpace, remoteUsers } from './remoteSpace';
 import { remoteRequests } from './remoteRequests';
 import { remoteCollection, remoteDoc } from './remoteContent';
 import { mockServices } from '../mock/services';
@@ -42,9 +42,10 @@ const remote = (): Repositories => ({
   plans: remoteCollection('plans'),
   users: remoteUsers(),
   requests: remoteRequests(),
-  // Signed-out visitors keep a device-only chat/history until they sign in (there is no identity to store it under).
+  // Designs need an account (they spend credits), so a signed-out visitor's history stays empty. Chats do not: a visitor's
+  // conversations are saved in the database under the device token and move into the account on sign-in.
   history: remoteSpace('history', createMockCollection('history', () => [])),
-  conversations: remoteSpace('conversations', createMockCollection('conversations', () => [])),
+  conversations: remoteSpace('conversations', guestConversations()),
 });
 
 export const repos: Repositories = backendEnabled ? remote() : demo();
@@ -55,4 +56,6 @@ export const docs: DocRepositories = backendEnabled
 
 export const services: Services = backendEnabled ? { ...mockServices, auth: { loginAdmin: backendLogin } } : mockServices;
 export { ME } from '../mock/seed';
+/** Owner id of conversations written before sign-in (the server stamps `guest`); the offline demo keeps its local profile. */
+export const VISITOR = backendEnabled ? 'guest' : S.ME;
 export type * from './types';

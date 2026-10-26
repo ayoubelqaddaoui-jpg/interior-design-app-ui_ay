@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Pressable, View } from 'react-native';
 import { Button } from '@/components/ui/Button';
 import { Icon, ICON_CHOICES } from '@/components/ui/Icon';
@@ -9,11 +9,14 @@ import { Toggle } from '@/components/ui/Toggle';
 import { Txt } from '@/components/ui/Txt';
 import { ColorPicker } from './ColorPicker';
 import { ImageField } from './ImageField';
+import { LangDots, LangField } from './LangField';
+import { mergeStates } from '@/lib/langStatus';
 import { useStore } from '@/store/useStore';
 import { useL, useT } from '@/i18n';
 import { toast } from '@/store/useToast';
-import { mediaUploadsEnabled, pickAndUploadVideo } from '@/lib/media';
+import { mediaUploadsEnabled, pickAndUploadVideo, uploadsIdle, usePendingUploads } from '@/lib/media';
 import { requestLeave, useLeaveGuard } from '@/hooks/useLeaveGuard';
+import { PartialSaveError } from '@/hooks/useReveal';
 import type { LText } from '@/data/types';
 
 export type Opt = { value: string; label: string };
@@ -29,8 +32,6 @@ export type FieldDef =
   | (Base & { kind: 'media' })
   | (Base & { kind: 'colors' })
   | (Base & { kind: 'icon' });
-
-const LANG_LABELS: { k: keyof LText; key: string }[] = [{ k: 'dar', key: 'title_dar' }, { k: 'ar', key: 'title_ar' }, { k: 'fr', key: 'title_fr' }];
 
 function Chips({ options, value, onChange, multi }: { options: Opt[]; value: any; onChange: (v: any) => void; multi?: boolean }) {
   return (
@@ -59,32 +60,23 @@ export function Field({ f, value, onChange, ctx, error }: { f: FieldDef; value: 
         autoCapitalize={f.kind === 'secret' ? 'none' : undefined}
         onChangeText={(v) => onChange(f.kind === 'number' ? (v === '' ? 0 : Number(v.replace(/[^\d.-]/g, '')) || 0) : v)} />;
     case 'ltext':
-      return (
-        <View className="mb-1">
-          {label}
-          {LANG_LABELS.map(({ k, key }) => (
-            <Input key={k} language={k} testID={`lt-${f.key}-${k}`} placeholder={t(`admin.f.${key}`)} value={(value as LText)?.[k] ?? ''} error={k === 'dar' ? error : undefined}
-              multiline={f.multiline} label={t(`admin.f.${key}`)} style={{ textAlign: k === 'fr' ? 'left' : 'right', writingDirection: k === 'fr' ? 'ltr' : 'rtl' } as any}
-              onChangeText={(v) => onChange({ ...(value ?? { dar: '', ar: '', fr: '' }), [k]: v })} />
-          ))}
-        </View>
-      );
+      return <View className="mb-3"><LangField label={f.label} fieldKey={f.key} value={value as LText} onChange={onChange} error={error} multiline={f.multiline} /></View>;
     case 'bool':
       return (
-        <View className="flex-row items-center justify-between mb-4 bg-surface2 rounded-xl px-4 h-12">
+        <View className="flex-row items-center justify-between gap-3" style={{ minHeight: 32 }}>
           <Txt className="font-semibold text-[14px] flex-1">{f.label}</Txt>
           <Toggle testID={`sw-${f.key}`} label={f.label} value={!!value} onValueChange={onChange} />
         </View>
       );
     case 'select':
-      return <View className="mb-4">{label}<Chips options={f.options(ctx)} value={value} onChange={onChange} />{error ? <Txt className="text-danger text-[12px] mt-1">{error}</Txt> : null}</View>;
+      return <View className="mb-3">{label}<Chips options={f.options(ctx)} value={value} onChange={onChange} />{error ? <Txt className="text-danger text-[12px] mt-1">{error}</Txt> : null}</View>;
     case 'multi':
-      return <View className="mb-4">{label}<Chips multi options={f.options(ctx)} value={value ?? []} onChange={onChange} /></View>;
+      return <View className="mb-3">{label}<Chips multi options={f.options(ctx)} value={value ?? []} onChange={onChange} /></View>;
     case 'image':
       return <ImageField label={f.label} value={value ?? ''} onChange={onChange} />;
     case 'icon':
       return (
-        <View className="mb-4">{label}
+        <View className="mb-3">{label}
           <View className="flex-row flex-wrap gap-2">
             {ICON_CHOICES.map((n) => (
               <Pressable key={n} onPress={() => onChange(n)} className={`w-11 h-11 rounded-xl items-center justify-center ${value === n ? 'bg-primary' : 'bg-surface2'}`}><Icon name={n} size={22} tone={value === n ? 'onprimary' : 'fg'} /></Pressable>
@@ -110,7 +102,7 @@ export function Field({ f, value, onChange, ctx, error }: { f: FieldDef; value: 
     case 'colors': {
       const list: string[] = value ?? [];
       return (
-        <View className="mb-4">{label}
+        <View className="mb-3">{label}
           {list.map((c, i) => (
             <View key={i} className="flex-row items-start gap-2">
               <View className="flex-1"><ColorPicker value={c} onChange={(v) => onChange(list.map((x, j) => (j === i ? v : x)))} /></View>
@@ -131,7 +123,7 @@ function VideoUpload({ onUploaded }: { onUploaded: (uri: string, poster: string)
   const up = async () => {
     setBusy(true);
     try { const { uri, poster } = await pickAndUploadVideo(); if (uri) onUploaded(uri, poster); }
-    catch (error) { toast(error instanceof Error && /TOO_LARGE/.test(error.message) ? t('admin.f.videoTooLarge') : t('admin.f.uploadFailed')); }
+    catch (error) { toast(error instanceof Error && /TOO_LARGE/.test(error.message) ? t('admin.f.videoTooLarge') : error instanceof Error && error.message === 'R2_REQUIRED' ? t('improve.videoNeedsR2') : t('admin.f.uploadFailed')); }
     finally { setBusy(false); }
   };
   return <View className="flex-row -mt-1 mb-3"><Button title={t('admin.f.uploadVideo')} icon="upload" variant="soft" size="sm" onPress={up} loading={busy} /></View>;
@@ -192,29 +184,40 @@ function FormDialog({ visible, title, fields, initial, onClose, onSubmit, onDraf
   const [v, setV] = useState<any>(initial ?? {});
   const [err, setErr] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
+  const uploading = usePendingUploads() > 0;
   const ctx: Ctx = { s, L, t };
+  const latest = useRef(v);
+  useEffect(() => { latest.current = v; });
   const submit = async () => {
-    const e = validate(fields, v, t);
-    setErr(e);
-    if (Object.keys(e).length) return false;
     setBusy(true);
-    try { await onSubmit(normalize(fields, v)); return true; } catch { toast(t('improve.saveError')); return false; } finally { setBusy(false); }
+    // A picture or video still travelling would be saved as an empty field: wait for it, then save the finished form.
+    await uploadsIdle();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    const now = latest.current;
+    const e = validate(fields, now, t);
+    setErr(e);
+    if (Object.keys(e).length) { setBusy(false); return false; }
+    try { await onSubmit(normalize(fields, now)); return true; } catch { toast(t('improve.saveError')); return false; } finally { setBusy(false); }
   };
+  const langKeys = fields.filter((f) => f.kind === 'ltext' && (!f.show || f.show(v))).map((f) => f.key);
   const dirty = visible && JSON.stringify(v) !== JSON.stringify(initial ?? {});
   useLeaveGuard(dirty, submit, onClose, { before: initial ?? {}, after: v, labels: Object.fromEntries(fields.map(f => [f.key, f.label])), secrets: fields.filter(f => f.kind === 'secret').map(f => f.key) });
   useEffect(() => { if (visible) onDraftChange?.(v); }, [v, visible, onDraftChange]);
   const close = () => { if (!busy) requestLeave(onClose); };
   return (
-    <Sheet visible={visible} onClose={close} title={title} wide footer={<View className="flex-row gap-3">
+    <Sheet visible={visible} onClose={close} title={title} wide footer={<View className="flex-row gap-2.5">
       <Button title={t('common.cancel')} variant="soft" onPress={close} disabled={busy} className="flex-1" />
-      <Button testID="form-save" title={t('improve.submit')} onPress={submit} loading={busy} className="flex-1" />
+      <Button testID="form-save" title={t('improve.submit')} onPress={submit} loading={busy || uploading} className="flex-1" />
     </View>}>
-      {visible ? <View testID="form-preview" className="bg-soft rounded-xl p-3 mb-3">
-        <Txt className="text-muted text-[11px] font-bold mb-2">{t('improve.previewLabel')}</Txt>
-        {v.image || v.media?.uri ? <MediaView uri={v.image || v.media?.poster || v.media?.uri} style={{ height: 130, borderRadius: 10, marginBottom: 8 }} /> : null}
-        <Txt className="font-bold text-[18px]">{L(v.title) || v.name || title}</Txt>
-        {v.subtitle ? <Txt className="text-muted text-[13px]">{L(v.subtitle)}</Txt> : null}
-        {v.colors ? <View className="flex-row gap-1 mt-2">{v.colors.map((color: string, i: number) => <View key={i} style={{ width: 24, height: 24, borderRadius: 12, backgroundColor: color }} />)}</View> : null}
+      {visible ? <View testID="form-preview" className="bg-soft rounded-xl px-3 py-2 mb-2 flex-row items-center gap-3">
+        {v.image || v.media?.uri ? <MediaView uri={v.image || v.media?.poster || v.media?.uri} style={{ width: 44, height: 44, borderRadius: 10 }} /> : null}
+        <View className="flex-1" style={{ minWidth: 0 }}>
+          <Txt className="text-muted text-[10px] font-bold tracking-wide">{t('improve.previewLabel')}</Txt>
+          <Txt className="font-bold text-[15px]" numberOfLines={1}>{L(v.title) || v.name || title}</Txt>
+          {v.subtitle ? <Txt className="text-muted text-[12px]" numberOfLines={1}>{L(v.subtitle)}</Txt> : null}
+          {v.colors ? <View className="flex-row gap-1 mt-1">{v.colors.map((color: string, i: number) => <View key={i} style={{ width: 16, height: 16, borderRadius: 8, backgroundColor: color }} />)}</View> : null}
+        </View>
+        {langKeys.length ? <LangDots all states={mergeStates(langKeys.map((key) => v[key]))} /> : null}
       </View> : null}
       <FormFields fields={visible ? fields : []} value={v} errors={err} ctx={ctx} onChange={(key, value) => setV((old: any) => ({ ...old, [key]: value }))} />
     </Sheet>
@@ -222,12 +225,41 @@ function FormDialog({ visible, title, fields, initial, onClose, onSubmit, onDraf
 }
 
 
+/**
+ * How much room a field needs: wide editors (languages, media, colours, icons, long chip lists, multi-line text) take a full row,
+ * short ones (a toggle, a short text, a few chips, a photo) share a row two by two.
+ */
+function span(f: FieldDef, ctx: Ctx): 'full' | 'half' {
+  switch (f.kind) {
+    case 'ltext': case 'media': case 'colors': case 'icon': return 'full';
+    case 'text': case 'secret': case 'number': return 'multiline' in f && f.multiline ? 'full' : 'half';
+    case 'select': case 'multi': return f.options(ctx).reduce((sum, o) => sum + o.label.length * 7.5 + 44, 0) <= 330 ? 'half' : 'full';
+    default: return 'half';
+  }
+}
+
+/** Fields in reading order, packed into rows without holes: a short field takes the next short one (looking 3 fields ahead) as its row mate. */
+export function packRows(fields: FieldDef[], ctx: Ctx, twoColumns: boolean): FieldDef[][] {
+  const queue = [...fields];
+  const rows: FieldDef[][] = [];
+  while (queue.length) {
+    const f = queue.shift() as FieldDef;
+    if (!twoColumns || span(f, ctx) === 'full') { rows.push([f]); continue; }
+    const mate = queue.findIndex((x, i) => i < 3 && span(x, ctx) === 'half');
+    rows.push(mate >= 0 ? [f, queue.splice(mate, 1)[0]] : [f]);
+  }
+  return rows;
+}
+
 /** Layout is based on the actual dialog width, not the viewport behind it. */
 export function FormFields({ fields, value, errors, ctx, onChange }: { fields: FieldDef[]; value: any; errors: Record<string, string>; ctx: Ctx; onChange: (key: string, value: any) => void }) {
   const [width, setWidth] = useState(0);
-  return <View onLayout={(e) => setWidth(e.nativeEvent.layout.width)} style={{ flexDirection: 'row', flexWrap: 'wrap', marginHorizontal: -6 }}>
-    {fields.filter((f) => !f.show || f.show(value ?? {})).map((f) => <View key={f.key} style={{ width: width >= 680 && !['media', 'colors', 'icon'].includes(f.kind) ? '50%' : '100%', padding: 6, minWidth: 0 }}>
-      <View className="bg-surface rounded-xl border border-line p-3" style={{ minWidth: 0 }}><Field f={f} ctx={ctx} value={value?.[f.key]} error={errors[f.key]} onChange={(v) => onChange(f.key, v)} /></View>
+  const rows = packRows(fields.filter((f) => !f.show || f.show(value ?? {})), ctx, width >= 680);
+  return <View testID="form-fields" onLayout={(e) => setWidth(e.nativeEvent.layout.width)} style={{ gap: 8 }}>
+    {rows.map((row) => <View key={row.map((f) => f.key).join('+')} style={{ flexDirection: 'row', gap: 8, alignItems: 'stretch' }}>
+      {row.map((f) => <View key={f.key} testID={`field-${f.key}`} className="bg-surface rounded-xl border border-line px-3 pt-2.5" style={{ flex: 1, minWidth: 0, justifyContent: f.kind === 'bool' ? 'center' : undefined, paddingBottom: f.kind === 'bool' ? 10 : 0 }}>
+        <Field f={f} ctx={ctx} value={value?.[f.key]} error={errors[f.key]} onChange={(v) => onChange(f.key, v)} />
+      </View>)}
     </View>)}
   </View>;
 }
@@ -247,7 +279,9 @@ function BatchFormDialog({ mode, title, fields, initial, initialKeys = [], blank
   const sharedFields = fields.filter((f) => f.key !== titleField?.key);
   const pasted = mode === 'add' && pasteMode;
   const lines = text.split(/\r?\n/).map((line) => line.trim().replace(/^(?:[-*•]\s+|\d+[.)]\s+)/, '')).filter(Boolean);
+  const uploading = usePendingUploads() > 0;
   const submit = async () => {
+    if (uploading) { toast(t('improve.uploadWait')); return false; }
     if (pasted && (!lines.length || lines.length > 50)) { setPasteError(t('improve.pasteError')); return false; }
     const active = mode === 'edit' ? fields.filter((f) => keys.includes(f.key)) : fields;
     const values = pasted ? pasteDrafts.map((draft, i) => ({ ...shared, id: draft.id, [titleField!.key]: titleField!.kind === 'ltext' ? { dar: lines[i], ar: lines[i], fr: lines[i] } : lines[i] })) : drafts;
@@ -256,35 +290,35 @@ function BatchFormDialog({ mode, title, fields, initial, initialKeys = [], blank
     if (nextErrors.some((e) => Object.keys(e).length)) return false;
     setBusy(true);
     try { await onSubmit(values.map((v) => normalize(active, v)), keys); return true; }
-    catch { toast(t('improve.saveError')); return false; } finally { setBusy(false); }
+    catch (error) { toast(error instanceof PartialSaveError ? error.message : t('improve.saveError')); return false; } finally { setBusy(false); }
   };
   const snapshot = JSON.stringify({ text, shared, drafts, keys });
   const [original] = useState(snapshot);
   const [originalValues] = useState(() => ({ text, shared, drafts, keys }));
   useLeaveGuard(!!mode && snapshot !== original, submit, onClose, { before: originalValues, after: { text, shared, drafts, keys }, labels: { text: t('improve.pasteText'), keys: t('improve.selectedFields'), ...Object.fromEntries(fields.flatMap(f => [[`shared.${f.key}`, f.label], [`drafts.0.${f.key}`, f.label]])) }, secrets: fields.filter(f => f.kind === 'secret').flatMap(f => [`shared.${f.key}`, ...drafts.map((_, i) => `drafts.${i}.${f.key}`)]) });
   const close = () => { if (!busy) requestLeave(onClose); };
-  return <Sheet visible={!!mode} title={title} wide={mode === 'add'} onClose={close} footer={<View className="flex-row gap-3"><Button title={t('common.cancel')} variant="soft" onPress={close} disabled={busy} className="flex-1" /><Button testID="batch-save" title={pasted ? t('improve.createCount', { count: lines.length }) : t('common.save')} onPress={submit} loading={busy} disabled={mode === 'edit' && !keys.length || pasted && (!lines.length || lines.length > 50)} className="flex-1" /></View>}>
+  return <Sheet visible={!!mode} title={title} wide={mode === 'add'} onClose={close} footer={<View className="flex-row gap-2.5"><Button title={t('common.cancel')} variant="soft" onPress={close} disabled={busy} className="flex-1" /><Button testID="batch-save" title={pasted ? t('improve.createCount', { count: lines.length }) : t('common.save')} onPress={submit} loading={busy || uploading} disabled={mode === 'edit' && !keys.length || pasted && (!lines.length || lines.length > 50)} className="flex-1" /></View>}>
     {mode === 'edit' ? <>
-      <Txt className="text-muted text-[13px] leading-[21px] mb-3">{t('improve.batchHelp')}</Txt>
-      {fields.filter((f) => !f.show || f.show(drafts[0] ?? {})).map((f) => <View key={f.key} className="rounded-xl border border-line p-3 mb-3 bg-surface">
-        <View className="flex-row items-center gap-3 mb-2"><Toggle label={f.label} testID={`batch-field-${f.key}`} value={keys.includes(f.key)} onValueChange={(on) => setKeys((old) => on ? [...old, f.key] : old.filter((key) => key !== f.key))} /><Txt className="flex-1 font-bold text-[14px]">{f.label}</Txt></View>
+      <Txt className="text-muted text-[12px] leading-[18px] mb-2">{t('improve.batchHelp')}</Txt>
+      {fields.filter((f) => !f.show || f.show(drafts[0] ?? {})).map((f) => <View key={f.key} className="rounded-xl border border-line px-3 pt-2.5 pb-1.5 mb-2 bg-surface">
+        <View className="flex-row items-center gap-3 mb-1.5"><Toggle label={f.label} testID={`batch-field-${f.key}`} value={keys.includes(f.key)} onValueChange={(on) => setKeys((old) => on ? [...old, f.key] : old.filter((key) => key !== f.key))} /><Txt className="flex-1 font-bold text-[14px]">{f.label}</Txt></View>
         <View pointerEvents={keys.includes(f.key) ? 'auto' : 'none'} style={{ opacity: keys.includes(f.key) ? 1 : 0.4 }}><Field f={f} value={drafts[0]?.[f.key]} error={errors[0]?.[f.key]} ctx={ctx} onChange={(v) => setDrafts(([old]) => [{ ...old, [f.key]: v }])} /></View>
       </View>)}
     </> : <>
-      {titleField ? <View className="flex-row flex-wrap gap-2 mb-4"><Button size="sm" icon="text-box-outline" variant={pasteMode ? 'primary' : 'soft'} title={t('improve.pasteMode')} onPress={() => { setPasteMode(true); setErrors([]); }} /><Button testID="batch-individual" size="sm" icon="form-select" variant={!pasteMode ? 'primary' : 'soft'} title={t('improve.individual')} onPress={() => { setPasteMode(false); setErrors([]); }} /></View> : null}
+      {titleField ? <View className="flex-row flex-wrap gap-2 mb-2.5"><Button size="sm" icon="text-box-outline" variant={pasteMode ? 'primary' : 'soft'} title={t('improve.pasteMode')} onPress={() => { setPasteMode(true); setErrors([]); }} /><Button testID="batch-individual" size="sm" icon="form-select" variant={!pasteMode ? 'primary' : 'soft'} title={t('improve.individual')} onPress={() => { setPasteMode(false); setErrors([]); }} /></View> : null}
       {pasteMode && titleField ? <>
-        <Txt className="text-muted text-[13px] leading-[21px] mb-3">{t('improve.pasteHelp')}</Txt>
+        <Txt className="text-muted text-[12px] leading-[18px] mb-2">{t('improve.pasteHelp')}</Txt>
         <Input testID="batch-titles" label={t('improve.pasteTitles')} multiline value={text} error={pasteError} placeholder="Salon\nCuisine\nChambre" style={{ minHeight: 120, maxHeight: 200, textAlignVertical: 'top' }} onChangeText={(value) => {
           setText(value);
           const count = value.split(/\r?\n/).map((line) => line.trim().replace(/^(?:[-*•]\s+|\d+[.)]\s+)/, '')).filter(Boolean).length;
           setPasteError(count > 50 ? t('improve.pasteError') : '');
           setPasteDrafts((old) => Array.from({ length: Math.min(count, 50) }, (_, i) => old[i] ?? blank()));
         }} />
-        <Txt className="font-bold text-[16px] mb-3">{t('improve.sharedSettings')}</Txt>
+        <Txt className="font-bold text-[14px] mb-1.5">{t('improve.sharedSettings')}</Txt>
         <FormFields fields={sharedFields} value={shared} errors={errors[0] ?? {}} ctx={ctx} onChange={(key, value) => setShared((old: any) => ({ ...old, [key]: value }))} />
       </> : <>
-        {drafts.map((v, i) => <View key={v.id} className="mb-5">
-          <View className="flex-row items-center justify-between mb-2"><Txt className="font-bold text-[17px]">{t('admin.crud.addNew')} · {i + 1}</Txt>{drafts.length > 1 ? <Button size="sm" variant="soft" icon="close" title={t('improve.removeDraft')} disabled={busy} onPress={() => setDrafts((old) => old.filter((_, index) => i !== index))} /> : null}</View>
+        {drafts.map((v, i) => <View key={v.id} className="mb-3">
+          <View className="flex-row items-center justify-between mb-1"><Txt className="font-bold text-[14px]">{t('admin.crud.addNew')} · {i + 1}</Txt>{drafts.length > 1 ? <Button size="sm" variant="soft" icon="close" title={t('improve.removeDraft')} disabled={busy} onPress={() => setDrafts((old) => old.filter((_, index) => i !== index))} /> : null}</View>
           <FormFields fields={fields} value={v} errors={errors[i] ?? {}} ctx={ctx} onChange={(key, value) => setDrafts((old) => old.map((item, index) => index === i ? { ...item, [key]: value } : item))} />
         </View>)}
         <Button testID="batch-add-another" variant="soft" icon="plus" title={t('improve.addAnother')} disabled={busy || drafts.length >= 50} onPress={() => setDrafts((old) => [...old, blank()])} />

@@ -38,25 +38,25 @@ function Thread({ id, onClose }: { id: string | null; onClose: () => void }) {
     finally { setBusy(false); }
   };
   return (
-    <Sheet visible onClose={onClose} title={chat.clientName} wide
+    <Sheet visible onClose={onClose} title={chat.guest ? t('inbox.guest') : chat.clientName} wide
       footer={<View className="flex-row items-end gap-2">
-        <View className="flex-1 bg-surface2 rounded-3xl px-4 min-h-[48px] justify-center">
+        <View className="flex-1 bg-surface2 rounded-3xl px-4 min-h-[44px] justify-center">
           <TextInput testID="admin-chat-input" value={text} onChangeText={setText} placeholder={t('inbox.replyPlaceholder')} placeholderTextColor={colors.muted} multiline maxLength={4000}
-            style={{ fontFamily, color: colors.fg, fontSize: 16, maxHeight: 110, paddingVertical: 12, outlineStyle: 'none' } as any} />
+            style={{ fontFamily, color: colors.fg, fontSize: 16, maxHeight: 110, paddingVertical: 10, outlineStyle: 'none' } as any} />
         </View>
-        <Pressable testID="admin-chat-send" accessibilityRole="button" accessibilityLabel={t('inbox.reply')} disabled={!text.trim() || busy} onPress={send} className={`w-12 h-12 rounded-full items-center justify-center ${text.trim() ? 'bg-primary' : 'bg-surface2'}`}>
+        <Pressable testID="admin-chat-send" accessibilityRole="button" accessibilityLabel={t('inbox.reply')} disabled={!text.trim() || busy} onPress={send} className={`w-11 h-11 rounded-full items-center justify-center ${text.trim() ? 'bg-primary' : 'bg-surface2'}`}>
           <Icon name="arrow-up" size={22} tone={text.trim() ? 'onprimary' : 'muted'} />
         </Pressable>
       </View>}>
-      <View className="flex-row items-center justify-between mb-3 gap-3">
+      {chat.guest ? null : <View className="flex-row items-center justify-between mb-2 gap-3">
         <Txt className="text-muted flex-1">{chat.whatsapp}</Txt>
         <Button testID="admin-chat-wa" icon="whatsapp" size="sm" variant="soft" title={t('inbox.openWa')} onPress={() => Linking.openURL(waLink(chat.whatsapp, ''))} />
-      </View>
+      </View>}
       {chat.messages.map(m => (
-        <View key={m.id} testID={`admin-msg-${m.role}`} className={`mb-2.5 max-w-[86%] ${m.role === 'user' ? 'self-start' : 'self-end'}`}>
-          <View className={`rounded-2xl px-3.5 py-2.5 ${m.role === 'admin' ? 'bg-primary rounded-ee-md' : m.role === 'user' ? 'bg-surface2 rounded-es-md' : 'bg-soft rounded-ee-md'}`}>
+        <View key={m.id} testID={`admin-msg-${m.role}`} className={`mb-2 max-w-[86%] ${m.role === 'user' ? 'self-start' : 'self-end'}`}>
+          <View className={`rounded-2xl px-3 py-2 ${m.role === 'admin' ? 'bg-primary rounded-ee-md' : m.role === 'user' ? 'bg-surface2 rounded-es-md' : 'bg-soft rounded-ee-md'}`}>
             {m.image ? <Image source={{ uri: m.image }} style={{ width: 200, height: 140, borderRadius: 12, marginBottom: m.text ? 8 : 0 }} contentFit="cover" /> : null}
-            {m.text ? <Txt className={`text-[15px] leading-[22px] ${m.role === 'admin' ? 'text-onprimary' : ''}`}>{m.text}</Txt> : null}
+            {m.text ? <Txt className={`text-[14px] leading-[20px] ${m.role === 'admin' ? 'text-onprimary' : ''}`}>{m.text}</Txt> : null}
           </View>
         </View>
       ))}
@@ -89,7 +89,7 @@ export default function Chats() {
                   <View className="w-11 h-11 rounded-full bg-soft items-center justify-center"><Icon name="account-outline" size={22} tone="primary" /></View>
                   <View className="flex-1">
                     <View className="flex-row items-center justify-between gap-2">
-                      <Txt className="font-bold text-[15px] flex-1" numberOfLines={1}>{chat.clientName}</Txt>
+                      <Txt className="font-bold text-[15px] flex-1" numberOfLines={1}>{chat.guest ? t('inbox.guest') : chat.clientName}</Txt>
                       <Txt className="text-muted text-[11px]">{new Date(chat.updatedAt).toLocaleDateString()}</Txt>
                     </View>
                     <Txt className="text-muted text-[13px] mt-0.5" numberOfLines={1}>{preview(chat, t('inbox.photo'))}</Txt>

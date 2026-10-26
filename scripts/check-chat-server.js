@@ -178,4 +178,67 @@ test('the service worker opens the right conversation, for admins and clients, a
   const traversal = await show({ title: 't', body: 'b', requestId: 'x', url: '/chat/../admin/users' });
   assert.notEqual(await click(traversal), 'https://dwira.example/chat/../admin/users');
 });
+const deviceToken = () => crypto.randomBytes(32).toString('hex');
+test('a visitor chats without an account; the messages are stored, admins see them, and signing in moves every one of them to the account', async () => {
+  const { backend, sent, admin } = await setup();
+  try {
+    await call(backend, '/api/push/subscriptions', { method: 'POST', headers: admin, body: device('admin-guest') });
+    sent.length = 0;
+    const d1 = { 'x-demand-token': deviceToken() }, d2 = { 'x-demand-token': deviceToken() };
+    assert.equal((await call(backend, '/api/guest/conversations')).status, 400, 'a device token is required');
+    assert.deepEqual((await call(backend, '/api/guest/conversations', { headers: d1 })).body, []);
+    const first = await call(backend, '/api/guest/conversations', { method: 'POST', headers: d1, body: { title: 'Salon', messages: [message('g1', 'Bonjour, je cherche une idée')], updatedAt: Date.now() } });
+    assert.equal(first.status, 200);
+    assert.equal(first.body.userId, 'guest');
+    const id = first.body.id;
+    // Another device can neither read nor change it.
+    assert.deepEqual((await call(backend, '/api/guest/conversations', { headers: d2 })).body, []);
+    assert.equal((await call(backend, `/api/guest/conversations/${id}`, { method: 'PATCH', headers: d2, body: { messages: [message('x', 'hijack')] } })).status, 404);
+    // The thread keeps growing; the assistant answer is stored, a new user message notifies the admins (as "Visiteur", no personal data).
+    const grown = await call(backend, `/api/guest/conversations/${id}`, { method: 'PATCH', headers: d1, body: { messages: [message('g1', 'Bonjour, je cherche une idée'), message('g2', 'demo', 'assistant'), message('g3', 'Et pour la cuisine ?')] } });
+    assert.equal(grown.body.messages.length, 3);
+    const pushes = sent.filter(p => p.title === 'Nouveau message');
+    assert.equal(pushes.length, 2);
+    assert.equal(pushes.at(-1).body, 'Visiteur: Et pour la cuisine ?');
+    assert.equal(pushes.at(-1).url, `/admin/chats?target=${id}&open=${id}`);
+    assert.equal(pushes.at(-1).phone, '');
+    // Admin inbox lists it as a guest conversation and can answer; the visitor's thread keeps the answer.
+    const inbox = (await call(backend, '/api/admin/conversations', { headers: admin })).body;
+    assert.equal(inbox.length, 1);
+    assert.equal(inbox[0].guest, true);
+    assert.equal(inbox[0].clientName, '');
+    const answered = await call(backend, `/api/admin/conversations/${id}`, { method: 'POST', headers: admin, body: { text: 'Avec plaisir !' } });
+    assert.equal(answered.status, 200);
+    const stored = (await call(backend, `/api/guest/conversations/${id}`, { headers: d1 })).body;
+    assert.equal(stored.messages.at(-1).role, 'admin');
+    // A stale copy from the visitor cannot erase the admin answer.
+    const stale = await call(backend, `/api/guest/conversations/${id}`, { method: 'PATCH', headers: d1, body: { messages: grown.body.messages } });
+    assert.equal(stale.body.messages.at(-1).role, 'admin');
+    // Sync: the visitor's device sees its own counter move.
+    const sync0 = (await call(backend, '/api/sync', { headers: d1 })).body.guest;
+    await call(backend, `/api/guest/conversations/${id}`, { method: 'PATCH', headers: d1, body: { messages: stale.body.messages } });
+    assert.ok((await call(backend, '/api/sync', { headers: d1 })).body.guest > sync0);
+    // A second visitor thread, then sign in from d1: BOTH threads (and the admin answer) now belong to the client.
+    const second = await call(backend, '/api/guest/conversations', { method: 'POST', headers: d1, body: { title: 'Chambre', messages: [message('g9', 'Salut')], updatedAt: Date.now() } });
+    const login = await call(backend, '/api/user/login', { method: 'POST', headers: { ...native, ...d1 }, body: { name: 'Salma', phone: '0633333333' } });
+    assert.equal(login.status, 200);
+    const mine = { 'x-user-token': login.body.token };
+    const owned = (await call(backend, '/api/user/conversations', { headers: mine })).body;
+    assert.deepEqual(owned.map(c => c.id).sort(), [id, second.body.id].sort());
+    assert.ok(owned.every(c => c.userId === login.body.user.id), 'every thread is stamped with the account');
+    assert.equal(owned.find(c => c.id === id).messages.length, 4, 'existing messages (incl. the admin answer) came along');
+    assert.deepEqual((await call(backend, '/api/guest/conversations', { headers: d1 })).body, [], 'nothing is left as a guest chat');
+    assert.equal((await call(backend, '/api/guest/conversations', { headers: { ...d1, ...mine } })).status, 409, 'a signed-in session uses its own space');
+    // Later messages go to the account and the admin inbox shows the client by name, once.
+    const later = await call(backend, `/api/user/conversations/${id}`, { method: 'PATCH', headers: mine, body: { messages: [...owned.find(c => c.id === id).messages, message('g10', 'Merci')] } });
+    assert.equal(later.body.messages.length, 5);
+    const named = (await call(backend, '/api/admin/conversations', { headers: admin })).body;
+    assert.equal(named.length, 2);
+    assert.ok(named.every(c => c.clientName === 'Salma' && !c.guest));
+    // A device cannot adopt someone else's guest chats by signing in from another device.
+    const other = await call(backend, '/api/user/login', { method: 'POST', headers: { ...native, ...d2 }, body: { name: 'Omar', phone: '0644444444' } });
+    assert.deepEqual((await call(backend, '/api/user/conversations', { headers: { 'x-user-token': other.body.token } })).body, []);
+  } finally { backend.server.emit('close'); }
+});
+
 test.after(closeShared);

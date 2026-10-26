@@ -1,10 +1,10 @@
 const crypto = require('node:crypto');
 const webpush = require('web-push');
 const TEXT = {
-  en: { title: 'New demand', lead: 'New lead', ready: 'Your design is ready', readyBody: 'Open the app to see it.', open: 'Open', call: 'Call', chat: 'New message', reply: 'New reply', replyBody: 'Open the chat to read it.' },
-  fr: { title: 'Nouvelle demande', lead: 'Nouveau client', ready: 'Votre design est prêt', readyBody: 'Ouvrez l’app pour le voir.', open: 'Ouvrir', call: 'Appeler', chat: 'Nouveau message', reply: 'Nouvelle réponse', replyBody: 'Ouvrez la conversation pour la lire.' },
-  ar: { title: 'طلب جديد', lead: 'عميل جديد', ready: 'تصميمك جاهز', readyBody: 'افتح التطبيق لمشاهدته.', open: 'فتح', call: 'اتصال', chat: 'رسالة جديدة', reply: 'رد جديد', replyBody: 'افتح المحادثة لقراءته.' },
-  dar: { title: 'طلب جديد', lead: 'كليون جديد', ready: 'التصميم ديالك واجد', readyBody: 'حل التطبيق باش تشوفو.', open: 'فتح', call: 'اتصال', chat: 'ميساج جديد', reply: 'جواب جديد', replyBody: 'حل المحادثة باش تقراه.' },
+  en: { guest: 'Visitor', title: 'New demand', lead: 'New lead', ready: 'Your design is ready', readyBody: 'Open the app to see it.', open: 'Open', call: 'Call', chat: 'New message', reply: 'New reply', replyBody: 'Open the chat to read it.' },
+  fr: { guest: 'Visiteur', title: 'Nouvelle demande', lead: 'Nouveau client', ready: 'Votre design est prêt', readyBody: 'Ouvrez l’app pour le voir.', open: 'Ouvrir', call: 'Appeler', chat: 'Nouveau message', reply: 'Nouvelle réponse', replyBody: 'Ouvrez la conversation pour la lire.' },
+  ar: { guest: 'زائر', title: 'طلب جديد', lead: 'عميل جديد', ready: 'تصميمك جاهز', readyBody: 'افتح التطبيق لمشاهدته.', open: 'فتح', call: 'اتصال', chat: 'رسالة جديدة', reply: 'رد جديد', replyBody: 'افتح المحادثة لقراءته.' },
+  dar: { guest: 'زائر', title: 'طلب جديد', lead: 'كليون جديد', ready: 'التصميم ديالك واجد', readyBody: 'حل التطبيق باش تشوفو.', open: 'فتح', call: 'اتصال', chat: 'ميساج جديد', reply: 'جواب جديد', replyBody: 'حل المحادثة باش تقراه.' },
 };
 const trim = (value, max) => Array.from(String(value ?? '').replace(/[\u0000-\u001f\u007f\u202a-\u202e\u2066-\u2069]/g, '').trim()).slice(0, max).join('');
 const phone = value => trim(value, 32).replace(/[^\d+]/g, '').replace(/(?!^)\+/g, '');
@@ -16,7 +16,7 @@ function payloadFor(request, language, event = 'request') {
   if (event === 'reply') return { title: text.reply, body: trim(request.text, 120) || text.replyBody, requestId: String(request.id), phone: '', lang, dir, url: `/chat/${encodeURIComponent(request.id)}`, actions: [{ action: 'open', title: text.open }] };
   if (event === 'chat') {
     const preview = trim(request.text, 100) || '📷';
-    return { title: text.chat, body: `${trim(request.name, 60)}: ${preview}`, requestId: String(request.id), phone: phone(request.whatsapp), lang, dir, url: `/admin/chats?target=${encodeURIComponent(request.id)}&open=${encodeURIComponent(request.id)}`, actions: [{ action: 'open', title: text.open }, { action: 'call', title: text.call }] };
+    return { title: text.chat, body: `${trim(request.name, 60) || text.guest}: ${preview}`, requestId: String(request.id), phone: phone(request.whatsapp), lang, dir, url: `/admin/chats?target=${encodeURIComponent(request.id)}&open=${encodeURIComponent(request.id)}`, actions: [{ action: 'open', title: text.open }, { action: 'call', title: text.call }] };
   }
   if (event === 'ready') return { title: text.ready, body: text.readyBody, requestId: String(request.id), phone: '', lang, dir, url: '/history', actions: [{ action: 'open', title: text.open }] };
   const base = { body: `${trim(request.name, 80)} - ${phone(request.whatsapp)}`, requestId: String(request.id), phone: phone(request.whatsapp), lang, dir, actions: [{ action: 'open', title: text.open }, { action: 'call', title: text.call }] };

@@ -49,6 +49,19 @@ function validateDemand(value) {
   if (!draft.toolId) throw fail(400, 'Tool required');
   return { name, whatsapp, draft, photoUri: value.photoUri, userId: trim(value.userId || 'client', 100), status: 'pending', createdAt: Date.now() };
 }
+/**
+ * Validates a conversation write (shared by signed-in clients and visitors): shape, size, and who may write which role.
+ * Admin answers belong to the server: a client can neither forge nor erase them (and a stale copy never drops a new reply).
+ * Mutates `value.messages`; returns the user messages that are new (they notify the admins).
+ */
+function mergeConversation(value, existing) {
+  if (!Array.isArray(value.messages) || value.messages.length > 1000 || typeof value.title !== 'string') throw fail(400, 'INVALID_CONVERSATION');
+  const known = new Map((existing?.messages || []).map(m => [m.id, m]));
+  const sent = value.messages.filter(m => m && typeof m.id === 'string' && typeof m.text === 'string' && m.text.length <= 4000 && ['user', 'assistant'].includes(m.role));
+  const kept = (existing?.messages || []).filter(m => m.role === 'admin');
+  value.messages = [...sent, ...kept].sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
+  return sent.filter(m => m.role === 'user' && !known.has(m.id));
+}
 const withTimeout = (promise, ms) => Promise.race([promise, new Promise(resolve => setTimeout(resolve, ms))]);
 
 /** `media` (tests): { storage, download } overrides for the R2 adapter and the external downloader. */
@@ -181,6 +194,8 @@ function createBackend({ env = process.env, db = createDb(env), senders, media: 
           const body = await readBody(req);
           const result = await clients.login(body.name, body.phone, (await content.getDoc('settings')).defaultFreeCredits);
           res.setHeader('Set-Cookie', cookie('dwira_user', result.token, 365 * 86400));
+          // Chats this device held as a visitor now belong to the person who just signed in.
+          if (clientHash && (await clients.adoptGuest(clientHash, result.user)).length) await sync.bump(`c:${result.user.id}`, 'chats', `g:${clientHash}`);
           if (result.created) {
             // A brand-new lead: tell the admins right away (bounded wait; failures stay queued for retry).
             await enqueue('lead', `lead:${result.user.id}`, { id: result.user.id, name: result.user.name, whatsapp: result.user.whatsapp });
@@ -192,12 +207,12 @@ function createBackend({ env = process.env, db = createDb(env), senders, media: 
         if (url.pathname === '/api/user/session' && req.method === 'GET') return json(200, { user: requireUser(), prefs: await content.clientPrefs(client.id) });
         // ---- Sync, shared content and preferences ----
         if (url.pathname === '/api/sync' && req.method === 'GET') {
-          const keys = ['content', ...(session ? ['requests', 'clients', 'chats', `a:${adminId}`] : []), ...(client ? [`c:${client.id}`] : [])];
+          const keys = ['content', ...(session ? ['requests', 'clients', 'chats', `a:${adminId}`] : []), ...(client ? [`c:${client.id}`] : []), ...(clientHash && !client ? [`g:${clientHash}`] : [])];
           const versions = await sync.read(keys);
           // Opportunistic retry of failed notifications (serverless has no background timer; cron is only daily).
           const waiting = (await db.query('SELECT 1 FROM outbox WHERE next_at<=$1 LIMIT 1', [now]))[0];
           if (waiting) await withTimeout(pump(), 9000);
-          return json(200, { content: versions.content, requests: session ? versions.requests : null, clients: session ? versions.clients : null, chats: session ? versions.chats : null, admin: session ? versions[`a:${adminId}`] : null, client: client ? versions[`c:${client.id}`] : null, user: client ? { id: client.id, blocked: !!client.blocked } : null, isAdmin: !!session });
+          return json(200, { content: versions.content, requests: session ? versions.requests : null, clients: session ? versions.clients : null, chats: session ? versions.chats : null, admin: session ? versions[`a:${adminId}`] : null, client: client ? versions[`c:${client.id}`] : null, guest: clientHash && !client ? versions[`g:${clientHash}`] : null, user: client ? { id: client.id, blocked: !!client.blocked } : null, isAdmin: !!session });
         }
         if (url.pathname === '/api/prefs') {
           const asAdmin = url.searchParams.get('as') === 'admin';
@@ -221,6 +236,37 @@ function createBackend({ env = process.env, db = createDb(env), senders, media: 
           requireUser();
           return json(200, (await db.query('SELECT data FROM requests WHERE user_id=$1 ORDER BY created_at DESC', [client.id])).map(row => publicRow(rowOf(row))));
         }
+        // ---- Visitors: assistant chats without an account or any personal detail, stored under the device token ----
+        const guestChat = url.pathname.match(/^\/api\/guest\/conversations(?:\/([A-Za-z0-9_-]{1,100}))?$/);
+        if (guestChat) {
+          if (client) throw fail(409, 'ALREADY_SIGNED_IN'); // a signed-in person uses /api/user/conversations
+          if (!clientHash) throw fail(400, 'Client token required');
+          const id = guestChat[1];
+          if (req.method === 'GET') {
+            const rows = await clients.guestList(clientHash);
+            if (!id) return json(200, rows);
+            const row = rows.find(row => row.id === id);
+            if (!row) throw fail(404, 'NOT_FOUND');
+            return json(200, row);
+          }
+          if (req.method === 'DELETE' && id) { await clients.guestRemove(clientHash, id); await sync.bump('chats', `g:${clientHash}`); return json(200, { ok: true }); }
+          if (req.method === 'POST' || req.method === 'PATCH' && id) {
+            const body = await readBody(req);
+            const existing = id && (await clients.guestList(clientHash)).find(row => row.id === id);
+            if (id && !existing) throw fail(404, 'NOT_FOUND');
+            const value = { ...existing, ...(await media.externalize(body, { remote: 'report', svg: false })).value };
+            const fresh = mergeConversation(value, existing);
+            const saved = await clients.guestPut(clientHash, value, id || crypto.randomUUID());
+            await sync.bump('chats', `g:${clientHash}`);
+            if (fresh.length) {
+              const last = fresh[fresh.length - 1], jobId = `chat:${saved.id}:${last.id}`;
+              await enqueue('chat', jobId, { id: saved.id, name: '', whatsapp: '', text: last.text });
+              await withTimeout(pump(jobId), Number(env.PUSH_WAIT_MS) || 8000);
+            }
+            return json(200, saved);
+          }
+          throw fail(405, 'Method not allowed');
+        }
         const space = url.pathname.match(/^\/api\/user\/(history|conversations)(?:\/([A-Za-z0-9_-]{1,100}))?$/);
         if (space) {
           requireUser();
@@ -241,16 +287,7 @@ function createBackend({ env = process.env, db = createDb(env), senders, media: 
             // Inline uploads (data URLs) and external pictures go to media storage; a failed download keeps the URL so a design is never lost.
             const value = { ...existing, ...(await media.externalize(body, { remote: 'report', svg: false })).value };
             if (kind === 'history' && (!value.draft?.toolId || typeof value.before !== 'string' || !['pending', 'done'].includes(value.status))) throw fail(400, 'INVALID_HISTORY');
-            if (kind === 'conversations' && (!Array.isArray(value.messages) || value.messages.length > 1000 || typeof value.title !== 'string')) throw fail(400, 'INVALID_CONVERSATION');
-            let fresh = [];
-            if (kind === 'conversations') {
-              // Admin answers belong to the server: a client can neither forge nor erase them (and a stale copy never drops a new reply).
-              const known = new Map((existing?.messages || []).map(m => [m.id, m]));
-              const sent = value.messages.filter(m => m && typeof m.id === 'string' && typeof m.text === 'string' && m.text.length <= 4000 && ['user', 'assistant'].includes(m.role));
-              const kept = (existing?.messages || []).filter(m => m.role === 'admin');
-              fresh = sent.filter(m => m.role === 'user' && !known.has(m.id));
-              value.messages = [...sent, ...kept].sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
-            }
+            const fresh = kind === 'conversations' ? mergeConversation(value, existing) : [];
             const saved = await clients.putSpace(client, kind, value, id || (kind === 'history' ? body.claimId : crypto.randomUUID()));
             await sync.bump(`c:${client.id}`, 'clients');
             if (fresh.length) {
@@ -274,7 +311,9 @@ function createBackend({ env = process.env, db = createDb(env), senders, media: 
           const body = await readBody(req), text = typeof body.text === 'string' ? body.text.trim() : '';
           if (!text || text.length > 4000) throw fail(400, 'INVALID_MESSAGE');
           const message = { id: `a_${crypto.randomUUID()}`, role: 'admin', text, createdAt: Date.now() };
-          const { conversation, clientId } = await clients.adminReply(adminChat[1], text, message);
+          const { conversation, clientId, deviceHash } = await clients.adminReply(adminChat[1], text, message);
+          // A visitor has no account to notify: their open chat picks the answer up through the sync loop.
+          if (!clientId) { await sync.bump('chats', `g:${deviceHash}`); return json(200, conversation); }
           await sync.bump(`c:${clientId}`, 'chats');
           const jobId = `reply:${conversation.id}:${message.id}`;
           await enqueue('reply', jobId, { id: conversation.id, text, audience: { type: 'client', id: clientId } });
@@ -324,6 +363,16 @@ function createBackend({ env = process.env, db = createDb(env), senders, media: 
           if (typeof body.data !== 'string' || !/^data:[a-z]+\/[a-z0-9.+-]+;base64,/i.test(body.data)) throw fail(400, 'INVALID_MEDIA');
           const { value } = await media.externalize({ file: body.data });
           return json(200, { url: value.file });
+        }
+        // Raw upload (database mode, where presigned uploads do not exist): the file is the request body, its type the Content-Type.
+        if (url.pathname === '/api/admin/media/raw' && req.method === 'POST') {
+          admin();
+          const type = String(req.headers['content-type'] || '').split(';')[0].trim().toLowerCase();
+          const max = media.rawLimit(type.startsWith('video/') ? 'video' : 'image');
+          let size = 0;
+          const chunks = [];
+          for await (const chunk of req) { size += chunk.length; if (size > max) throw fail(413, 'MEDIA_TOO_LARGE'); chunks.push(chunk); }
+          return json(200, { url: await media.storeRaw(Buffer.concat(chunks), type) });
         }
         // External image URL -> downloaded once into storage (https, public hosts, 10 s, 10 MB, image/* only).
         if (url.pathname === '/api/admin/media/import' && req.method === 'POST') {

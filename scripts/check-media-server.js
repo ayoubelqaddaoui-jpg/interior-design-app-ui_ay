@@ -302,3 +302,45 @@ test('external downloads: https only, private addresses blocked (also via DNS), 
 });
 
 test.after(closeShared);
+
+function rawCall(backend, url, buffer, type, headers = {}) {
+  return new Promise(resolve => {
+    const req = Readable.from([buffer]);
+    Object.assign(req, { url, method: 'POST', headers: { 'content-type': type, ...headers }, socket: { remoteAddress: 'test-client' } });
+    const output = { headers: {} };
+    const res = { headersSent: false, setHeader: (k, v) => { output.headers[k.toLowerCase()] = v; }, writeHead(status, h) { output.status = status; this.headersSent = true; }, end(value) { try { output.body = value ? JSON.parse(value) : undefined; } catch { output.body = undefined; } resolve(output); } };
+    backend.handle(req, res);
+  });
+}
+
+test('without R2: a video file uploaded from the admin is stored in the database and served, and a picture-less video row reaches the public content', async () => {
+  const { backend, admin } = await setup({ env: { MEDIA_MAX_DB_MB: '1' } });
+  try {
+    assert.equal((await rawCall(backend, '/api/admin/media/raw', mp4Head, 'video/mp4')).status, 401, 'admin only');
+    assert.equal((await rawCall(backend, '/api/admin/media/raw', Buffer.from('<html>nope</html>'), 'video/mp4', admin)).status, 400, 'type is checked from the bytes');
+    assert.equal((await rawCall(backend, '/api/admin/media/raw', Buffer.alloc(1.5 * 1024 * 1024, 1), 'video/mp4', admin)).status, 413, 'database mode has a lower cap');
+    const up = await rawCall(backend, '/api/admin/media/raw', mp4Head, 'video/mp4', admin);
+    assert.equal(up.status, 200);
+    assert.match(up.body.url, /^\/api\/media\/[a-f0-9]{32}\.mp4$/);
+    const saved = await call(backend, '/api/admin/content/tools/tool_raw', { method: 'PUT', headers: admin, body: { title: { fr: 'x', ar: 'x', dar: 'x' }, media: { type: 'video', uri: up.body.url }, order: 1, visible: true } });
+    assert.equal(saved.body.media.uri, up.body.url);
+    const file = await call(backend, up.body.url);
+    assert.equal(file.status, 200);
+    assert.equal(file.headers['content-type'], 'video/mp4');
+    assert.equal(Buffer.from(file.raw).equals(mp4Head), true);
+    const content = await call(backend, '/api/content');
+    assert.equal(content.body.collections.tools.find(t => t.id === 'tool_raw').media.uri, up.body.url, 'the app sees the new media');
+    const row = (await backend.db.query("SELECT storage,data FROM media WHERE mime='video/mp4'"))[0];
+    assert.deepEqual([row.storage, row.data], ['db', '']);
+  } finally { backend.server.emit('close'); }
+});
+
+test('with R2: raw uploads go to R2 as well (one write path)', async () => {
+  const { backend, admin, storage } = await setup({ r2: true });
+  try {
+    const up = await rawCall(backend, '/api/admin/media/raw', mp4Head, 'video/mp4', admin);
+    assert.equal(up.status, 200);
+    assert.equal(storage.objects.has(`media/${up.body.url.split('/').pop()}`), true);
+    assert.equal((await call(backend, up.body.url)).status, 302);
+  } finally { backend.server.emit('close'); }
+});

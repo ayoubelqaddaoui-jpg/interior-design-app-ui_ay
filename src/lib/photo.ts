@@ -37,7 +37,15 @@ export async function pickPhoto(source: 'camera' | 'gallery', options: PickOptio
     // /api/media URL. A device-local file:// path would mean nothing to the server or to other devices.
     if (backendEnabled) {
       const { File } = await import('expo-file-system');
-      return { uri: `data:image/${options.preserveTransparency ? 'png' : 'jpeg'};base64,${await new File(uri).base64()}` };
+      const png = !!options.preserveTransparency;
+      let base64 = await new File(uri).base64();
+      let type = png ? 'png' : 'jpeg';
+      // One request carries at most ~4 MB: a bigger picture is re-encoded (WebP keeps transparency) and shrunk until it fits.
+      for (let width = 1024; base64.length > 3.2 * 1024 * 1024 && width >= 256; width = Math.round(width * 0.75)) {
+        const out = await Manipulator.manipulateAsync(uri, [{ resize: { width } }], { compress: 0.7, format: Manipulator.SaveFormat.WEBP });
+        base64 = await new File(out.uri).base64(); type = 'webp';
+      }
+      return { uri: `data:image/${type};base64,${base64}` };
     }
     return { uri: await services.upload.upload(uri, 'photos') };
   } catch {

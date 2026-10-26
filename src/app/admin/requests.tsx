@@ -70,17 +70,17 @@ function Detail({ id, onClose }: { id: string | null; onClose: () => void }) {
   const open = () => Linking.openURL(waLink(r.whatsapp, t('admin.req.waMsg', { name: r.name })));
   return (
     <Sheet visible={!!id} onClose={close} title={t('admin.req.details')} wide>
-      <View className="flex-row items-center justify-between mb-3"><View><Txt className="text-[18px] font-extrabold">{r.name}</Txt><Txt className="text-muted">{r.whatsapp}</Txt></View><Badge s={r.status} /></View>
+      <View className="flex-row items-center justify-between mb-2"><View><Txt className="text-[16px] font-extrabold">{r.name}</Txt><Txt className="text-muted">{r.whatsapp}</Txt></View><Badge s={r.status} /></View>
       <Choices r={r} />
-      <View className="flex-row gap-3 mt-4">
-        <View className="flex-1"><Txt className="text-[12px] font-semibold text-muted mb-1.5">{t('admin.f.photo')}</Txt><MediaView uri={r.photoUri} className="rounded-xl" style={{ aspectRatio: 1 }} /></View>
-        <View className="flex-1"><Txt className="text-[12px] font-semibold text-muted mb-1.5">{t('admin.f.aiResult')}</Txt><MediaView uri={r.aiResult} className="rounded-xl" style={{ aspectRatio: 1 }} /></View>
+      <View className="flex-row gap-2.5 mt-3">
+        <View className="flex-1"><Txt className="text-[12px] font-semibold text-muted mb-1">{t('admin.f.photo')}</Txt><MediaView uri={r.photoUri} className="rounded-xl" style={{ aspectRatio: 4 / 3, maxHeight: 180 }} /></View>
+        <View className="flex-1"><Txt className="text-[12px] font-semibold text-muted mb-1">{t('admin.f.aiResult')}</Txt><MediaView uri={r.aiResult} className="rounded-xl" style={{ aspectRatio: 4 / 3, maxHeight: 180 }} /></View>
       </View>
-      <View className="mt-4"><ImageField label={t('admin.req.uploadFinal')} value={final} onChange={setFinal} /></View>
-      <Button title={t('common.save')} variant="soft" size="sm" onPress={saveFinal} className="self-start mb-4" />
-      <Button testID="req-call" icon="phone" title={t('push.call')} variant="soft" onPress={() => Linking.openURL(`tel:${r.whatsapp.replace(/[^\d+]/g, '')}`)} className="mb-3" />
-      <Button testID="req-wa" icon="whatsapp" title={t('admin.req.openWa')} variant="ink" onPress={open} className="mb-3" />
-      <View className="flex-row gap-3">
+      <View className="mt-3"><ImageField label={t('admin.req.uploadFinal')} value={final} onChange={setFinal} /></View>
+      <Button title={t('common.save')} variant="soft" size="sm" onPress={saveFinal} className="self-start mb-3" />
+      <Button testID="req-call" icon="phone" title={t('push.call')} variant="soft" onPress={() => Linking.openURL(`tel:${r.whatsapp.replace(/[^\d+]/g, '')}`)} className="mb-2" />
+      <Button testID="req-wa" icon="whatsapp" title={t('admin.req.openWa')} variant="ink" onPress={open} className="mb-2" />
+      <View className="flex-row gap-2.5">
         <Button testID="req-processing" title={t('admin.req.markProcessing')} variant="soft" className="flex-1" disabled={r.status === 'processing'} onPress={() => set('processing')} />
         <Button testID="req-delivered" title={t('admin.req.markDelivered')} className="flex-1" disabled={r.status === 'delivered'} onPress={() => set('delivered', final ? { finalResult: final } : {})} />
       </View>

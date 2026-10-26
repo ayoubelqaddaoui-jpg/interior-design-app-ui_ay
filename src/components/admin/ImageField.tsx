@@ -22,7 +22,7 @@ export function ImageField({ label, value, onChange }: { label: string; value: s
     if (!('uri' in r)) return;
     if (!mediaUploadsEnabled || !r.uri.startsWith('data:')) { onChange(r.uri); return; }
     setBusy(true);
-    try { onChange(await uploadDataUrl(r.uri)); } catch { toast(t('improve.saveError')); } finally { setBusy(false); }
+    try { onChange(await uploadDataUrl(r.uri)); } catch { toast(t('admin.f.uploadFailed')); } finally { setBusy(false); }
   };
   const importLink = async () => {
     const url = value.trim();
