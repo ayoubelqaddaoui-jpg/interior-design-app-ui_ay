@@ -4,7 +4,7 @@ import { Pressable, View } from 'react-native';
 import { router } from '@/hooks/useLeaveGuard';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { useStore, useMe } from '@/store/useStore';
-import { ME } from '@/data/repositories';
+import { VISITOR } from '@/data/repositories';
 import { usePrefs } from '@/store/usePrefs';
 import { setNotifications, useOwnerPushStatus } from '@/lib/notifications';
 import { useLang, useT } from '@/i18n';
@@ -25,7 +25,7 @@ export default function History() {
   const me = useMe();
   const userId = useUserSession(s => s.user?.id);
   const history = useStore((s) => s.history).filter((h) => h.userId === userId).sort((a, b) => b.createdAt - a.createdAt);
-  const chats = useStore((s) => s.conversations).filter((c) => c.userId === (userId || ME)).sort((a, b) => b.updatedAt - a.updatedAt);
+  const chats = useStore((s) => s.conversations).filter((c) => c.userId === (userId || VISITOR)).sort((a, b) => b.updatedAt - a.updatedAt);
   const tools = useStore((s) => s.tools);
   const prefs = usePrefs((s) => s.client);
   const devicePush = useOwnerPushStatus('client');

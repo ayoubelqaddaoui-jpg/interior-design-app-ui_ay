@@ -52,6 +52,8 @@ export const RememberScroll = React.forwardRef<ScrollView, ScrollViewProps & { s
     contentOffset={positions.get(key)} onContentSizeChange={(w, h) => { if (restoring.current) restore(); onContentSizeChange?.(w, h); }}
     onScroll={(e) => { offset.current = e.nativeEvent.contentOffset.y; if (!restoring.current) positions.set(key, e.nativeEvent.contentOffset); onScroll?.(e); }}>{children}</ScrollView></ScrollContext.Provider>;
 });
+/** Every scroll container above the caller, outermost first (nested panes scroll the target into view one level at a time). */
+export const useScrollAncestors = () => useContext(ScrollContext);
 /** The nearest vertical scroll container: drag-and-drop uses it to auto-scroll near the screen edges. */
 export function useVerticalScroller() {
   const all = useContext(ScrollContext);

@@ -63,22 +63,38 @@ async function decode(file: File): Promise<{ source: CanvasImageSource; width: n
   } finally { URL.revokeObjectURL(url); }
 }
 
-/** Downscale to <= 1024px JPEG (or PNG when transparency matters) so the result is small enough to store and send. */
+/** Largest data URL the server accepts inline (JSON body limit is 4 MB; base64 adds a third). */
+const MAX_DATA_URL = 3.2 * 1024 * 1024;
+
+/**
+ * Downscale to <= 1024px JPEG (or <= 1600px PNG when transparency matters). A picture that is still too big for one request is
+ * re-encoded as WebP (keeps transparency) and then shrunk step by step: it must always fit, otherwise the upload is refused
+ * and the item ends up saved without its picture.
+ */
 async function compress(file: File, options: PickOptions): Promise<string> {
   const png = !!options.preserveTransparency;
   const max = png ? 1600 : 1024;
   const image = await decode(file);
   try {
     if (!image.width || !image.height) throw new Error('empty image');
-    const scale = Math.min(1, max / Math.max(image.width, image.height));
-    const canvas = document.createElement('canvas');
-    canvas.width = Math.round(image.width * scale);
-    canvas.height = Math.round(image.height * scale);
-    const ctx = canvas.getContext('2d');
-    if (!ctx) throw new Error('no canvas');
-    if (!png) { ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, canvas.width, canvas.height); }
-    ctx.drawImage(image.source, 0, 0, canvas.width, canvas.height);
-    return canvas.toDataURL(png ? 'image/png' : 'image/jpeg', 0.75);
+    let scale = Math.min(1, max / Math.max(image.width, image.height));
+    for (let attempt = 0; attempt < 6; attempt++) {
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.max(1, Math.round(image.width * scale));
+      canvas.height = Math.max(1, Math.round(image.height * scale));
+      const ctx = canvas.getContext('2d');
+      if (!ctx) throw new Error('no canvas');
+      if (!png) { ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, canvas.width, canvas.height); }
+      ctx.drawImage(image.source, 0, 0, canvas.width, canvas.height);
+      let out = canvas.toDataURL(png ? 'image/png' : 'image/jpeg', 0.75);
+      if (png && out.length > MAX_DATA_URL) {
+        const webp = canvas.toDataURL('image/webp', 0.85);
+        out = webp.startsWith('data:image/webp') ? webp : canvas.toDataURL('image/jpeg', 0.8);
+      }
+      if (out.length <= MAX_DATA_URL) return out;
+      scale *= 0.75;
+    }
+    throw new Error('too large');
   } finally { image.release(); }
 }
 

@@ -4,7 +4,7 @@ import { api, backendEnabled } from '@/lib/backend';
 import { useLocal } from '@/store/useLocal';
 
 /** A client's conversation as the admin sees it (with who wrote it). */
-export type AdminConversation = Conversation & { clientName: string; whatsapp: string };
+export type AdminConversation = Conversation & { clientName: string; whatsapp: string; guest?: boolean };
 
 /** Admin inbox: every client's assistant conversations. Loaded on demand and whenever the server announces a `chats` change. */
 export const useAdminChats = create<{

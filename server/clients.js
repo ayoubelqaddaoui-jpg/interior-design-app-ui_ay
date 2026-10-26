@@ -61,22 +61,62 @@ function createClients(db) {
     await db.query('INSERT INTO space VALUES($1,$2,$3,$4) ON CONFLICT (id) DO UPDATE SET value=EXCLUDED.value', [id, client.id, kind, JSON.stringify(next)]);
     return next;
   }
-  /** Admin view of every client's assistant conversation (with who wrote it). */
-  const adminConversations = async () => (await db.query("SELECT s.value, c.name, c.phone FROM space s JOIN clients c ON c.id=s.client_id WHERE s.kind='conversations'"))
-    .map(row => ({ ...JSON.parse(row.value), clientName: row.name, whatsapp: row.phone }))
-    .filter(row => Array.isArray(row.messages) && row.messages.length)
+  /** Admin view of every assistant conversation: clients' (with who wrote it) and visitors' who have not signed in (`guest: true`, no name or phone). */
+  const adminConversations = async () => [
+    ...(await db.query("SELECT s.value, c.name, c.phone FROM space s JOIN clients c ON c.id=s.client_id WHERE s.kind='conversations'"))
+      .map(row => ({ ...JSON.parse(row.value), clientName: row.name, whatsapp: row.phone })),
+    ...(await db.query('SELECT value FROM guest_chats ORDER BY updated_at DESC LIMIT 300')).map(row => ({ ...JSON.parse(row.value), clientName: '', whatsapp: '', guest: true })),
+  ].filter(row => Array.isArray(row.messages) && row.messages.length)
     .sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0)).slice(0, 300);
-  /** An admin answers inside the client's own conversation: the thread stays in that client's space only. */
+  /** An admin answers inside the conversation: the thread stays in its owner's space (or the visitor's device chat) only. */
   async function adminReply(id, text, message) {
     const row = (await db.query("SELECT s.client_id, s.value, c.name, c.phone FROM space s JOIN clients c ON c.id=s.client_id WHERE s.id=$1 AND s.kind='conversations'", [id]))[0];
-    if (!row) throw fail(404, 'NOT_FOUND');
+    if (!row) {
+      const guest = (await db.query('SELECT device_hash, value FROM guest_chats WHERE id=$1', [id]))[0];
+      if (!guest) throw fail(404, 'NOT_FOUND');
+      const value = JSON.parse(guest.value);
+      const next = { ...value, messages: [...value.messages, message], updatedAt: message.createdAt };
+      await db.query('UPDATE guest_chats SET value=$1, updated_at=$2 WHERE id=$3', [JSON.stringify(next), message.createdAt, id]);
+      return { conversation: { ...next, clientName: '', whatsapp: '', guest: true }, clientId: null, deviceHash: guest.device_hash };
+    }
     const value = JSON.parse(row.value);
     const next = { ...value, messages: [...value.messages, message], updatedAt: message.createdAt };
     await db.query('UPDATE space SET value=$1 WHERE id=$2', [JSON.stringify(next), id]);
     return { conversation: { ...next, clientName: row.name, whatsapp: row.phone }, clientId: row.client_id };
   }
+
+  /* ---- Visitors who have not signed in: their chats live under the (hashed) device token ---- */
+  const MAX_GUEST_CHATS = 30;
+  const guestList = async device => (await db.query('SELECT value FROM guest_chats WHERE device_hash=$1 ORDER BY updated_at DESC', [device])).map(row => JSON.parse(row.value));
+  async function guestPut(device, value, id) {
+    const existing = (await db.query('SELECT device_hash FROM guest_chats WHERE id=$1', [id]))[0];
+    if (existing && existing.device_hash !== device) throw fail(404, 'NOT_FOUND');
+    // An id that belongs to a signed-in client's own thread is never writable from a device token.
+    if (!existing && (await db.query('SELECT 1 FROM space WHERE id=$1', [id]))[0]) throw fail(404, 'NOT_FOUND');
+    if (!existing && Number((await db.query('SELECT COUNT(*) AS n FROM guest_chats WHERE device_hash=$1', [device]))[0].n) >= MAX_GUEST_CHATS) throw fail(429, 'TOO_MANY_CHATS');
+    const next = { ...value, id, userId: 'guest' };
+    await db.query('INSERT INTO guest_chats(id,device_hash,value,updated_at) VALUES($1,$2,$3,$4) ON CONFLICT (id) DO UPDATE SET value=EXCLUDED.value, updated_at=EXCLUDED.updated_at', [id, device, JSON.stringify(next), Number(next.updatedAt) || Date.now()]);
+    return next;
+  }
+  const guestRemove = (device, id) => db.query('DELETE FROM guest_chats WHERE id=$1 AND device_hash=$2', [id, device]);
+  /**
+   * The visitor signed in: every conversation this device started (and every later one, because the next request finds none
+   * left) now belongs to the client. One transaction, so a thread is either still a guest chat or already the client's, never both or neither.
+   */
+  async function adoptGuest(device, client) {
+    if (!device) return [];
+    return db.tx(async q => {
+      const rows = await q('SELECT id, value FROM guest_chats WHERE device_hash=$1 FOR UPDATE', [device]);
+      for (const row of rows) {
+        const next = { ...JSON.parse(row.value), userId: client.id };
+        await q("INSERT INTO space(id,client_id,kind,value) VALUES($1,$2,'conversations',$3) ON CONFLICT (id) DO NOTHING", [row.id, client.id, JSON.stringify(next)]);
+        await q('DELETE FROM guest_chats WHERE id=$1', [row.id]);
+      }
+      return rows.map(row => row.id);
+    });
+  }
   return {
-    adminConversations, adminReply,
+    adminConversations, adminReply, guestList, guestPut, guestRemove, adoptGuest,
     login, authenticate, claim, listSpace, putSpace,
     hasClaim: async (id, clientId) => !!(await db.query('SELECT 1 FROM claims WHERE id=$1 AND client_id=$2', [id, clientId]))[0],
     user: async id => toUser(await byId(id)),

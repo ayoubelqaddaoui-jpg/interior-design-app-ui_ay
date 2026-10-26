@@ -17,6 +17,22 @@ export function remoteSpace<T extends HistoryItem | Conversation>(kind: 'history
   };
 }
 
+/**
+ * A visitor who has not signed in still has real conversations: they are stored in the database under the secret device
+ * token (no name, no phone). When that person signs in, the server moves every one of them into their account.
+ */
+export function guestConversations(): CollectionRepo<Conversation> {
+  const call = <R,>(path: string, method = 'GET', body?: unknown) => api<R>(`/guest/conversations${path}`, { method, body, client: true });
+  return {
+    list: () => call<Conversation[]>(''),
+    get: id => call<Conversation>(`/${encodeURIComponent(id)}`),
+    create: input => call<Conversation>('', 'POST', input),
+    update: (id, patch) => call<Conversation>(`/${encodeURIComponent(id)}`, 'PATCH', patch),
+    async remove(id) { await call(`/${encodeURIComponent(id)}`, 'DELETE'); },
+    async removeMany(ids) { for (const id of ids) await this.remove(id); },
+  };
+}
+
 /** Server clients have UUID ids. */
 export const isClientId = (id: string) => /^[a-f0-9]{8}-[a-f0-9-]{27}$/i.test(id);
 

@@ -136,6 +136,21 @@ function createMedia(db, { env = process.env, storage = createR2Storage(env), do
     return storeMedia({ body, mime });
   }
 
+  /**
+   * Raw bytes from the admin (database mode, where there is no presigned upload): a video or a large picture sent as the request
+   * body. The real type is checked from the bytes. Without R2 the database holds the file, so a lower cap applies.
+   */
+  async function storeRaw(body, declared) {
+    const mime = String(declared || '').split(';')[0].trim().toLowerCase();
+    const kind = mime === 'image/svg+xml' ? '' : kindOf(mime);
+    if (!kind || !body.length) throw fail(400, 'INVALID_MEDIA');
+    if (body.length > rawLimit(kind)) throw fail(413, 'MEDIA_TOO_LARGE');
+    let actual;
+    try { actual = verifyMedia(body, mime, kind); } catch { throw fail(400, 'INVALID_MEDIA'); }
+    return storeMedia({ body, mime: actual });
+  }
+  const rawLimit = kind => (storage ? limits[kind] : Math.min(limits[kind], mb(env.MEDIA_MAX_DB_MB, 25)));
+
   /** Copies an external https image into storage once and returns its /api/media URL. */
   function importRemote(url, { kind = 'image' } = {}) {
     const cacheKey = `${kind}:${url}`;
@@ -257,7 +272,7 @@ function createMedia(db, { env = process.env, storage = createR2Storage(env), do
     return true;
   }
 
-  return { storeMedia, readMedia, externalize, importRemote, presignUpload, completeUpload, moveRowToR2, stats, mode: storage ? 'r2' : 'database' };
+  return { storeMedia, storeRaw, rawLimit, readMedia, externalize, importRemote, presignUpload, completeUpload, moveRowToR2, stats, mode: storage ? 'r2' : 'database' };
 }
 
 module.exports = { createMedia, createR2Storage, r2Status, MEDIA_PREFIX: PREFIX, MEDIA_KEYS, R2_VARS, EXT };

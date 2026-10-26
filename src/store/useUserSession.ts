@@ -35,7 +35,7 @@ export const useUserSession = create<{
     }
   },
   async login(name, phone) {
-    const result = await api<{ user: AppUser; prefs?: UserPrefs; token?: string }>('/user/login', { method: 'POST', body: { name, phone } });
+    const result = await api<{ user: AppUser; prefs?: UserPrefs; token?: string }>('/user/login', { method: 'POST', body: { name, phone }, client: true }); // the device token lets the server move this device's visitor chats into the account
     if (Platform.OS !== 'web' && result.token) await (await import('expo-secure-store')).setItemAsync('dwira-user-session', result.token);
     set({ user: result.user });
     usePrefs.getState().hydrate('client', result.prefs ?? {});

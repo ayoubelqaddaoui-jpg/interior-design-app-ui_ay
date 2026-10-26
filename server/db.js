@@ -43,6 +43,10 @@ CREATE TABLE IF NOT EXISTS media (id TEXT PRIMARY KEY, mime TEXT NOT NULL, data 
 ALTER TABLE media ADD COLUMN IF NOT EXISTS body BYTEA;
 ALTER TABLE media ADD COLUMN IF NOT EXISTS size BIGINT;
 ALTER TABLE media ADD COLUMN IF NOT EXISTS storage TEXT NOT NULL DEFAULT 'db';
+-- Assistant conversations of visitors who have not signed in yet, keyed by the secret device token (hashed). They move into the
+-- client's own space (table space) the moment that person signs in from the same device.
+CREATE TABLE IF NOT EXISTS guest_chats (id TEXT PRIMARY KEY, device_hash TEXT NOT NULL, value TEXT NOT NULL, updated_at BIGINT NOT NULL);
+CREATE INDEX IF NOT EXISTS guest_chats_device ON guest_chats(device_hash, updated_at);
 `;
 
 async function openPg(url) {
