@@ -56,7 +56,7 @@ The starter content in `server/seed-content.json` (generated from `src/data/mock
 All media (admin images and videos, client photos, AI results, chat images, external image links) is stored in **Cloudflare R2** through `server/media.js` and referenced by stable `/api/media/<hash>.<ext>` URLs (a redirect to the public R2 object). Videos use admin-only presigned uploads; external https images are downloaded once. Without the `R2_*` variables, files fall back to raw bytes in the `media` table; base64 is never stored. Setup and migration (`scripts/migrate-media-to-r2.js`): see [docs/r2-setup.md](docs/r2-setup.md).
 
 ## Services to replace later (`Services`)
-`render` (AI image generation), `chat` (assistant LLM), `upload` (file storage), `whatsapp` (send design) are still mock services; `auth` is the real admin login.
+`render` (AI image generation), `upload` (file storage), `whatsapp` (send design) are still mock services; `auth` is the real admin login and `chat` is real (see **AI chat** below; it falls back to the local canned reply when no provider answers).
 
 ## Deploy on Vercel (UI + API)
 `vercel.json` builds the static web export **and** exposes the backend as a Vercel Function (`api/index.js` -> `server/index.js`). The backend needs a Postgres database; without one every `/api/*` call answers `503 DATABASE_NOT_CONFIGURED` and `/lead` shows "service temporairement indisponible".
@@ -84,6 +84,17 @@ What keeps the first load fast, and where to change it:
 - **On by default:** whenever a device already has notification permission and the person's saved setting (stored in the database, per admin / per client) is not "off", the device is subscribed silently on sign-in or startup, with no prompt. Turning notifications off in Settings is saved in the database and applies to all of that person's devices. The browser/OS permission prompt can only be shown from a tap, so first-time opt-in is the toggle in Settings or the banner in History.
 - Works on desktop Chrome/Edge/Firefox/Safari, Android Chrome, and the Android app. On iPhone/iPad, first use Safari **Share -> Add to Home Screen**, open Dwira from that icon, then enable notifications (Apple only allows web push for installed web apps).
 - Delivery is sent from the API request itself (bounded wait); failures stay in the outbox and are retried by the sync poll and the daily cron (`/api/push/pump`, Vercel Hobby allows daily crons only).
+
+### Push campaigns and automations (`/admin/notifications`)
+- **Campaigns**: one-off (now or scheduled), or recurring (daily / weekly / monthly) with title and body in Darija, Arabic and French (`{name}` is replaced by the client's first name), an in-app link, and an audience: everyone, **new** clients, **existing** clients, **inactive** clients, clients who **generated images** (or never did), and/or hand-picked people. The composer shows the reachable device count and can send a test push to your own devices.
+- **Automations** run on activity: after sign-up, after a first/each design, or after inactivity, with a delay, a per-client cooldown and the global frequency cap (`settings.campaignCapHours`, default 24 h). Quiet hours default to 22:00-08:00 Africa/Casablanca. Every delivery is recorded once per client and occurrence (`campaign_deliveries`), so retries and parallel runs never double-send.
+- **Scheduler**: Vercel Hobby only allows a daily cron, so due campaigns are also processed by every sync poll, by `/api/push/pump` and by an in-process timer. For minute-level punctuality, point a free external pinger (cron-job.org, UptimeRobot) at `GET /api/push/pump` every minute, with `Authorization: Bearer $CRON_SECRET`.
+- The push card on the dashboards (admin home, requests, notifications > Devices) shares one minimal component.
+
+### AI chat (`/api/chat/reply`)
+- Free providers are tried in order and the next takes over on error or quota: **Google Gemini** (`GEMINI_API_KEY`, aistudio.google.com, best for Darija/Arabic/French), **Groq** (`GROQ_API_KEY`), **OpenRouter** free models (`OPENROUTER_API_KEY`), then keyless **Pollinations** as a last resort. Keys can be set as environment variables or pasted in `/admin/assistant` (write-only, stored server-side, never returned). Optional: `CHAT_PROVIDER_ORDER` (e.g. `groq,gemini`), `GEMINI_MODEL` / `GROQ_MODEL` / `OPENROUTER_MODEL`, `CHAT_RATE_LIMIT` (messages per minute per visitor).
+- The reply language follows the visitor (Darija in Arabic script or Latin letters, Arabic, French).
+- **Human-like pacing** (`/admin/assistant`, per assistant config): *Instant*, *Natural* (delay scales with the answer length, 0.9-3.5 s) or *Custom* min/max seconds, plus an optional typewriter reveal. The typing indicator shows immediately; the request starts at once and its own network time counts towards the delay.
 
 Why `scripts/postexport.js`? Vercel never serves paths containing a `node_modules` segment, but `expo export` writes package fonts/images
 (icon font, router icons) to `dist/assets/node_modules/...`. The script moves them to `dist/assets/vendor/...` and rewrites all references, injects the web app manifest/iOS meta tags, and fails the build if any are left.

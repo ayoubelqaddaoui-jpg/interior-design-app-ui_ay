@@ -4,10 +4,12 @@ self.addEventListener('activate', event => event.waitUntil(self.clients.claim())
 // Admin requests/leads/chats, the client's own history ("design ready") and one of the client's chat threads are the only pages a notification may open.
 const OPENABLE = ['/admin/requests', '/admin/users', '/admin/chats', '/history'];
 const CHAT_THREAD = /^\/chat\/[A-Za-z0-9_-]{1,100}$/;
+// Admin-authored campaign messages (server/notifications.js CAMPAIGN_URL): public app pages and one tool.
+const PUBLIC_PAGE = /^\/(?:(?:explore|assistant|history|pro|settings|tool\/[A-Za-z0-9_-]{1,100}))?$/;
 function safeUrl(value) {
   try {
     const url = new URL(value, self.location.origin);
-    return url.origin === self.location.origin && (OPENABLE.includes(url.pathname) || CHAT_THREAD.test(url.pathname)) ? url.href : new URL('/admin/requests', self.location.origin).href;
+    return url.origin === self.location.origin && (OPENABLE.includes(url.pathname) || CHAT_THREAD.test(url.pathname) || PUBLIC_PAGE.test(url.pathname)) ? url.href : new URL('/admin/requests', self.location.origin).href;
   } catch { return new URL('/admin/requests', self.location.origin).href; }
 }
 self.addEventListener('push', event => {

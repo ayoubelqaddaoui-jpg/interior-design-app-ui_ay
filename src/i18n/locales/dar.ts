@@ -127,6 +127,8 @@ const dar: Dict = {
     hello: 'مرحبا، كيفاش نقدر نعاونك؟',
     placeholder: 'سول دويرة…',
     attach: 'زيد تصويرة',
+    typing: 'دويرة كتكتب…',
+    error: 'سمح لينا، ما قدرناش نجاوبو. عاود جرّب من بعد شوية.',
     thinking: 'دويرة كتكتب…',
     newChat: 'محادثة جديدة',
     pro: 'PRO',
@@ -390,7 +392,7 @@ const dar: Dict = {
         vibrant: 'حيوية',
       },
     },
-    assistant: { type: 'نوع المساعد', ai: 'شات ذكاء اصطناعي', whatsapp: 'تواصل فالواتساب', model: 'الموديل', prompt: 'برومبت النظام', number: 'نمرة الواتساب', welcome: 'رسالة الترحيب' },
+    assistant: { type: 'نوع المساعد', ai: 'شات ذكاء اصطناعي', whatsapp: 'تواصل فالواتساب', model: 'الموديل', prompt: 'برومبت النظام', number: 'نمرة الواتساب', welcome: 'رسالة الترحيب', delayTitle: 'سرعة الجواب', delayHint: 'الجواب كيتطلب دغيا، وكيبان من بعد تأخير طبيعي قصير مع علامة «كيكتب…».', delayOff: 'دغيا', delayAuto: 'طبيعي', delayCustom: 'بيدك', delayMin: 'أقل تأخير (ثانية)', delayMax: 'أكثر تأخير (ثانية)', typewriter: 'بين النص شوية بشوية', providersTitle: 'مزودين ذكاء اصطناعي بلا فلوس', providersHint: 'كيتجربو بالترتيب، وإلا فشل واحد ولا سالات ليه الحصة كيدوز للّي بعدو. المفاتيح عمرها ما كتبان مرة أخرى.', provGemini: 'Google Gemini', provGroq: 'Groq', provOpenrouter: 'OpenRouter', provPollinations: 'Pollinations (بلا مفتاح)', provOn: 'خدام', provOff: 'بلا مفتاح', provCooling: 'واقف شوية (الحصة)', srcEnv: 'متغير السيرفر', srcDb: 'محفوظ هنا', keyPlaceholder: 'لصق مفتاح API', keySave: 'سجّل', keyRemove: 'حيّد', keySaved: 'تسجل المفتاح', keyRemoved: 'تحيد المفتاح', keyInvalid: 'مفتاح ماشي صحيح', keyEnv: 'محدد فالسيرفر', noProvider: 'ما كاين حتى مفتاح: الزوار كيتجاوبو بأجوبة تجريبية. زيد مفتاح Gemini ولا Groq بلا فلوس.' },
     credits: {
       defaultCredits: 'الكريديات المجانية الافتراضية',
       defaultNote: 'كيتطبق على المستخدمين الجداد.',

@@ -29,12 +29,16 @@ function createClients(db) {
     const token = crypto.randomBytes(32).toString('hex');
     await db.query('DELETE FROM user_sessions WHERE expires_at<=$1', [Date.now()]);
     await db.query('INSERT INTO user_sessions VALUES($1,$2,$3)', [digest(token), row.id, Date.now() + 365 * 86400000]);
+    await db.query('UPDATE clients SET last_seen=$1 WHERE id=$2', [Date.now(), row.id]);
     return { token, user: toUser(row), created };
   }
   async function authenticate(token) {
     if (!token || !/^[a-f0-9]{64}$/.test(token)) return null;
     const rows = await db.query('SELECT c.* FROM user_sessions s JOIN clients c ON c.id=s.client_id WHERE s.token_hash=$1 AND s.expires_at>$2', [digest(token), Date.now()]);
-    return toUser(rows[0]) || null;
+    const row = rows[0];
+    // Activity for notification segments: the sync poll only runs while the app is visible, so this is real usage. Written at most every 5 minutes.
+    if (row && Date.now() - Number(row.last_seen || 0) > 300000) await db.query('UPDATE clients SET last_seen=$1 WHERE id=$2', [Date.now(), row.id]).catch(() => {});
+    return toUser(row) || null;
   }
   /** Idempotent: replaying the same claim id never charges twice; the first free claim is atomic. */
   async function claim(client, id) {
@@ -49,7 +53,7 @@ function createClients(db) {
       const free = !row.free_used;
       if (!free && row.credits <= 0) throw fail(402, 'PRO_REQUIRED');
       await q(free ? 'UPDATE clients SET free_used=1 WHERE id=$1' : 'UPDATE clients SET credits=credits-1 WHERE id=$1', [client.id]);
-      await q('INSERT INTO claims VALUES($1,$2,$3)', [id, client.id, free ? 1 : 0]);
+      await q('INSERT INTO claims(id,client_id,free,created_at) VALUES($1,$2,$3,$4)', [id, client.id, free ? 1 : 0, Date.now()]);
       return toUser(await byId(client.id, q));
     });
   }

@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { View } from 'react-native';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
+import { Icon } from '@/components/ui/Icon';
 import { Txt } from '@/components/ui/Txt';
 import { useT } from '@/i18n';
 import { BackendError, isBackendUnavailable } from '@/lib/backend';
@@ -42,16 +43,34 @@ export function PushNotifications() {
     finally { setBusy(false); }
   };
   const blockedInfo = status === 'unsupported' || status === 'unconfigured' || status === 'blocked' || status === 'install';
-  return <Card testID="admin-push-panel" className="p-4 mb-4 gap-3">
-    <Txt className="font-bold text-[16px]">{t('push.title')}</Txt>
-    <Txt testID="push-status" className="text-muted text-[13px]">{t(`push.${status}`)}</Txt>
+  const on = status === 'enabled' && !paused;
+  const bad = status === 'blocked' || status === 'unsupported' || status === 'unconfigured';
+  const badge = on ? 'push.badgeOn' : paused ? 'push.badgePaused' : bad ? 'push.badgeBlocked' : status === 'install' ? 'push.badgeInstall' : 'push.badgeOff';
+  const tone = on ? 'text-success' : bad ? 'text-danger' : 'text-muted';
+  return <Card testID="admin-push-panel" className="p-4 mb-4 gap-4">
+    <View className="flex-row items-center gap-3">
+      <View className={`w-11 h-11 rounded-2xl items-center justify-center ${on ? 'bg-soft' : 'bg-surface2'}`}>
+        <Icon name={on ? 'bell-check-outline' : bad ? 'bell-off-outline' : 'bell-outline'} size={22} tone={on ? 'primary' : bad ? 'danger' : 'muted'} />
+      </View>
+      <View className="flex-1 gap-0.5">
+        <Txt className="font-bold text-[16px]">{t('push.title')}</Txt>
+        <View className="flex-row items-center gap-1.5">
+          <View className={`w-2 h-2 rounded-full ${on ? 'bg-success' : bad ? 'bg-danger' : 'bg-muted'}`} />
+          <Txt testID="push-badge" className={`text-[12px] font-semibold ${tone}`}>{t(badge)}</Txt>
+        </View>
+      </View>
+    </View>
+    <Txt testID="push-status" className="text-muted text-[13px] leading-5">{t(`push.${status}`)}</Txt>
     {paused ? <Txt testID="push-paused" className="text-danger text-[13px]">{t('inbox.offByAdmin')}</Txt> : null}
     {offline ? <Txt testID="push-offline" className="text-danger text-[13px]">{t('push.login')}</Txt> : null}
-    <View className="flex-row flex-wrap gap-2">
-      <Button testID="push-enable" title={t(status === 'enabled' ? 'push.renew' : 'push.enable')} icon="bell-outline" loading={busy} disabled={blockedInfo} onPress={() => { void enable(); }} />
-      {status === 'enabled' ? <Button testID="push-test" title={t('push.test')} variant="soft" disabled={busy} onPress={() => { void test(); }} /> : null}
-      {status === 'enabled' ? <Button testID="push-disable" title={t('push.disable')} variant="soft" disabled={busy} onPress={() => { void disable(); }} /> : null}
+    <View className="flex-row flex-wrap items-center gap-2">
+      <Button testID="push-enable" title={t(status === 'enabled' ? 'push.renew' : 'push.enable')} icon={status === 'enabled' ? 'refresh' : 'bell-outline'} loading={busy} disabled={blockedInfo} onPress={() => { void enable(); }} />
+      {status === 'enabled' ? <Button testID="push-test" title={t('push.test')} icon="bell-ring-outline" variant="outline" disabled={busy} onPress={() => { void test(); }} /> : null}
+      {status === 'enabled' ? <Button testID="push-disable" title={t('push.disable')} icon="bell-off-outline" variant="ghost" disabled={busy} onPress={() => { void disable(); }} /> : null}
     </View>
-    <Txt className="text-muted text-[12px]">{t('push.privacy')}</Txt>
+    <View className="flex-row items-start gap-2 pt-3 border-t border-line">
+      <View className="pt-0.5"><Icon name="lock-outline" size={14} tone="muted" /></View>
+      <Txt className="flex-1 text-muted text-[12px] leading-4">{t('push.privacy')}</Txt>
+    </View>
   </Card>;
 }

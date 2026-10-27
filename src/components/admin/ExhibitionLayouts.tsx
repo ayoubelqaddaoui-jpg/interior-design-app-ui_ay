@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { Pressable, View } from 'react-native';
 import { Icon } from '@/components/ui/Icon';
 import { Txt } from '@/components/ui/Txt';
@@ -29,9 +29,8 @@ function LayoutPreview({ layout }: { layout: GalleryLayout }) {
 }
 export function ExhibitionLayouts({ value, onChange }: { value: GalleryLayout; onChange: (layout: GalleryLayout) => void }) {
   const { t } = useT();
-  const [width, setWidth] = useState(0);
-  return <View testID="exhibition-layouts" onLayout={(event) => setWidth(event.nativeEvent.layout.width)} style={{ flexDirection: 'row', flexWrap: 'wrap', margin: -4 }}>
-    {layouts.map(({ id, key }) => <View key={id} style={{ width: width >= 340 ? '50%' : '100%', padding: 4 }}>
+  return <View testID="exhibition-layouts" style={{ flexDirection: 'row', flexWrap: 'wrap', margin: -4 }}>
+    {layouts.map(({ id, key }) => <View key={id} style={{ width: '50%', padding: 4 }}>
       <Pressable testID={`layout-${id}`} accessibilityRole="radio" accessibilityLabel={t(`improve.${key}Title`)} aria-checked={value === id} accessibilityState={{ selected: value === id }} onPress={() => onChange(id)} className={`rounded-xl border-2 p-2 ${value === id ? 'border-primary bg-soft' : 'border-line bg-surface'}`}>
         <View testID={`layout-preview-${id}`} className="rounded-lg bg-surface2 overflow-hidden p-2 mb-2" style={{ height: 132 }}><LayoutPreview layout={id} /></View>
         <View className="flex-row items-start gap-1"><Txt className="flex-1 font-bold text-[13px] leading-[19px]" style={{ minHeight: 38 }}>{t(`improve.${key}Title`)}</Txt><Icon name={value === id ? 'check-circle' : 'radiobox-blank'} size={17} tone={value === id ? 'primary' : 'muted'} /></View>

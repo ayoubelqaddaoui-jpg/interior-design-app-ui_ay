@@ -9,12 +9,13 @@ import { useLocal } from '@/store/useLocal';
 import { usePrefs } from '@/store/usePrefs';
 import { useUserSession } from '@/store/useUserSession';
 import { useAdminChats } from '@/store/useAdminChats';
+import { useAdminCampaigns } from '@/store/useAdminCampaigns';
 
 /** What `GET /api/sync` returns: one monotonically increasing version per kind of data (null = not visible to this session). */
-interface SyncState { content: number; requests: number | null; clients: number | null; chats?: number | null; admin: number | null; client: number | null; guest?: number | null; user: { id: string; blocked: boolean } | null; isAdmin: boolean }
+interface SyncState { content: number; requests: number | null; clients: number | null; chats?: number | null; campaigns?: number | null; admin: number | null; client: number | null; guest?: number | null; user: { id: string; blocked: boolean } | null; isAdmin: boolean }
 const POLL_MS = 4000;
 
-type Seen = Partial<Record<'content' | 'requests' | 'clients' | 'chats' | 'admin' | 'client' | 'guest', number | null>>;
+type Seen = Partial<Record<'content' | 'requests' | 'clients' | 'chats' | 'campaigns' | 'admin' | 'client' | 'guest', number | null>>;
 let seen: Seen = {};
 let identity = '';
 let running = false;
@@ -50,11 +51,12 @@ export async function syncOnce() {
 
     if (changed('content')) jobs.push(store.reloadContent(state.content));
     // The server forgot the admin session (expired / signed out elsewhere): leave the admin panel.
-    if (local.adminSession && !local.adminOffline && !state.isAdmin) { useLocal.getState().set({ adminSession: false }); usePrefs.getState().clear('admin'); useAdminChats.getState().clear(); }
+    if (local.adminSession && !local.adminOffline && !state.isAdmin) { useLocal.getState().set({ adminSession: false }); usePrefs.getState().clear('admin'); useAdminChats.getState().clear(); useAdminCampaigns.getState().clear(); }
     if (state.isAdmin && local.adminSession) {
       if (changed('requests')) jobs.push(store.reload('requests'));
       if (changed('clients')) jobs.push(store.reload('users'));
       if (changed('chats')) jobs.push(useAdminChats.getState().load());
+      if (changed('campaigns') && useAdminCampaigns.getState().loaded) jobs.push(useAdminCampaigns.getState().load());
       if (changed('admin')) jobs.push(refreshAdminSession());
     }
     if (session.user) {
