@@ -18,6 +18,7 @@ import { Txt } from '@/components/ui/Txt';
 import { useUserSession } from '@/store/useUserSession';
 import { toast } from '@/store/useToast';
 import { useBp } from '@/hooks/useBp';
+import { ListSkeleton } from '@/components/ui/Skeleton';
 
 export default function History() {
   const { t } = useT();
@@ -27,6 +28,7 @@ export default function History() {
   const history = useStore((s) => s.history).filter((h) => h.userId === userId).sort((a, b) => b.createdAt - a.createdAt);
   const chats = useStore((s) => s.conversations).filter((c) => c.userId === (userId || VISITOR)).sort((a, b) => b.updatedAt - a.updatedAt);
   const tools = useStore((s) => s.tools);
+  const personalReady = useStore((s) => s.personalReady);
   const prefs = usePrefs((s) => s.client);
   const devicePush = useOwnerPushStatus('client');
   const lang = useLang((s) => s.lang);
@@ -89,7 +91,9 @@ export default function History() {
         ))}
       </View>
 
-      {tab === 'designs' ? (
+      {!personalReady && (tab === 'designs' ? history.length === 0 : chats.length === 0) ? (
+        <ListSkeleton rows={tab === 'designs' ? 3 : 4} h={tab === 'designs' ? 120 : 64} />
+      ) : tab === 'designs' ? (
         history.length === 0 ? (
           <EmptyState title={t('history.emptyDesigns')} subtitle={t('history.emptyDesignsSub')} action={t('history.start')} onAction={() => router.navigate('/')} />
         ) : (

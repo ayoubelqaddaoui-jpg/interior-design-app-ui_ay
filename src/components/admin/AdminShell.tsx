@@ -39,8 +39,8 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
   const { t } = useT();
   const router = useRouter();
   const pathname = usePathname();
-  // init() may run before the stored admin session is known, so load the admin-only lists here.
-  useEffect(() => { if (backendEnabled) void Promise.all([useStore.getState().reload('requests'), useStore.getState().reload('users')]); }, []);
+  // Startup already reads the admin lists in the background; this only covers an admin who signed in after startup.
+  useEffect(() => { if (backendEnabled && !useStore.getState().adminLoaded) void useStore.getState().loadAdminData(); }, []);
   const { target, focus } = useGlobalSearchParams<{ target?: string; focus?: string }>();
   const insets = useSafeAreaInsets();
   const active = useActive();

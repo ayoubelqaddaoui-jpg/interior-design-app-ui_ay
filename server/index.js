@@ -9,6 +9,7 @@ const { createClients } = require('./clients');
 const { createSync } = require('./sync');
 const { createContent } = require('./content');
 const { r2Status } = require('./media');
+const { translate } = require('./translate');
 const { createNotifier, validateSubscription, trim, phone } = require('./notifications');
 const hash = value => crypto.createHash('sha256').update(value).digest('hex');
 const fail = (status, message) => Object.assign(new Error(message), { status });
@@ -65,7 +66,7 @@ function mergeConversation(value, existing) {
 const withTimeout = (promise, ms) => Promise.race([promise, new Promise(resolve => setTimeout(resolve, ms))]);
 
 /** `media` (tests): { storage, download } overrides for the R2 adapter and the external downloader. */
-function createBackend({ env = process.env, db = createDb(env), senders, media: mediaOptions = {} } = {}) {
+function createBackend({ env = process.env, db = createDb(env), senders, media: mediaOptions = {}, translator = translate } = {}) {
   const notifier = createNotifier(db, env, senders, { settings: () => content.getDoc('settings') });
   const clients = createClients(db);
   const sync = createSync(db);
@@ -338,6 +339,8 @@ function createBackend({ env = process.env, db = createDb(env), senders, media: 
           if (req.method === 'DELETE' && !contentItem[2]) { await content.deleteItems(contentItem[1], (await readBody(req)).ids); return json(200, { ok: true }); }
           throw fail(405, 'Method not allowed');
         }
+        // Automatic translation of admin content (fr / ar / Moroccan Darija) through free keyless providers; admin only.
+        if (url.pathname === '/api/admin/translate' && req.method === 'POST') { admin(); return json(200, await translator(await readBody(req))); }
         const contentDoc = url.pathname.match(/^\/api\/admin\/doc\/([A-Za-z]+)$/);
         if (contentDoc && req.method === 'PATCH') { admin(); return json(200, await content.patchDoc(contentDoc[1], await readBody(req))); }
         const creditClient = url.pathname.match(/^\/api\/admin\/clients\/([a-f0-9-]+)$/);

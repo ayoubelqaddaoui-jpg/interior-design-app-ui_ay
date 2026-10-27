@@ -1,10 +1,11 @@
-import React, { useState } from 'react';
-import { Pressable, View } from 'react-native';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { ActivityIndicator, Pressable, View } from 'react-native';
 import { Icon } from '@/components/ui/Icon';
 import { Input } from '@/components/ui/Field';
 import { Txt } from '@/components/ui/Txt';
 import { useT } from '@/i18n';
 import { useTheme } from '@/theme/ThemeProvider';
+import { beginTranslation, detectSource, LANGS, translateTexts, useAutoTranslate } from '@/lib/autoTranslate';
 import { copySource, doneCount, LANG_ORDER, langStates, type LangInfo, type LangState } from '@/lib/langStatus';
 import type { Lang, LText } from '@/data/types';
 
@@ -57,7 +58,55 @@ export function LangField({ label, fieldKey, value, onChange, error, multiline }
   const done = doneCount(states);
   const worstState: LangState = LANG_ORDER.some((l) => states[l].state === 'missing') ? 'missing' : LANG_ORDER.some((l) => states[l].state === 'incomplete') ? 'incomplete' : 'complete';
   const name = (l: Lang) => t(`admin.f.title_${l}`);
-  const set = (l: Lang, v: string) => onChange({ ...(value ?? { dar: '', ar: '', fr: '' }), [l]: v });
+  const auto = useAutoTranslate();
+  const [busy, setBusy] = useState(false);
+  const valueRef = useRef<LText | undefined>(value);
+  const onChangeRef = useRef(onChange);
+  useEffect(() => { valueRef.current = value; onChangeRef.current = onChange; });
+  const autoFilled = useRef(new Set<Lang>()); // languages filled by the translator and never touched by hand since
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const release = useRef<(() => void) | null>(null);
+  const seq = useRef(0);
+  const mounted = useRef(true);
+  const finish = useCallback(() => { release.current?.(); release.current = null; if (mounted.current) setBusy(false); }, []);
+  useEffect(() => () => { mounted.current = false; if (timer.current) clearTimeout(timer.current); seq.current++; release.current?.(); release.current = null; }, []);
+  useEffect(() => { if (!auto) { if (timer.current) clearTimeout(timer.current); seq.current++; finish(); } }, [auto, finish]);
+
+  const emit = (next: LText) => { valueRef.current = next; onChangeRef.current(next); };
+  const translate = (typedIn: Lang) => {
+    const mine = ++seq.current;
+    const current = valueRef.current ?? { dar: '', ar: '', fr: '' };
+    const text = (current[typedIn] ?? '').trim();
+    const from = detectSource(text, typedIn);
+    // Only boxes that are empty, were auto-filled, or hold foreign-script text typed by mistake get (over)written; hand-written translations are never touched.
+    const to = LANGS.filter((x) => x !== from && (x === typedIn || !(current[x] ?? '').trim() || autoFilled.current.has(x)));
+    if (!text || !to.length) return finish();
+    translateTexts(from, [text], to).then((result) => {
+      if (mine !== seq.current || !mounted.current) return;
+      const latest = valueRef.current ?? { dar: '', ar: '', fr: '' };
+      if ((latest[typedIn] ?? '').trim() !== text) return;
+      const next: LText = { ...latest };
+      for (const x of to) {
+        const out = result[x]?.[0]?.trim();
+        if (!out) continue;
+        if (x !== typedIn && (latest[x] ?? '').trim() && !autoFilled.current.has(x)) continue;
+        next[x] = out; autoFilled.current.add(x);
+      }
+      if (from !== typedIn) next[from] = text; // the text keeps its own language box
+      emit(next);
+    }).catch(() => { /* offline or provider down: the form still works manually, empty languages are copied on save */ }).finally(() => { if (mine === seq.current) finish(); });
+  };
+  const set = (l: Lang, v: string) => {
+    autoFilled.current.delete(l);
+    emit({ ...(valueRef.current ?? { dar: '', ar: '', fr: '' }), [l]: v });
+    if (!auto) return;
+    if (timer.current) clearTimeout(timer.current);
+    seq.current++;
+    if (!v.trim()) return finish();
+    if (!release.current) release.current = beginTranslation();
+    setBusy(true);
+    timer.current = setTimeout(() => translate(l), 900);
+  };
   const hint = (info: LangInfo) => info.state !== 'incomplete' ? '' : info.reason === 'copy' ? t('improve.langCopyHint', { lang: name(info.of as Lang) }) : t('improve.langScriptHint');
   const status = (l: Lang) => {
     const info = states[l];
@@ -80,6 +129,7 @@ export function LangField({ label, fieldKey, value, onChange, error, multiline }
         <Txt className="text-[13px] font-semibold text-muted flex-shrink" numberOfLines={1} style={{ flexShrink: 1 }}>{label}</Txt>
         <View testID={`lang-summary-${fieldKey}`} accessibilityLabel={t('improve.langSummary', { done, total: 3 })} className="flex-row items-center gap-1.5" style={{ flexShrink: 0 }}>
           {LANG_ORDER.map((l) => <View key={l} style={{ width: 16, height: 5, borderRadius: 3, backgroundColor: meta[states[l].state].color }} />)}
+          {busy ? <View testID={`lang-translating-${fieldKey}`} className="flex-row items-center gap-1"><ActivityIndicator size="small" /><Txt className="text-[11px] font-bold text-muted">{t('improve.translating')}</Txt></View> : null}
           <Txt className="text-[12px] font-extrabold" style={{ color: meta[worstState].color }}>{done}/3</Txt>
         </View>
       </View>

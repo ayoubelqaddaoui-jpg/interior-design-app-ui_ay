@@ -37,7 +37,7 @@ if (backendEnabled) prefetchContent();
 const INIT_ATTEMPTS = 4;
 const INIT_DELAY_MS = 800;
 /** A font still missing after this long never holds the first paint: text swaps to it when it arrives (font-display: swap). */
-const FONT_WAIT_MS = 800;
+const FONT_WAIT_MS = 400;
 async function initWithRetry() {
   for (let attempt = 0; attempt < INIT_ATTEMPTS; attempt++) {
     try { await useStore.getState().init(); return true; }
@@ -46,8 +46,6 @@ async function initWithRetry() {
   return false;
 }
 const withTimeout = (work: Promise<unknown>, ms: number) => Promise.race([work.catch(() => {}), new Promise((resolve) => setTimeout(resolve, ms))]);
-/** Home and the public catalogue screens open on cached/downloaded content; every other screen is built from the signed-in person's data. */
-const catalogueOnly = (path: string) => path === '/' || path === '' || path.startsWith('/tool') || path.startsWith('/explore');
 
 export default function RootLayout() {
   const initialPath = usePathname();
@@ -55,7 +53,6 @@ export default function RootLayout() {
   const [shown, setShown] = useState(false);
   // True once startup reads finished, or gave up after the bounded retries (the sync loop keeps trying afterwards).
   const [settled, setSettled] = useState(false);
-  const ready = useStore((s) => s.ready);
   const contentReady = useStore((s) => s.contentReady);
   const loaded = useLocal((s) => s.loaded);
   const lang = useLang((s) => s.lang);
@@ -71,12 +68,20 @@ export default function RootLayout() {
         // Cached / HTML-shell copy of the public content, if any: real content on the very first frame.
         try { if (await primeContent()) await useStore.getState().applyContent(); } catch { /* no cached copy: placeholders */ }
       }
-      // Session and full data load in the background; nothing below waits for them on Home.
+      // Everything below runs in parallel and none of it waits for the others: public content (what pages are built from), the
+      // session, and the person's own data. Home never waits at all; other pages wait only for the public content.
       void (async () => {
-        await useUserSession.getState().refresh();
-        const done = await initWithRetry();
-        if (!done) useStore.setState({ contentReady: true });
-        setSettled(true);
+        const content = (async () => {
+          const done = await initWithRetry();
+          if (!done) useStore.setState({ contentReady: true });
+          setSettled(true);
+        })();
+        // The person's own data needs the session first, but that chain no longer sits in front of the content download.
+        const personal = (async () => {
+          await useUserSession.getState().refresh();
+          await useStore.getState().loadPersonal();
+        })();
+        await Promise.allSettled([content, personal]);
       })();
       const settings = useStore.getState().doc.settings;
       const family = useLang.getState().lang === 'fr' ? settings.frenchFont || 'Inter' : settings.arabicFont || 'Tajawal';
@@ -88,8 +93,9 @@ export default function RootLayout() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Home never waits for the network. Deep links wait only for what that screen reads.
-  const ok = shown && loaded && (home || ready || settled || (catalogueOnly(initialPath) && contentReady));
+  // Home never waits for the network. Every other page waits only for the public content (cached copy, HTML-shell download or
+  // network); the person's own data (history, chats, requests, clients) fills in afterwards behind skeletons inside the page.
+  const ok = shown && loaded && (home || contentReady || settled);
   // Startup loader (admin: Interface > Loading screen): follows the saved settings and theme, and learns when the first screen is up.
   const settings = useStore((s) => s.doc.settings);
   const theme = useStore((s) => s.doc.theme);

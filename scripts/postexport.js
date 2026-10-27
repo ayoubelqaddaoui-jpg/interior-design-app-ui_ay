@@ -106,12 +106,23 @@ return s}).catch(function(){return null})}
     const chunkTags = routeChunks.filter((href) => href !== homeChunk).map((href) => `<link rel="preload" as="script" href="${href}">`).join('')
       + (homeChunk ? `<script>if(location.pathname==='/'){var l=document.createElement('link');l.rel='preload';l.as='script';l.href=${JSON.stringify(homeChunk)};document.head.appendChild(l)}</script>` : '');
     console.log(`[postexport] preloading ${routeChunks.length}/${markers.length} Home route chunk(s)`);
+    // Every other screen is its own lazy chunk (asyncRoutes). Left alone, each is downloaded the first time a page is opened, which is
+    // the multi-second blank on a slow link. Once the first screen is up and the browser is idle they are fetched at the lowest priority
+    // (rel=prefetch: never competes with the first paint, skipped on Save-Data), so navigating later finds them in the HTTP cache.
+    const allChunks = fs.existsSync(jsDir) ? fs.readdirSync(jsDir).filter((f) => f.endsWith('.js') && !f.startsWith('entry-') && !routeChunks.includes(`/_expo/static/js/web/${f}`)).map((f) => `/_expo/static/js/web/${f}`) : [];
+    const adminChunks = fs.existsSync(jsDir) ? allChunks.filter((href) => /\/(\[entity\]|admin|branding|chats|credits|interface|notifications|requests|theme|users|assistant)-/.test(href) && fs.readFileSync(path.join(dist, href), 'utf8').length > 0) : [];
+    const userChunks = allChunks.filter((href) => !adminChunks.includes(href));
+    const prefetchScript = `(function(){try{var c=navigator.connection;if(c&&(c.saveData||/(^|-)2g$/.test(c.effectiveType||'')))return;var U=${JSON.stringify(userChunks)},A=${JSON.stringify(adminChunks)};var all=location.pathname.indexOf('/admin')===0?A.concat(U):U;`
+      + `function go(){var i=0;(function next(){if(i>=all.length)return;var l=document.createElement('link');l.rel='prefetch';l.as='script';l.href=all[i++];document.head.appendChild(l);setTimeout(next,60)})()}`
+      + `function idle(){(window.requestIdleCallback||function(f){setTimeout(f,1500)})(go,{timeout:4000})}`
+      + `if(document.readyState==='complete')idle();else addEventListener('load',idle)}catch(e){}})();`;
+    console.log(`[postexport] prefetching ${userChunks.length} app + ${adminChunks.length} admin route chunk(s) when idle`);
     // Startup loader (admin: Interface > Loading screen): pure HTML/SVG/CSS, painted with the first bytes of the page.
     const loader = require('../src/lib/loaderShell.js');
     const loaderDefaults = { enabled: true, style: 'ring', color: '#111111', bg: '#FFFFFF', uri: '', anim: 'none', delayMs: 0 };
     const loaderHead = `<style id="dwira-boot-css">${loader.CSS}</style><script>${loader.headScript(loaderDefaults)}</script>`;
     html = html.replace(/<body([^>]*)>/, (tag) => tag + loader.BODY);
-    const tags = `${loaderHead}<link rel="preconnect" href="https://images.unsplash.com" crossorigin>${chunkTags}<script>${script.replace(/\n/g, '')}</script>`;
+    const tags = `${loaderHead}<link rel="preconnect" href="https://images.unsplash.com" crossorigin>${chunkTags}<script>${script.replace(/\n/g, '')}</script><script>${prefetchScript}</script>`;
     // First in <head>: earlier than the stylesheet and the (deferred) bundle scripts.
     html = html.replace('<head>', '<head>' + tags);
     fs.writeFileSync(shell, html);

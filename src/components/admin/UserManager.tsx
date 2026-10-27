@@ -3,6 +3,7 @@ import { Pressable, ScrollView, View } from 'react-native';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { ListSkeleton } from '@/components/ui/Skeleton';
 import { Icon } from '@/components/ui/Icon';
 import { Input } from '@/components/ui/Field';
 import { ConfirmSheet, Sheet } from '@/components/ui/Sheet';
@@ -17,6 +18,7 @@ import { useStore } from '@/store/useStore';
 import { toast } from '@/store/useToast';
 import { applyBulk, isProtected, MAX_CREDITS, nextCredits, type BulkOp, type CreditMode } from '@/lib/userAdmin';
 import type { AppUser } from '@/data/types';
+import { holdPress, PRESS_HOLD } from '@/lib/noSelect';
 import { useLocalSearchParams } from 'expo-router';
 
 type Filter = 'all' | 'active' | 'blocked' | 'admin';
@@ -60,6 +62,7 @@ export function UserManager() {
   const { desktop } = useBp();
   const { target } = useLocalSearchParams<{ target?: string }>();
   const users = useStore((s) => s.users);
+  const adminLoaded = useStore((s) => s.adminLoaded);
   const [query, setQuery] = useViewState('um-search', '');
   const [filter, setFilter] = useViewState<Filter>('um-filter', 'all');
   const [selected, setSelected] = useViewState<string[]>('um-selected', []);
@@ -155,7 +158,7 @@ export function UserManager() {
             const on = selected.includes(u.id);
             return (
               <SearchTarget key={u.id} id={u.id}>
-                <Pressable testID={`user-${u.id}`} accessibilityRole="button" onPress={() => (selected.length ? toggle(u.id) : setEditing(u))} onLongPress={() => toggle(u.id)} delayLongPress={350}
+                <Pressable testID={`user-${u.id}`} accessibilityRole="button" onPress={() => (selected.length ? toggle(u.id) : setEditing(u))} onLongPress={holdPress(() => toggle(u.id))} delayLongPress={350} {...PRESS_HOLD}
                   className={`flex-row items-center pe-2 ${i ? 'border-t border-line' : ''} ${on ? 'bg-soft' : ''} ${u.blocked ? 'opacity-70' : ''}`} style={{ minHeight: 68 }}>
                   <Checkbox testID={`select-${u.id}`} on={on} onPress={() => toggle(u.id)} label={t('common.select')} />
                   <View className={`w-10 h-10 rounded-full items-center justify-center me-3 ${u.blocked ? 'bg-danger' : 'bg-primary'}`}>
@@ -181,7 +184,7 @@ export function UserManager() {
             );
           })}
         </Card>
-      ) : <EmptyState icon="account-search-outline" title={t('admin.um.none')} />}
+      ) : !adminLoaded ? <ListSkeleton rows={6} h={68} /> : <EmptyState icon="account-search-outline" title={t('admin.um.none')} />}
 
       {rows.length > shown ? <View className="items-center py-3"><Button testID="um-more" variant="soft" size="sm" title={`${t('admin.um.more')} (${rows.length - shown})`} onPress={() => setShown(shown + PAGE)} /></View> : null}
       <View className="h-3" />

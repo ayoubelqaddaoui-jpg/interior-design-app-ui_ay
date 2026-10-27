@@ -1,4 +1,5 @@
 import { useUserSession } from './useUserSession';
+import { useLocal } from './useLocal';
 import { create } from 'zustand';
 import type { CollMap, CollName, DocMap, DocName, AppUser } from '@/data/types';
 import { repos, docs, ME } from '@/data/repositories';
@@ -16,7 +17,14 @@ interface State extends Colls {
   ready: boolean;
   /** True once real content (cached copy or network) is in the store. Until then screens show placeholders, never an "empty" state. */
   contentReady: boolean;
+  /** True once the signed-in person's own data (designs, chats, requests) has been read once. Screens show skeletons until then, never a false "empty" state. */
+  personalReady: boolean;
+  /** True once the admin lists (requests, clients) have been read in this admin session. */
+  adminLoaded: boolean;
   init(): Promise<void>;
+  /** Reads the person's own space (and, for an admin device, the admin lists) in the background; never blocks the first screen. */
+  loadPersonal(): Promise<void>;
+  loadAdminData(): Promise<void>;
   /** Puts the content snapshot already held in memory (cache / HTML shell / last download) into the store without any network call. */
   applyContent(): Promise<void>;
   reload(name: CollName): Promise<void>;
@@ -37,7 +45,7 @@ const empty: Colls = {
   inspirations: [], models: [], plans: [], users: [], requests: [], history: [], conversations: [],
 };
 let initializing: Promise<void> | null = null;
-const COLLS = Object.keys(empty) as CollName[];
+let adminInflight: Promise<void> | null = null;
 const CONTENT_COLLS = ['tabs', 'tools', 'roomTypes', 'styles', 'palettes', 'sections', 'categories', 'inspirations', 'models', 'plans'] as const;
 const DOC_NAMES = ['branding', 'theme', 'assistant', 'settings'] as const;
 
@@ -47,6 +55,8 @@ export const useStore = create<State>((set, get) => ({
   doc: { branding: defaultBranding(), theme: defaultTheme(), assistant: defaultAssistant(), settings: defaultSettings() },
   ready: false,
   contentReady: false,
+  personalReady: false,
+  adminLoaded: false,
   async applyContent() {
     const snapshot = await contentSnapshot(false);
     const patch: Record<string, unknown> = {};
@@ -59,16 +69,32 @@ export const useStore = create<State>((set, get) => ({
     if (get().ready) return;
     if (initializing) return initializing;
     initializing = (async () => {
-    // Start independent reads together rather than serializing startup behind migration.
-    const listsPromise = Promise.all(COLLS.map((c) => repos[c].list()));
+    // Only the shared public content gates the first screen. The person's own data (designs, chats, requests, clients) is
+    // read separately by loadPersonal(), in parallel with the session, so a slow account lookup never delays a page.
+    const listsPromise = Promise.all(CONTENT_COLLS.map((c) => repos[c].list()));
     const docsPromise = Promise.all([docs.branding.get(), docs.theme.get(), docs.assistant.get(), docs.settings.get()]);
     const lists = await listsPromise;
     const [branding, theme, assistant, settings] = await docsPromise;
     const patch: Record<string, unknown> = {};
-    COLLS.forEach((c, i) => (patch[c] = lists[i]));
-    set({ ...(patch as Colls), doc: { branding, theme, assistant, settings }, ready: true, contentReady: true });
+    CONTENT_COLLS.forEach((c, i) => (patch[c] = lists[i]));
+    set({ ...(patch as Partial<Colls>), doc: { branding, theme, assistant, settings }, ready: true, contentReady: true });
     })().finally(() => { initializing = null; });
     return initializing;
+  },
+  async loadPersonal() {
+    // The space readers only return data for the person who is signed in right now (or the visitor's own chats).
+    await Promise.allSettled([reloadUserSpace(), get().loadAdminData()]);
+    set({ personalReady: true });
+  },
+  loadAdminData() {
+    if (!useLocal.getState().adminSession) return Promise.resolve();
+    // Startup, the admin shell and the login form all ask: one set of requests answers them all.
+    adminInflight ??= (async () => {
+      const [requests, users] = await Promise.allSettled([repos.requests.list(), repos.users.list()]);
+      // A failed read keeps what is on screen; the loader still ends so a skeleton never stays forever.
+      set({ ...(requests.status === 'fulfilled' ? { requests: requests.value } : {}), ...(users.status === 'fulfilled' ? { users: users.value } : {}), adminLoaded: true });
+    })().finally(() => { adminInflight = null; });
+    return adminInflight;
   },
   async reload(name) {
     set({ [name]: await repos[name].list() } as Partial<State>);
@@ -130,15 +156,24 @@ export const useMe = (): AppUser | undefined => {
   return user ?? guest;
 };
 const SPACE_COLLS = ['history', 'conversations', 'requests'] as const;
+let spaceInflight: { who: string; promise: Promise<void> } | null = null;
 /**
  * Reload the signed-in person's own chats, designs and requests. A response that arrives after the person changed
  * (sign-out, another account) is dropped, so one account's data can never land in another's session.
+ * Concurrent calls for the same person share one set of requests (startup and the sign-in hook both ask).
  */
-export async function reloadUserSpace() {
+export function reloadUserSpace(): Promise<void> {
   const who = useUserSession.getState().user?.id ?? '';
-  const lists = await Promise.all(SPACE_COLLS.map(name => repos[name].list()));
-  if ((useUserSession.getState().user?.id ?? '') !== who) return;
-  useStore.setState(Object.fromEntries(SPACE_COLLS.map((name, i) => [name, lists[i]])) as Partial<State>);
+  if (spaceInflight?.who === who) return spaceInflight.promise;
+  const promise = (async () => {
+    // An admin device's `requests` list is the admin's, loaded by loadAdminData: only a signed-in person's own list is replaced here.
+    const names = useLocal.getState().adminSession && !who ? SPACE_COLLS.filter(name => name !== 'requests') : SPACE_COLLS;
+    const lists = await Promise.all(names.map(name => repos[name].list()));
+    if ((useUserSession.getState().user?.id ?? '') !== who) return;
+    useStore.setState(Object.fromEntries(names.map((name, i) => [name, lists[i]])) as Partial<State>);
+  })().finally(() => { if (spaceInflight?.promise === promise) spaceInflight = null; });
+  spaceInflight = { who, promise };
+  return promise;
 }
 /** Whoever the data on screen belongs to changed (sign-in, sign-out, expired or blocked session): start from an empty space, then load theirs. */
 useUserSession.subscribe((state, previous) => {
