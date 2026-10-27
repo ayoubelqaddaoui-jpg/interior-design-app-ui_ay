@@ -14,6 +14,7 @@ import { mergeStates } from '@/lib/langStatus';
 import { useStore } from '@/store/useStore';
 import { useL, useT } from '@/i18n';
 import { toast } from '@/store/useToast';
+import { translateLines, translationsIdle, usePendingTranslations } from '@/lib/autoTranslate';
 import { mediaUploadsEnabled, pickAndUploadVideo, uploadsIdle, usePendingUploads } from '@/lib/media';
 import { requestLeave, useLeaveGuard } from '@/hooks/useLeaveGuard';
 import { PartialSaveError } from '@/hooks/useReveal';
@@ -123,7 +124,10 @@ function VideoUpload({ onUploaded }: { onUploaded: (uri: string, poster: string)
   const up = async () => {
     setBusy(true);
     try { const { uri, poster } = await pickAndUploadVideo(); if (uri) onUploaded(uri, poster); }
-    catch (error) { toast(error instanceof Error && /TOO_LARGE/.test(error.message) ? t('admin.f.videoTooLarge') : error instanceof Error && error.message === 'R2_REQUIRED' ? t('improve.videoNeedsR2') : t('admin.f.uploadFailed')); }
+    catch (error) {
+      const code = error instanceof Error ? error.message : '';
+      toast(/TOO_LARGE/.test(code) ? t('admin.f.videoTooLarge') : code === 'R2_REQUIRED' ? t('improve.videoNeedsR2') : /^UPLOAD_(BLOCKED|FAILED_403)$/.test(code) ? t('improve.uploadBlocked') : t('admin.f.uploadFailed'));
+    }
     finally { setBusy(false); }
   };
   return <View className="flex-row -mt-1 mb-3"><Button title={t('admin.f.uploadVideo')} icon="upload" variant="soft" size="sm" onPress={up} loading={busy} /></View>;
@@ -184,7 +188,8 @@ function FormDialog({ visible, title, fields, initial, onClose, onSubmit, onDraf
   const [v, setV] = useState<any>(initial ?? {});
   const [err, setErr] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
-  const uploading = usePendingUploads() > 0;
+  const translating = usePendingTranslations() > 0;
+  const uploading = usePendingUploads() > 0 || translating;
   const ctx: Ctx = { s, L, t };
   const latest = useRef(v);
   useEffect(() => { latest.current = v; });
@@ -192,6 +197,8 @@ function FormDialog({ visible, title, fields, initial, onClose, onSubmit, onDraf
     setBusy(true);
     // A picture or video still travelling would be saved as an empty field: wait for it, then save the finished form.
     await uploadsIdle();
+    // Automatic translations still travelling fill the other languages: wait for them so the saved form is complete.
+    await translationsIdle();
     await new Promise((resolve) => setTimeout(resolve, 0));
     const now = latest.current;
     const e = validate(fields, now, t);
@@ -279,12 +286,18 @@ function BatchFormDialog({ mode, title, fields, initial, initialKeys = [], blank
   const sharedFields = fields.filter((f) => f.key !== titleField?.key);
   const pasted = mode === 'add' && pasteMode;
   const lines = text.split(/\r?\n/).map((line) => line.trim().replace(/^(?:[-*•]\s+|\d+[.)]\s+)/, '')).filter(Boolean);
-  const uploading = usePendingUploads() > 0;
+  const translating = usePendingTranslations() > 0;
+  const uploading = usePendingUploads() > 0 || translating;
   const submit = async () => {
-    if (uploading) { toast(t('improve.uploadWait')); return false; }
+    if (uploading) { toast(t(translating ? 'improve.translateWait' : 'improve.uploadWait')); return false; }
     if (pasted && (!lines.length || lines.length > 50)) { setPasteError(t('improve.pasteError')); return false; }
     const active = mode === 'edit' ? fields.filter((f) => keys.includes(f.key)) : fields;
-    const values = pasted ? pasteDrafts.map((draft, i) => ({ ...shared, id: draft.id, [titleField!.key]: titleField!.kind === 'ltext' ? { dar: lines[i], ar: lines[i], fr: lines[i] } : lines[i] })) : drafts;
+    let titles: any[] = lines;
+    if (pasted && titleField!.kind === 'ltext') {
+      setBusy(true);
+      try { titles = await translateLines(lines); } finally { setBusy(false); }
+    }
+    const values = pasted ? pasteDrafts.map((draft, i) => ({ ...shared, id: draft.id, [titleField!.key]: titles[i] })) : drafts;
     const nextErrors = values.map((v) => validate(active, v, t));
     setErrors(nextErrors);
     if (nextErrors.some((e) => Object.keys(e).length)) return false;

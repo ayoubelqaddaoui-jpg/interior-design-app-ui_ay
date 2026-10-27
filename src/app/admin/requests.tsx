@@ -4,6 +4,7 @@ import { Linking, Pressable, View } from 'react-native';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { ListSkeleton } from '@/components/ui/Skeleton';
 import { Icon } from '@/components/ui/Icon';
 import { MediaView } from '@/components/ui/MediaView';
 import { Sheet } from '@/components/ui/Sheet';
@@ -120,7 +121,7 @@ export default function Requests() {
           </Pressable>
         ))}
       </View>
-      {!rows.length ? <EmptyState icon="inbox-outline" title={t('admin.crud.noItems')} /> : (
+      {!s.adminLoaded && !rows.length ? <ListSkeleton rows={5} h={72} /> : !rows.length ? <EmptyState icon="inbox-outline" title={t('admin.crud.noItems')} /> : (
         <Card className="overflow-hidden">
           {desktop ? (
             <View className="flex-row items-center px-4 h-10 bg-surface2">

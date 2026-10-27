@@ -69,6 +69,7 @@ Vercel → Project → Settings → **Environment Variables** (Production and Pr
 | `R2_SECRET_ACCESS_KEY` | token secret |
 | `R2_BUCKET` | bucket name |
 | `R2_PUBLIC_BASE_URL` | e.g. `https://media.example.com` |
+| `R2_ENDPOINT` (optional) | only for EU-jurisdiction buckets: `https://<account>.eu.r2.cloudflarestorage.com` |
 
 For local use, put the same names in `server/.env` (gitignored; see `server/.env.example`). Never put them in `EXPO_PUBLIC_*`
 variables and never commit them.
@@ -97,6 +98,13 @@ node scripts/migrate-media-to-r2.js --videos               # optional: external 
 ## Troubleshooting
 
 - **Images 404 after enabling R2:** run the migration (step 4). Rows still stored in the database keep being served until then.
-- **Video upload fails in the browser:** check the bucket CORS policy (origin, `PUT`, `content-type` header).
+- **Video upload fails in the browser:** check the bucket CORS policy (origin, `PUT`, `content-type` header). The admin now
+  shows a dedicated message when R2 refuses the direct upload; files up to 4 MB are then sent through the API instead.
+- **Presigned upload answers 400/403 (`x-amz-checksum-crc32`):** recent `@aws-sdk/client-s3` versions add a CRC32 of an
+  empty body to presigned PUT URLs, which R2 rejects. `server/media.js` (`r2ClientOptions`) disables these optional checksums
+  (`requestChecksumCalculation` / `responseChecksumValidation: 'WHEN_REQUIRED'`); keep that if you change the client.
+- **End-to-end check against a real bucket or emulator:** `R2_TEST_ENDPOINT=<s3 endpoint> R2_TEST_BUCKET=<bucket>
+  R2_TEST_KEY=... R2_TEST_SECRET=... node --test scripts/check-media-server.js` uploads an image and a video, saves them on a
+  tool, reads them back through `/api/media` and the public URL, and stores a client photo.
 - **`MEDIA_URL_*` error when saving:** the pasted link is not https, points to a private address, is not an image, is larger than 10 MB, or did not answer within 10 s. Upload the file instead.
 - **Changing the public URL:** update `R2_PUBLIC_BASE_URL`. Redirects are cached for at most one day.

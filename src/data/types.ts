@@ -186,6 +186,8 @@ export interface AppSettings {
   loaderCustomAnim?: LoaderAnim;
   /** 0 = automatic: removed as soon as the first two Home cards are on screen. Otherwise the loader stays this many ms. */
   loaderDelayMs?: number;
+  /** Fill the other two languages automatically (free translation) when one is typed in an admin form. On unless false. */
+  autoTranslate?: boolean;
   /** Bulk/reorder operations must be explicitly enabled per content panel. */
   bulkPanels?: string[];
 }

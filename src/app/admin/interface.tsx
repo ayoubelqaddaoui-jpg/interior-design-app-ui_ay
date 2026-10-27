@@ -49,6 +49,13 @@ export default function InterfaceAdmin() {
           <Txt className="flex-1 font-semibold">{t(`improve.${key === 'appSearchEnabled' ? 'appSearch' : key === 'adminSearchEnabled' ? 'adminSearch' : 'exitEnabled'}`)}</Txt>
           <Toggle testID={`setting-${key}`} label={t(`improve.${key === 'appSearchEnabled' ? 'appSearch' : key === 'adminSearchEnabled' ? 'adminSearch' : 'exitEnabled'}`)} value={settings[key] !== false} onValueChange={(value) => set({ [key]: value })} />
         </View>)}
+        <View className="py-2">
+          <View className="flex-row items-center justify-between gap-3">
+            <Txt className="flex-1 font-semibold">{t('improve.autoTranslate')}</Txt>
+            <Toggle testID="setting-autoTranslate" label={t('improve.autoTranslate')} value={settings.autoTranslate !== false} onValueChange={(value) => set({ autoTranslate: value })} />
+          </View>
+          <Txt className="text-muted text-[12px] mt-1">{t('improve.autoTranslateHint')}</Txt>
+        </View>
         <Txt className="font-bold text-[17px] my-3">{t('improve.exitSettings')}</Txt>
         {(['exitTitle', 'exitMessage'] as const).map((key) => <Field key={key} f={{ key, kind: 'ltext', label: t(`improve.${key}`), multiline: key === 'exitMessage' }} value={settings[key]} ctx={{ s: store, L, t }} onChange={(value) => set({ [key]: value })} />)}
       </Card>

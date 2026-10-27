@@ -30,7 +30,8 @@ export async function clientToken() {
   await storage.write('demand-client-token', deviceToken);
   return deviceToken;
 }
-export async function api<T>(path: string, options: { method?: string; body?: unknown; client?: boolean; raw?: Blob; headers?: Record<string, string> } = {}): Promise<T> {
+/** `timeoutMs`: default 15 s. File uploads pass a longer one (a few MB on a mobile network easily takes more than 15 s). */
+export async function api<T>(path: string, options: { method?: string; body?: unknown; client?: boolean; raw?: Blob; headers?: Record<string, string>; timeoutMs?: number } = {}): Promise<T> {
   if (!backendEnabled) throw new BackendError(503, 'BACKEND_UNAVAILABLE');
   const headers: Record<string, string> = { 'Content-Type': 'application/json', ...options.headers };
   if (options.client) headers['X-Demand-Token'] = await clientToken();
@@ -43,7 +44,7 @@ export async function api<T>(path: string, options: { method?: string; body?: un
     headers['X-Dwira-Native'] = '1';
   }
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 15000);
+  const timeout = setTimeout(() => controller.abort(), options.timeoutMs ?? 15000);
   try {
     const transport = Platform.OS === 'web' ? fetch : (await import('expo/fetch')).fetch;
     const response = await transport(`${BASE}${path}`, { method: options.method || 'GET', headers, credentials: 'include', body: options.raw ?? (options.body == null ? undefined : JSON.stringify(options.body)), signal: controller.signal });

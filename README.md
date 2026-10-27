@@ -40,6 +40,7 @@ With the backend enabled (default on web, or `EXPO_PUBLIC_API_URL` on native) th
 | --- | --- | --- |
 | Content: `tabs`, `tools`, `roomTypes`, `styles`, `palettes`, `sections`, `categories`, `inspirations`, `models`, `plans` | `content_items` | admin (`PUT/DELETE /api/admin/content/...`) |
 | Settings documents: `branding`, `theme`, `assistant`, `settings` | `content_docs` | admin (`PATCH /api/admin/doc/:name`) |
+| Auto-translation: `POST /api/admin/translate` (admin only) fills the other languages of multilingual fields (Darija / Arabic / French) with free, keyless providers: Pollinations LLM first (real Darija), MyMemory fallback (fr<->ar). Toggle: Admin > Interface > Automatic translation (`settings.autoTranslate`). | - | admin |
 | Clients (leads), credits, blocked state | `clients` | clients sign in; admin edits credits/blocked |
 | Render requests | `requests` | clients create; admin updates |
 | Per-client history and chats | `space` | the client |

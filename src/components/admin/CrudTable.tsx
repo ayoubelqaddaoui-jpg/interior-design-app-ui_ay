@@ -16,6 +16,7 @@ import { DragRow, justDragged, useReorder } from './DragReorder';
 import { LangDots } from './LangField';
 import type { Lang } from '@/data/types';
 import type { LangState } from '@/lib/langStatus';
+import { holdPress, PRESS_HOLD } from '@/lib/noSelect';
 
 const TONE: Record<NonNullable<Chip['tone']>, { box: string; text: string; icon: 'muted' | 'primary' | 'success' | 'danger' | 'fg' }> = {
   muted: { box: 'bg-surface2', text: 'text-muted', icon: 'muted' },
@@ -86,10 +87,11 @@ export function CrudTable<T extends { id: string; visible?: boolean }>({ rows, v
     </View>
   );
   const press = (r: T) => ({
+    ...PRESS_HOLD,
     accessibilityRole: onSelect ? 'button' as const : undefined,
     accessibilityLabel: onSelect ? t('improve.holdSelect') : undefined,
     delayLongPress: 450,
-    onLongPress: onLongPress ? () => { if (!justDragged()) onLongPress(r.id); } : undefined,
+    onLongPress: onLongPress ? holdPress(() => { if (!justDragged()) onLongPress(r.id); }) : undefined,
     onPress: onSelect && selected?.length ? () => { if (!justDragged()) onSelect(r.id); } : undefined,
   });
   const langBadge = (r: T) => { const states = langs?.(r); return states && Object.values(states).some((x) => x !== 'complete') ? <LangDots states={states} /> : null; };

@@ -56,7 +56,8 @@ const Section = ({ title, right, children, className = '' }: { title: string; ri
 export default function Dashboard() {
   const { t, lang } = useT();
   const L = useL();
-  const { desktop, tablet } = useBp();
+  const { desktop, tablet, width } = useBp();
+  const compact = width < 600;
   const router = useRouter();
   const s = useStore();
   const [range, setRange] = useViewState<Range>('range', 30);
@@ -98,10 +99,15 @@ export default function Dashboard() {
       <PushNotifications />
       {/* Attention banner */}
       {k.pending > 0 ? (
-        <Pressable testID="dash-attention" onPress={() => go('/admin/requests')} className="flex-row items-center gap-3 rounded-2xl p-4 mb-4 bg-primary">
-          <View className="w-10 h-10 rounded-full bg-ink items-center justify-center"><Icon name="bell-ring-outline" size={20} tone="onink" /></View>
-          <View className="flex-1"><Txt className="text-onprimary font-extrabold text-[15px]">{t('admin.dash.attention', { count: k.pending })}</Txt><Txt className="text-onprimary text-[12px] opacity-80">{t('admin.dash.attentionSub')}</Txt></View>
-          <View className="flex-row items-center gap-1"><Txt className="text-onprimary font-bold text-[13px]">{t('admin.dash.attentionCta')}</Txt><Icon name="chevron-right" size={18} tone="onprimary" flip /></View>
+        // Narrow screens: the call to action moves under the text instead of squeezing it into a thin column.
+        <Pressable testID="dash-attention" onPress={() => go('/admin/requests')} className="rounded-2xl p-4 mb-4 bg-primary" style={{ flexDirection: compact ? 'column' : 'row', alignItems: compact ? 'stretch' : 'center', gap: 12 }}>
+          <View className="flex-row items-center gap-3" style={{ flex: compact ? undefined : 1, minWidth: 0 }}>
+            <View className="w-10 h-10 rounded-full bg-ink items-center justify-center" style={{ flexShrink: 0 }}><Icon name="bell-ring-outline" size={20} tone="onink" /></View>
+            <View style={{ flex: 1, minWidth: 0 }}><Txt className="text-onprimary font-extrabold text-[15px] leading-[21px]">{t('admin.dash.attention', { count: k.pending })}</Txt><Txt className="text-onprimary text-[12px] leading-[18px] opacity-80">{t('admin.dash.attentionSub')}</Txt></View>
+          </View>
+          <View testID="dash-attention-cta" className={compact ? 'flex-row items-center justify-center gap-1 rounded-full bg-ink h-10 px-4' : 'flex-row items-center gap-1'} style={{ flexShrink: 0 }}>
+            <Txt className={`font-bold text-[13px] ${compact ? 'text-onink' : 'text-onprimary'}`}>{t('admin.dash.attentionCta')}</Txt><Icon name="chevron-right" size={18} tone={compact ? 'onink' : 'onprimary'} flip />
+          </View>
         </Pressable>
       ) : (
         <View className="flex-row items-center gap-3 rounded-2xl p-4 mb-4 bg-soft" testID="dash-allclear">
