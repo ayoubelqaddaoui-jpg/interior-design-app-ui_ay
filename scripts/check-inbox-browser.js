@@ -51,10 +51,12 @@ async function main() {
     await page.goto(`${base}/admin/notifications`);
     await page.getByTestId('notify-notifyAdmins').waitFor();
     await page.getByTestId('notify-notifyUsers').click();
+    await page.getByTestId('notif-tab-devices').click();
     await page.getByTestId('notify-users-paused').waitFor();
     await page.getByTestId('notifications-submit').click();
     await page.waitForFunction(() => document.querySelector('[data-testid="notifications-submit"]')?.getAttribute('aria-disabled') === 'true', null, { timeout: 15000 });
     await page.reload();
+    await page.getByTestId('notif-tab-devices').click();
     await page.getByTestId('notify-users-paused').waitFor();
     assert.equal(await page.getByTestId('notify-notifyAdmins').getAttribute('aria-checked'), 'true', 'the admin switch is independent');
     await page.getByTestId('notify-notifyUsers').click();

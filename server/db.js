@@ -47,6 +47,23 @@ ALTER TABLE media ADD COLUMN IF NOT EXISTS storage TEXT NOT NULL DEFAULT 'db';
 -- client's own space (table space) the moment that person signs in from the same device.
 CREATE TABLE IF NOT EXISTS guest_chats (id TEXT PRIMARY KEY, device_hash TEXT NOT NULL, value TEXT NOT NULL, updated_at BIGINT NOT NULL);
 CREATE INDEX IF NOT EXISTS guest_chats_device ON guest_chats(device_hash, updated_at);
+-- Activity used by notification segments: last time the client's app was open (written at most every 5 minutes) and when each
+-- design was started (claims = one per generation).
+ALTER TABLE clients ADD COLUMN IF NOT EXISTS last_seen BIGINT;
+ALTER TABLE claims ADD COLUMN IF NOT EXISTS created_at BIGINT;
+-- Notification campaigns. The data column holds the editable definition; status / next_at are columns so the scheduler can query them.
+-- kind: once | recurring | trigger. status: draft | scheduled | sending | sent (once), active | paused | ended (recurring / trigger). One delivery row per (campaign, client, occurrence): the primary key
+-- is the idempotency key, so a retry, a second server instance or a repeated tick can never notify the same person twice.
+CREATE TABLE IF NOT EXISTS campaigns (id TEXT PRIMARY KEY, kind TEXT NOT NULL, data TEXT NOT NULL, status TEXT NOT NULL, next_at BIGINT, created_at BIGINT NOT NULL, updated_at BIGINT NOT NULL);
+CREATE INDEX IF NOT EXISTS campaigns_status ON campaigns(status, next_at);
+CREATE TABLE IF NOT EXISTS campaign_deliveries (
+  id TEXT PRIMARY KEY, campaign_id TEXT NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE, client_id TEXT NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+  occurrence TEXT NOT NULL, status TEXT NOT NULL, attempts INTEGER NOT NULL DEFAULT 0, next_at BIGINT NOT NULL, created_at BIGINT NOT NULL,
+  sent_at BIGINT, devices INTEGER NOT NULL DEFAULT 0, reason TEXT, completed TEXT NOT NULL DEFAULT '[]'
+);
+CREATE INDEX IF NOT EXISTS campaign_deliveries_due ON campaign_deliveries(status, next_at);
+CREATE INDEX IF NOT EXISTS campaign_deliveries_campaign ON campaign_deliveries(campaign_id, status);
+CREATE INDEX IF NOT EXISTS campaign_deliveries_client ON campaign_deliveries(client_id, sent_at);
 `;
 
 async function openPg(url) {

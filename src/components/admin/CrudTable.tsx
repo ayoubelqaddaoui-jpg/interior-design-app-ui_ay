@@ -50,10 +50,11 @@ export function CrudTable<T extends { id: string; visible?: boolean }>({ rows, v
   onMove?: (r: T, d: -1 | 1) => void;
   rowTestID?: string; selected?: string[]; onSelect?: (id: string) => void; onLongPress?: (id: string) => void;
 }) {
-  const { desktop } = useBp();
+  const { desktop, width: windowWidth } = useBp();
   const { t } = useT();
   const { target, focus } = useLocalSearchParams<{ target?: string; focus?: string }>();
   const [width, setWidth] = useState(0);
+  const grid = width || windowWidth;
   const [page, setPage] = useViewState('table-page', 0);
   const pageSize = 24;
   const pageCount = Math.max(1, Math.ceil(rows.length / pageSize));
@@ -88,17 +89,19 @@ export function CrudTable<T extends { id: string; visible?: boolean }>({ rows, v
   );
   const press = (r: T) => ({
     ...PRESS_HOLD,
-    accessibilityRole: onSelect ? 'button' as const : undefined,
-    accessibilityLabel: onSelect ? t('improve.holdSelect') : undefined,
+    accessibilityRole: onSelect || onEdit ? 'button' as const : undefined,
+    accessibilityLabel: onSelect ? t('improve.holdSelect') : onEdit ? t('common.edit') : undefined,
     delayLongPress: 450,
     onLongPress: onLongPress ? holdPress(() => { if (!justDragged()) onLongPress(r.id); }) : undefined,
-    onPress: onSelect && selected?.length ? () => { if (!justDragged()) onSelect(r.id); } : undefined,
+    // One press opens the editor. While a selection is active a press toggles the row instead (so several can be picked quickly).
+    onPress: onSelect && selected?.length ? () => { if (!justDragged()) onSelect(r.id); } : onEdit ? () => { if (!justDragged()) onEdit(r); } : undefined,
   });
   const langBadge = (r: T) => { const states = langs?.(r); return states && Object.values(states).some((x) => x !== 'complete') ? <LangDots states={states} /> : null; };
   const hiddenBadge = (r: T) => r.visible === false ? <View className="flex-row items-center gap-1 rounded-full px-2 h-5 bg-ink"><Icon name="eye-off-outline" size={11} tone="onink" /><Txt className="text-onink text-[10px] font-bold">{t('admin.crud.hidden')}</Txt></View> : null;
 
   if (visual) {
-    const columns = width >= 900 ? 4 : width >= 640 ? 3 : width >= 340 ? 2 : 1;
+    // Phones always get two cards per row (even 320 px wide ones); before the first measure the window width is used so the grid never flashes as one column.
+    const columns = grid >= 900 ? 4 : grid >= 640 ? 3 : 2;
     return <View onLayout={measure}><View testID="crud-visual-grid" style={{ flexDirection: 'row', flexWrap: 'wrap', margin: -5 }}>
       {visibleRows.map((r, i) => {
         const v = view(r, currentPage * pageSize + i);

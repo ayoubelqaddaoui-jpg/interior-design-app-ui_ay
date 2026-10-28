@@ -9,9 +9,26 @@ const TEXT = {
 const trim = (value, max) => Array.from(String(value ?? '').replace(/[\u0000-\u001f\u007f\u202a-\u202e\u2066-\u2069]/g, '').trim()).slice(0, max).join('');
 const phone = value => trim(value, 32).replace(/[^\d+]/g, '').replace(/(?!^)\+/g, '');
 const locale = value => Object.hasOwn(TEXT, value) ? value : 'en';
+/** Pages a campaign notification may open (everything else falls back to Home): public app pages and one tool. */
+const CAMPAIGN_URL = /^\/(?:(?:explore|assistant|history|pro|settings|tool\/[A-Za-z0-9_-]{1,100}))?$/;
+const PICK = { dar: ['dar', 'ar', 'fr'], ar: ['ar', 'dar', 'fr'], fr: ['fr', 'ar', 'dar'], en: ['fr', 'ar', 'dar'] };
+/** `{name}` becomes the client's first name; with no name the token and the space before punctuation disappear. */
+const personalize = (text, name) => {
+  const first = trim(name, 60).split(/\s+/)[0] || '';
+  return text.replace(/\{name\}/gi, first).replace(/\s{2,}/g, ' ').replace(/\s+([,!?،؟.:])/g, '$1').trim();
+};
+const pickText = (value, lang) => (PICK[lang] || PICK.fr).map(key => trim(value?.[key], 400)).find(Boolean) || '';
 /** event: 'request' (new render request, to admins) | 'lead' (new client account, to admins) | 'chat' (client message, to admins) | 'ready' (design delivered, to its owner) | 'reply' (admin chat reply, to its owner). */
 function payloadFor(request, language, event = 'request') {
   const lang = locale(language), text = TEXT[lang], dir = lang === 'ar' || lang === 'dar' ? 'rtl' : 'ltr';
+  // Campaign (admin-authored message to clients): text per language, `{name}` personalisation, link restricted to public app pages.
+  if (event === 'campaign') {
+    return {
+      title: personalize(pickText(request.title, lang), request.name).slice(0, 120), body: personalize(pickText(request.body, lang), request.name).slice(0, 220),
+      requestId: `campaign-${String(request.id).slice(0, 80)}`, phone: '', lang, dir,
+      url: CAMPAIGN_URL.test(request.url || '') ? request.url : '/', actions: [{ action: 'open', title: text.open }],
+    };
+  }
   // Assistant chat: a client wrote (-> admins, opens that conversation) or an admin replied (-> the client, opens the chat).
   if (event === 'reply') return { title: text.reply, body: trim(request.text, 120) || text.replyBody, requestId: String(request.id), phone: '', lang, dir, url: `/chat/${encodeURIComponent(request.id)}`, actions: [{ action: 'open', title: text.open }] };
   if (event === 'chat') {
@@ -122,10 +139,11 @@ function createNotifier(db, env, adapters = {}, options = {}) {
   const removeDevice = deviceId => db.query('DELETE FROM subscriptions WHERE COALESCE(device_id,id)=$1', [deviceId]);
   async function deliver(request, completed = [], options = {}) {
     const done = new Set(completed), event = options.event || 'request';
-    let retry = false;
+    let retry = false, sent = 0;
     const { publicKey, privateKey, subject } = await keys();
+    const targets = (await recipients(options.audience)).filter(row => !done.has(row.rowId));
     // Independent sends: one expired/failed device never suppresses the others.
-    await Promise.all((await recipients(options.audience)).filter(row => !done.has(row.rowId)).map(async subscriber => {
+    await Promise.all(targets.map(async subscriber => {
       const payload = payloadFor(request, subscriber.language, event);
       try {
         if (subscriber.kind === 'fcm') {
@@ -134,7 +152,7 @@ function createNotifier(db, env, adapters = {}, options = {}) {
         } else {
           await (adapters.web || ((sub, body, opts) => webpush.sendNotification(sub, body, { ...opts, vapidDetails: { subject, publicKey, privateKey } })))(subscriber.subscription, JSON.stringify(payload), { TTL: 86400, urgency: 'high', timeout: 8000 });
         }
-        done.add(subscriber.rowId);
+        done.add(subscriber.rowId); sent++;
       } catch (error) {
         const expired = error.statusCode === 410 || error.statusCode === 404 || error.code === 'messaging/registration-token-not-registered';
         if (expired) { await removeDevice(subscriber.id); done.add(subscriber.rowId); } else retry = true;
@@ -142,7 +160,8 @@ function createNotifier(db, env, adapters = {}, options = {}) {
         console.warn('Push failed', { event, code: error.statusCode || error.code || 'delivery-failed' });
       }
     }));
-    return { retry, completed: [...done] };
+    // `devices`: how many were tried; `sent`: how many accepted the message (0 with devices > 0 = every device had expired).
+    return { retry, completed: [...done], sent, devices: targets.length };
   }
   return {
     deliver,
@@ -171,4 +190,4 @@ function createNotifier(db, env, adapters = {}, options = {}) {
     removeOwner: (type, id) => db.query('DELETE FROM subscriptions WHERE owner_type=$1 AND owner_id=$2', [type, id]),
   };
 }
-module.exports = { createNotifier, createFcm, payloadFor, validateSubscription, trim, phone };
+module.exports = { createNotifier, createFcm, payloadFor, validateSubscription, trim, phone, CAMPAIGN_URL };

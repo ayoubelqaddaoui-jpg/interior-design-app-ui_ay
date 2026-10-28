@@ -150,6 +150,13 @@ export interface AssistantConfig {
   systemPrompt: string;
   whatsappNumber: string;
   welcome: LText;
+  /** Human-like pacing of AI replies: `off` answers as soon as the text arrives, `auto` scales with reply length, `custom` uses the bounds below. */
+  replyDelayMode?: 'off' | 'auto' | 'custom';
+  /** Custom mode bounds (ms): the reply never shows sooner than `min` nor is held longer than `max`. */
+  replyDelayMinMs?: number;
+  replyDelayMaxMs?: number;
+  /** Reveal the answer progressively, like someone typing it. */
+  typewriter?: boolean;
 }
 export type UserNavStyle = 'classic' | 'floating' | 'minimal';
 /** Startup loading screen: four built-in animations or the admin's own image (GIF / SVG / PNG / WebP). */
@@ -160,6 +167,8 @@ export interface AppSettings {
   /** Master switches for push notifications, independent of each other (on unless false). */
   notifyAdmins?: boolean;
   notifyUsers?: boolean;
+  /** Minimum hours between two automated (trigger) notifications to the same person. 0 = no limit. Default 24. */
+  campaignCapHours?: number;
   appSearchEnabled?: boolean;
   adminSearchEnabled?: boolean;
   exitConfirmationEnabled?: boolean;

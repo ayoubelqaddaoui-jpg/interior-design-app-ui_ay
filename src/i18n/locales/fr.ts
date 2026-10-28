@@ -125,6 +125,8 @@ const fr = {
     hello: 'Bonjour, comment puis-je vous aider ?',
     placeholder: 'Demandez à Dwira…',
     attach: 'Joindre une photo',
+    typing: 'Dwira écrit…',
+    error: 'Désolé, je n’ai pas pu répondre. Réessayez dans un instant.',
     thinking: 'Dwira écrit…',
     newChat: 'Nouvelle conversation',
     pro: 'PRO',
@@ -399,7 +401,7 @@ const fr = {
         vibrant: 'Vibrant',
       },
     },
-    assistant: { type: 'Type d’assistant', ai: 'Chat IA', whatsapp: 'Contact WhatsApp', model: 'Modèle', prompt: 'Prompt système', number: 'Numéro WhatsApp', welcome: 'Message d’accueil' },
+    assistant: { type: 'Type d’assistant', ai: 'Chat IA', whatsapp: 'Contact WhatsApp', model: 'Modèle', prompt: 'Prompt système', number: 'Numéro WhatsApp', welcome: 'Message d’accueil', delayTitle: 'Rythme des réponses', delayHint: 'La réponse est demandée tout de suite ; elle s’affiche après un court délai naturel avec l’indicateur « écrit… ».', delayOff: 'Instantané', delayAuto: 'Naturel', delayCustom: 'Personnalisé', delayMin: 'Délai minimum (s)', delayMax: 'Délai maximum (s)', typewriter: 'Afficher le texte progressivement', providersTitle: 'Fournisseurs IA gratuits', providersHint: 'Essayés dans l’ordre ; le suivant prend le relais en cas d’échec ou de quota atteint. Les clés ne sont jamais réaffichées.', provGemini: 'Google Gemini', provGroq: 'Groq', provOpenrouter: 'OpenRouter', provPollinations: 'Pollinations (sans clé)', provOn: 'Actif', provOff: 'Sans clé', provCooling: 'En pause (quota)', srcEnv: 'Variable serveur', srcDb: 'Enregistrée ici', keyPlaceholder: 'Coller une clé API', keySave: 'Enregistrer', keyRemove: 'Retirer', keySaved: 'Clé enregistrée', keyRemoved: 'Clé retirée', keyInvalid: 'Clé invalide', keyEnv: 'Définie sur le serveur', noProvider: 'Aucune clé : les visiteurs reçoivent des réponses de démonstration. Ajoutez une clé gratuite Gemini ou Groq.' },
     credits: {
       defaultCredits: 'Crédits gratuits par défaut',
       defaultNote: 'Appliqué aux nouveaux utilisateurs.',

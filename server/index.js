@@ -11,6 +11,8 @@ const { createContent } = require('./content');
 const { r2Status } = require('./media');
 const { translate } = require('./translate');
 const { createNotifier, validateSubscription, trim, phone } = require('./notifications');
+const { createCampaigns, cleanCampaign } = require('./campaigns');
+const { createChat } = require('./chat');
 const hash = value => crypto.createHash('sha256').update(value).digest('hex');
 const fail = (status, message) => Object.assign(new Error(message), { status });
 function passwordMatches(password, encoded) {
@@ -66,12 +68,15 @@ function mergeConversation(value, existing) {
 const withTimeout = (promise, ms) => Promise.race([promise, new Promise(resolve => setTimeout(resolve, ms))]);
 
 /** `media` (tests): { storage, download } overrides for the R2 adapter and the external downloader. */
-function createBackend({ env = process.env, db = createDb(env), senders, media: mediaOptions = {}, translator = translate } = {}) {
+function createBackend({ env = process.env, db = createDb(env), senders, media: mediaOptions = {}, translator = translate, chatFetch } = {}) {
   const notifier = createNotifier(db, env, senders, { settings: () => content.getDoc('settings') });
   const clients = createClients(db);
   const sync = createSync(db);
   const content = createContent(db, sync, { env, ...mediaOptions });
   const media = content.media;
+  // Campaigns (scheduled / recurring / automated pushes) and the free-provider AI chat. Both are lazy: no work until used.
+  const campaigns = createCampaigns(db, notifier, { sync, settings: () => content.getDoc('settings') });
+  const chat = createChat(db, { env, ...(chatFetch ? { fetch: chatFetch } : {}) });
   const trustedProxies = new Set(String(env.TRUSTED_PROXY_IPS || '').split(',').map(value => value.trim()).filter(Boolean));
   const address = req => {
     const remote = req.socket?.remoteAddress || 'unknown';
@@ -143,14 +148,15 @@ function createBackend({ env = process.env, db = createDb(env), senders, media: 
           if (file.redirect) { res.writeHead(302, { Location: file.redirect, 'Cache-Control': 'public, max-age=86400, s-maxage=86400' }); return res.end(); }
           return sendBuffer(req, res, 200, { 'Content-Type': file.mime, 'Cache-Control': 'public, max-age=31536000, s-maxage=31536000, immutable', ...(file.mime === 'image/svg+xml' ? { 'Content-Security-Policy': "default-src 'none'; style-src 'unsafe-inline'" } : {}) }, file.body);
         }
-        const bucketName = url.pathname === '/api/admin/login' ? 'login' : url.pathname === '/api/sync' ? 'sync' : 'api';
+        const bucketName = url.pathname === '/api/admin/login' ? 'login' : url.pathname === '/api/sync' ? 'sync' : url.pathname === '/api/chat/reply' ? 'chat' : 'api';
         const key = `${address(req)}:${bucketName}`;
         const now = Date.now();
         if (buckets.size > 10000) for (const [id, bucket] of buckets) if (bucket.until < now) buckets.delete(id);
         const bucket = buckets.get(key) || { count: 0, until: now + 15 * 60000 };
         if (bucket.until < now) { bucket.count = 0; bucket.until = now + 15 * 60000; }
         bucket.count++; buckets.set(key, bucket);
-        if (bucket.count > (bucketName === 'login' ? 20 : bucketName === 'sync' ? 20000 : apiLimit)) throw fail(429, 'Too many requests');
+        // The AI chat spends a shared free quota: its own, much smaller allowance per address (CHAT_RATE_LIMIT per 15 minutes, default 90).
+        if (bucket.count > (bucketName === 'login' ? 20 : bucketName === 'sync' ? 20000 : bucketName === 'chat' ? Math.max(5, Math.min(2000, Number(env.CHAT_RATE_LIMIT) || 90)) : apiLimit)) throw fail(429, 'Too many requests');
 
         if (url.pathname === '/api/health' && req.method === 'GET') {
           // Never exposes secrets: only whether the database is reachable.
@@ -208,12 +214,14 @@ function createBackend({ env = process.env, db = createDb(env), senders, media: 
         if (url.pathname === '/api/user/session' && req.method === 'GET') return json(200, { user: requireUser(), prefs: await content.clientPrefs(client.id) });
         // ---- Sync, shared content and preferences ----
         if (url.pathname === '/api/sync' && req.method === 'GET') {
-          const keys = ['content', ...(session ? ['requests', 'clients', 'chats', `a:${adminId}`] : []), ...(client ? [`c:${client.id}`] : []), ...(clientHash && !client ? [`g:${clientHash}`] : [])];
+          const keys = ['content', ...(session ? ['requests', 'clients', 'chats', 'campaigns', `a:${adminId}`] : []), ...(client ? [`c:${client.id}`] : []), ...(clientHash && !client ? [`g:${clientHash}`] : [])];
           const versions = await sync.read(keys);
           // Opportunistic retry of failed notifications (serverless has no background timer; cron is only daily).
           const waiting = (await db.query('SELECT 1 FROM outbox WHERE next_at<=$1 LIMIT 1', [now]))[0];
           if (waiting) await withTimeout(pump(), 9000);
-          return json(200, { content: versions.content, requests: session ? versions.requests : null, clients: session ? versions.clients : null, chats: session ? versions.chats : null, admin: session ? versions[`a:${adminId}`] : null, client: client ? versions[`c:${client.id}`] : null, guest: clientHash && !client ? versions[`g:${clientHash}`] : null, user: client ? { id: client.id, blocked: !!client.blocked } : null, isAdmin: !!session });
+          // Scheduled / recurring / automated campaigns are driven by any open app too (cross-instance throttled to one run per 10 s).
+          if (env.VERCEL) await withTimeout(campaigns.tick({ budgetMs: 6000 }), 8000); else void campaigns.tick();
+          return json(200, { content: versions.content, campaigns: session ? versions.campaigns : null, requests: session ? versions.requests : null, clients: session ? versions.clients : null, chats: session ? versions.chats : null, admin: session ? versions[`a:${adminId}`] : null, client: client ? versions[`c:${client.id}`] : null, guest: clientHash && !client ? versions[`g:${clientHash}`] : null, user: client ? { id: client.id, blocked: !!client.blocked } : null, isAdmin: !!session });
         }
         if (url.pathname === '/api/prefs') {
           const asAdmin = url.searchParams.get('as') === 'admin';
@@ -325,6 +333,56 @@ function createBackend({ env = process.env, db = createDb(env), senders, media: 
           admin();
           return json(200, { adminsEnabled: await notifier.enabled('admin'), usersEnabled: await notifier.enabled('client'), users: await notifier.clientSubscribers() });
         }
+        // ---- Notification campaigns (admin) ----
+        if (url.pathname.startsWith('/api/admin/campaigns')) {
+          admin();
+          const route = url.pathname.slice('/api/admin/campaigns'.length).replace(/^\//, '');
+          if (!route) {
+            if (req.method === 'GET') return json(200, await campaigns.list());
+            if (req.method === 'POST') return json(201, await campaigns.create(await readBody(req)));
+            throw fail(405, 'Method not allowed');
+          }
+          if (route === 'segments' && req.method === 'GET') return json(200, await campaigns.segments({ newDays: Number(url.searchParams.get('newDays')) || undefined, inactiveDays: Number(url.searchParams.get('inactiveDays')) || undefined }));
+          if (route === 'preview' && req.method === 'POST') return json(200, await campaigns.preview(await readBody(req)));
+          if (route === 'people' && req.method === 'GET') return json(200, await campaigns.people());
+          if (route === 'test' && req.method === 'POST') {
+            // Shows the message on THIS admin's own devices, exactly as clients will see it ({name} becomes "Admin").
+            const body = await readBody(req);
+            if (!(await notifier.count())) throw fail(409, 'NO_SUBSCRIPTION');
+            const cleaned = cleanCampaign({ ...body, name: body?.name || 'test', audience: {} }, 'once');
+            const result = await withTimeout(notifier.deliver({ id: 'test', name: 'Admin', title: cleaned.title, body: cleaned.body, url: cleaned.url }, [], { event: 'campaign', audience: { type: 'admin' }, force: true }), 12000);
+            return json(200, { ok: !!result && !result.retry && result.sent > 0, devices: result?.devices ?? 0 });
+          }
+          const [id, action] = route.split('/');
+          if (!/^[a-f0-9-]{8,64}$/.test(id)) throw fail(404, 'NOT_FOUND');
+          if (!action) {
+            if (req.method === 'GET') return json(200, await campaigns.get(id));
+            if (req.method === 'PATCH') return json(200, await campaigns.update(id, await readBody(req)));
+            if (req.method === 'DELETE') { await campaigns.remove(id); return json(200, { ok: true }); }
+            throw fail(405, 'Method not allowed');
+          }
+          if (req.method !== 'POST') throw fail(405, 'Method not allowed');
+          if (action === 'activate') {
+            const result = await campaigns.activate(id);
+            // "Send now" must not wait for the next poll: run the scheduler once, bounded.
+            await withTimeout(campaigns.tick({ force: true, budgetMs: 8000 }), 10000);
+            return json(200, await campaigns.get(result.id));
+          }
+          if (action === 'pause') return json(200, await campaigns.pause(id));
+          if (action === 'duplicate') return json(201, await campaigns.duplicate(id));
+          throw fail(404, 'NOT_FOUND');
+        }
+        // ---- AI assistant: reply generated by the free provider chain (visitors and clients; the prompt comes from the stored assistant settings) ----
+        if (url.pathname === '/api/chat/reply' && req.method === 'POST') {
+          if (client?.blocked) throw fail(403, 'ACCOUNT_BLOCKED');
+          if (!client && !clientHash) throw fail(400, 'Client token required');
+          const body = await readBody(req);
+          const config = await content.getDoc('assistant');
+          if (config.type === 'whatsapp') throw fail(409, 'ASSISTANT_DISABLED');
+          return json(200, await chat.reply(body.messages, config));
+        }
+        if (url.pathname === '/api/admin/chat/status' && req.method === 'GET') { admin(); return json(200, await chat.status()); }
+        if (url.pathname === '/api/admin/chat/keys' && req.method === 'PATCH') { admin(); return json(200, await chat.setKeys(await readBody(req))); }
         if (url.pathname === '/api/admin/clients/bulk' && req.method === 'POST') {
           admin();
           const body = await readBody(req), result = await clients.bulk(body);
@@ -439,7 +497,8 @@ function createBackend({ env = process.env, db = createDb(env), senders, media: 
         if (url.pathname === '/api/push/pump' && (req.method === 'GET' || req.method === 'POST')) {
           if (!session && !(env.CRON_SECRET && req.headers.authorization === `Bearer ${env.CRON_SECRET}`)) throw fail(401, 'Admin login required');
           await withTimeout(pump(), 25000);
-          return json(200, { ok: true });
+          const ran = await withTimeout(campaigns.tick({ force: true, budgetMs: 20000 }), 25000);
+          return json(200, { ok: true, campaigns: ran && !ran.skipped ? !!ran.ok : null });
         }
 
         // ---- Render requests ----
@@ -530,10 +589,10 @@ function createBackend({ env = process.env, db = createDb(env), senders, media: 
   }
   const server = http.createServer(handle);
   server.requestTimeout = 30000;
-  const timer = setInterval(() => { void pump(); }, 15000);
+  const timer = setInterval(() => { void pump(); void campaigns.tick(); }, 15000);
   timer.unref();
   server.on('close', () => { clearInterval(timer); void db.close(); });
-  return { server, handle, pump, db, clients, notifier };
+  return { server, handle, pump, db, clients, notifier, campaigns, chat };
 }
 if (require.main === module) {
   const backend = createBackend();

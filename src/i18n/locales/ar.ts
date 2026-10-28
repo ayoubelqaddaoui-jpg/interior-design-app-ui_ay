@@ -127,6 +127,8 @@ const ar: Dict = {
     hello: 'مرحبًا، كيف يمكنني مساعدتك؟',
     placeholder: 'اسأل دويرة…',
     attach: 'إرفاق صورة',
+    typing: 'دويرة تكتب…',
+    error: 'عذرًا، تعذّر الرد. حاول مجددًا بعد قليل.',
     thinking: 'دويرة تكتب…',
     newChat: 'محادثة جديدة',
     pro: 'PRO',
@@ -400,7 +402,7 @@ const ar: Dict = {
         vibrant: 'حيوية',
       },
     },
-    assistant: { type: 'نوع المساعد', ai: 'دردشة ذكاء اصطناعي', whatsapp: 'تواصل عبر واتساب', model: 'النموذج', prompt: 'تعليمات النظام', number: 'رقم واتساب', welcome: 'رسالة الترحيب' },
+    assistant: { type: 'نوع المساعد', ai: 'دردشة ذكاء اصطناعي', whatsapp: 'تواصل عبر واتساب', model: 'النموذج', prompt: 'تعليمات النظام', number: 'رقم واتساب', welcome: 'رسالة الترحيب', delayTitle: 'إيقاع الردود', delayHint: 'يُطلب الرد فورًا ثم يظهر بعد تأخير طبيعي قصير مع مؤشر «يكتب…».', delayOff: 'فوري', delayAuto: 'طبيعي', delayCustom: 'مخصص', delayMin: 'الحد الأدنى للتأخير (ث)', delayMax: 'الحد الأقصى للتأخير (ث)', typewriter: 'إظهار النص تدريجيًا', providersTitle: 'مزودو الذكاء الاصطناعي المجانيون', providersHint: 'تتم تجربتهم بالترتيب، وينتقل الدور للتالي عند الفشل أو نفاد الحصة. لا تُعرض المفاتيح مرة أخرى.', provGemini: 'Google Gemini', provGroq: 'Groq', provOpenrouter: 'OpenRouter', provPollinations: 'Pollinations (بدون مفتاح)', provOn: 'مفعّل', provOff: 'بدون مفتاح', provCooling: 'متوقف مؤقتًا (الحصة)', srcEnv: 'متغير الخادم', srcDb: 'محفوظ هنا', keyPlaceholder: 'ألصق مفتاح API', keySave: 'حفظ', keyRemove: 'إزالة', keySaved: 'تم حفظ المفتاح', keyRemoved: 'تمت إزالة المفتاح', keyInvalid: 'مفتاح غير صالح', keyEnv: 'معرّف على الخادم', noProvider: 'لا يوجد مفتاح: يتلقى الزوار ردودًا تجريبية. أضف مفتاح Gemini أو Groq مجانيًا.' },
     credits: {
       defaultCredits: 'الرصيد المجاني الافتراضي',
       defaultNote: 'يُطبّق على المستخدمين الجدد.',

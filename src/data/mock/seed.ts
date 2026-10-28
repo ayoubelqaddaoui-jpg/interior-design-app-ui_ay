@@ -204,6 +204,7 @@ export const defaultAssistant = (): T.AssistantConfig => ({
   type: 'ai', modelId: 'mdl_gemini',
   systemPrompt: 'You are Dwira, a friendly interior design assistant. Answer in the language of the user (Moroccan Darija, Arabic or French). Be concise and practical.',
   whatsappNumber: '+212600000000',
+  replyDelayMode: 'auto', replyDelayMinMs: 900, replyDelayMaxMs: 3500, typewriter: true,
   welcome: L('مرحبا! أنا مساعد ديال التصميم الداخلي، كيفاش نقدر نعاونك؟', 'مرحبًا! كيف يمكنني مساعدتك في تصميم منزلك؟', 'Bonjour ! Comment puis-je vous aider pour votre déco ?'),
 });
 export const defaultSettings = (): T.AppSettings => ({ notifyAdmins: true, notifyUsers: true, appSearchEnabled: true, adminSearchEnabled: true, exitConfirmationEnabled: true, autoTranslate: true, defaultFreeCredits: 1, autoSendWhatsApp: false, homeShowAll: true, homeTabsVisible: true, userNavStyle: 'floating', adminNavMode: 'drawer', loaderEnabled: true, loaderStyle: 'ring', loaderColor: '', loaderCustomUri: '', loaderCustomAnim: 'none', loaderDelayMs: 0, bulkPanels: ['tabs', 'tools', 'sections', 'categories', 'inspirations', 'styles', 'roomTypes', 'palettes', 'models', 'plans'] });

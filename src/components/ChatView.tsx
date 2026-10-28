@@ -13,6 +13,7 @@ import { Icon } from '@/components/ui/Icon';
 import { Sheet } from '@/components/ui/Sheet';
 import { pickPhoto } from '@/lib/photo';
 import { uid } from '@/lib/uid';
+import { replyDelayMs, typeStep } from '@/lib/chatPace';
 import { useTheme } from '@/theme/ThemeProvider';
 import { toast } from '@/store/useToast';
 import type { ChatMessage, Conversation } from '@/data/types';
@@ -24,7 +25,7 @@ function Dot({ d }: { d: number }) {
   return <Animated.View style={s} className="w-2 h-2 rounded-full bg-muted" />;
 }
 
-/** AI chat: persisted conversations, image attach, demo replies (Darija / Arabic / French aware). */
+/** AI chat: persisted conversations, image attach, free-provider replies (Darija / Arabic / French aware) paced like a person. */
 export function ChatView({ conversationId, onCreated, header }: { conversationId?: string; onCreated?: (id: string) => void; header?: React.ReactNode }) {
   const { t } = useT();
   const L = useL();
@@ -36,6 +37,10 @@ export function ChatView({ conversationId, onCreated, header }: { conversationId
   const [text, setText] = useViewState(`chat:${conversationId ?? 'new'}:text`, '');
   const [image, setImage] = useViewState(`chat:${conversationId ?? 'new'}:image`, '');
   const [busy, setBusy] = useState(false);
+  // The assistant message currently being "typed" (cosmetic: the full text is already saved) and how much of it shows.
+  const [typing, setTyping] = useState<{ id: string; shown: number } | null>(null);
+  const alive = useRef(true);
+  useEffect(() => () => { alive.current = false; }, []);
   const [attach, setAttach] = useState(false);
   const list = useRef<FlatList>(null);
   const [local, setLocal] = useState<ChatMessage[]>([]);
@@ -83,10 +88,26 @@ export function ChatView({ conversationId, onCreated, header }: { conversationId
       onCreated?.(c.id);
     } else await st.update('conversations', c.id, { messages: next, updatedAt: Date.now() });
     setLocal(next);
-    const reply = await services.chat.reply({ messages: next, config });
-    const am: ChatMessage = { id: uid('m'), role: 'assistant', text: reply, createdAt: Date.now() };
+    // The typing indicator is already showing (busy). The answer is requested right away; it is then held back just
+    // long enough to feel written by a person, counting the time the request itself took.
+    const started = Date.now();
+    let answer = '';
+    try { answer = await services.chat.reply({ messages: next, config }); } catch { answer = t('assistant.error'); }
+    const wait = replyDelayMs(config, answer) - (Date.now() - started);
+    if (wait > 0) await new Promise((r) => setTimeout(r, wait));
+    const am: ChatMessage = { id: uid('m'), role: 'assistant', text: answer, createdAt: Date.now() };
+    const animate = config.typewriter !== false && config.replyDelayMode !== 'off' && alive.current && answer.length > 0;
+    if (animate) setTyping({ id: am.id, shown: 0 });
     await useStore.getState().update('conversations', c.id, { messages: [...next, am], updatedAt: Date.now() });
     setBusy(false);
+    if (!animate) return;
+    const step = typeStep(answer.length);
+    for (let shown = step; alive.current; shown += step) {
+      setTyping({ id: am.id, shown });
+      if (shown >= answer.length) break;
+      await new Promise((r) => setTimeout(r, 40));
+    }
+    if (alive.current) setTyping(null);
   };
 
   const data = messages;
@@ -95,6 +116,7 @@ export function ChatView({ conversationId, onCreated, header }: { conversationId
       {header}
       <FlatList
         ref={list}
+        extraData={typing}
         scrollEventThrottle={16}
         onScroll={(event) => { if (!restoring.current) setOffset(event.nativeEvent.contentOffset.y); }}
         onContentSizeChange={() => { if (restoring.current) restore(); }}
@@ -113,11 +135,11 @@ export function ChatView({ conversationId, onCreated, header }: { conversationId
             {m.role === 'admin' ? <View testID={`chat-admin-${m.id}`} className="flex-row items-center gap-1 mb-1 ms-1"><Icon name="face-agent" size={14} tone="primary" /><Txt className="text-[11px] font-bold text-primary">{t('inbox.team')}</Txt></View> : null}
             <View className={`rounded-2xl px-3.5 py-2.5 ${m.role === 'user' ? 'bg-primary rounded-ee-md' : m.role === 'admin' ? 'bg-surface2 rounded-es-md border border-primary/40' : 'bg-surface2 rounded-es-md'}`}>
               {m.image ? <Image source={{ uri: m.image }} style={{ width: 200, height: 140, borderRadius: 12, marginBottom: m.text ? 8 : 0 }} contentFit="cover" /> : null}
-              {m.text ? <Txt className={`text-[15px] leading-[22px] ${m.role === 'user' ? 'text-onprimary' : ''}`}>{m.text}</Txt> : null}
+              {m.text ? <Txt className={`text-[15px] leading-[22px] ${m.role === 'user' ? 'text-onprimary' : ''}`}>{typing && typing.id === m.id ? m.text.slice(0, typing.shown) : m.text}</Txt> : null}
             </View>
           </Animated.View>
         )}
-        ListFooterComponent={busy ? <View className="self-start bg-surface2 rounded-2xl px-4 py-3.5 flex-row gap-1.5 items-center"><Dot d={0} /><Dot d={150} /><Dot d={300} /></View> : null}
+        ListFooterComponent={busy ? <View testID="chat-typing" accessibilityLabel={t('assistant.typing')} className="self-start bg-surface2 rounded-2xl px-4 py-3.5 flex-row gap-1.5 items-center"><Dot d={0} /><Dot d={150} /><Dot d={300} /></View> : null}
       />
       {image ? (
         <View className="px-4 pb-2 flex-row"><View><Image source={{ uri: image }} style={{ width: 64, height: 64, borderRadius: 12 }} /><Pressable onPress={() => setImage('')} className="absolute -top-2 -end-2 w-6 h-6 rounded-full bg-danger items-center justify-center"><Icon name="close" size={14} color="#fff" /></Pressable></View></View>
