@@ -269,7 +269,8 @@ class Notifier
                 if (($sub['kind'] ?? 'web') === 'fcm') {
                     ($this->fcmSender())($sub['token'], $payload);
                 } else {
-                    $this->sendWeb($sub['subscription'], Json::encode($payload));
+                    // Stored JSON decodes to stdClass; the sender (and the test double) want a plain array.
+                    $this->sendWeb(json_decode(Json::encode($sub['subscription'] ?? null), true) ?: [], Json::encode($payload));
                 }
                 $done[$sub['rowId']] = true;
                 $sent++;

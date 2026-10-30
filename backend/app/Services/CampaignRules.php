@@ -306,6 +306,9 @@ final class CampaignRules
 
     public static function cleanCampaign(mixed $body, string $kind): array
     {
+        if (is_array($body)) {
+            throw fail(400, 'NAME_REQUIRED'); // a JS array is an object without a `name`
+        }
         if (! ($body instanceof \stdClass)) {
             throw fail(400, 'INVALID_CAMPAIGN');
         }
