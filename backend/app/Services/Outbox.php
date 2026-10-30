@@ -96,4 +96,17 @@ class Outbox
     {
         app()->terminating(fn () => $this->pump($jobId, (int) config('dwira.push_wait_ms', 8000)));
     }
+
+    /** Retry whatever is due (after the response). A request with nothing due costs one indexed EXISTS query. */
+    public function afterResponseIfDue(): void
+    {
+        app()->terminating(function () {
+            try {
+                if ($this->hasDue()) {
+                    $this->pump(null, (int) config('dwira.push_wait_ms', 8000));
+                }
+            } catch (\Throwable) {
+            }
+        });
+    }
 }
