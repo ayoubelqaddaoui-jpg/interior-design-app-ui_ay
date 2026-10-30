@@ -58,6 +58,13 @@ All media (admin images and videos, client photos, AI results, chat images, exte
 ## Services to replace later (`Services`)
 `render` (AI image generation), `upload` (file storage), `whatsapp` (send design) are still mock services; `auth` is the real admin login and `chat` is real (see **AI chat** below; it falls back to the local canned reply when no provider answers).
 
+## Deploy on Hostinger shared hosting (UI + Laravel API + MySQL)
+The `backend/` folder is a drop-in replacement of `server/` (same `/api` routes, JSON, cookies and status codes) built on Laravel + MySQL
+for one shared-hosting plan: no Node, no Docker, cron instead of workers, media on the app's own disk (WebP + thumbnails).
+Step by step (upload, `.env`, PHP 8.3, cron, `.htaccess`, import of the old Postgres data, checklist, rollback): [`docs/HOSTINGER.md`](docs/HOSTINGER.md).
+Design and route inventory: [`docs/BACKEND_ANALYSIS.md`](docs/BACKEND_ANALYSIS.md). Build the upload with `backend/deploy/build-release.sh`, verify with `backend/deploy/smoke-test.sh https://your-domain`.
+The Node API in `server/` is untouched and keeps working until you switch.
+
 ## Deploy on Vercel (UI + API)
 `vercel.json` builds the static web export **and** exposes the backend as a Vercel Function (`api/index.js` -> `server/index.js`). The backend needs a Postgres database; without one every `/api/*` call answers `503 DATABASE_NOT_CONFIGURED` and `/lead` shows "service temporairement indisponible".
 1. Import the repo in Vercel (framework preset: **Other**); install/build/output are set in `vercel.json`.
