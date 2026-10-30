@@ -67,13 +67,14 @@ class Media
     }
 
     /** THE single write path. Content-addressed, so storing the same bytes twice is free (idempotent). */
-    public function storeMedia(string $body, string $mime): string
+    public function storeMedia(string $body, string $mime, ?string $forceId = null, ?string $urlMime = null): string
     {
         if (! isset(Sniffer::EXT[$mime])) {
             throw fail(400, 'UNSUPPORTED_MEDIA');
         }
-        $id = self::idOf($body);
-        $origExt = Sniffer::EXT[$mime];
+        // $forceId / $urlMime exist for the Postgres import: a file keeps the id and the extension of the URLs already issued.
+        $id = $forceId ?? self::idOf($body);
+        $origExt = Sniffer::EXT[$urlMime ?? $mime] ?? Sniffer::EXT[$mime];
         $url = self::PREFIX.$id.'.'.$origExt;
         if (isset($this->saved[$id])) {
             return $url;
