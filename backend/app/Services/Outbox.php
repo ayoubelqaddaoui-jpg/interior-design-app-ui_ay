@@ -87,9 +87,13 @@ class Outbox
         }
     }
 
-    /** Bounded inline delivery of ONE job right after it was queued. */
-    public function pumpNow(string $jobId): void
+    /**
+     * Deliver ONE job right after the response has been sent (Laravel's terminate phase runs after `fastcgi_finish_request` /
+     * `litespeed_finish_request`), so a slow push service never delays the user. The job is already durable in the outbox: if
+     * the process dies first, the cron `schedule:run` retries it (same lease and backoff rules).
+     */
+    public function afterResponse(string $jobId): void
     {
-        $this->pump($jobId, (int) config('dwira.push_wait_ms', 8000));
+        app()->terminating(fn () => $this->pump($jobId, (int) config('dwira.push_wait_ms', 8000)));
     }
 }
