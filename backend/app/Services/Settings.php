@@ -50,4 +50,10 @@ final class Settings
     {
         $this->put($key, 'enc:'.Crypt::encryptString(Json::encode($value)));
     }
+
+    /** Race-safe: the first writer wins, everyone then reads the stored winner. */
+    public function putSecretIfAbsent(string $key, mixed $value): bool
+    {
+        return Db::insertIfAbsent('settings', ['key' => $key, 'value' => 'enc:'.Crypt::encryptString(Json::encode($value))]);
+    }
 }
