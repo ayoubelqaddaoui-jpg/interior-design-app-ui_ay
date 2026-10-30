@@ -57,3 +57,4 @@ server/.env.*
 !server/.env.example
 google-services.json
 GoogleService-Info.plist
+release/

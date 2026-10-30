@@ -1,0 +1,69 @@
+# ---------------------------------------------------------------------------------------------------------------------
+# Dwira on Hostinger (LiteSpeed / Apache) - goes to  public_html/.htaccess
+#
+#   public_html/   = Expo web export (static) + this file + _api.php (the only PHP entry point)
+#   ../laravel/    = the Laravel API, OUTSIDE the web root (sibling folder of public_html)
+#
+# /api/*  -> _api.php -> Laravel      everything else -> static file, or index.html (single page app)
+# ---------------------------------------------------------------------------------------------------------------------
+Options -Indexes -MultiViews
+DirectoryIndex index.html
+
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+
+    # HTTPS: switch it on in hPanel (Websites > Security > Force HTTPS). The admin cookie is Secure, so the site must be https.
+
+    # 1. Never serve internals, even if someone uploads the folders into public_html by mistake.
+    RewriteRule ^(?:laravel|vendor|storage|bootstrap|database|tests|node_modules|\.git)(?:/|$) - [R=404,L]
+    RewriteRule (?:^|/)\.(?!well-known(?:/|$)) - [R=404,L]
+    RewriteRule \.(?:env|log|sql|bak|md|lock|sh|ini|php\.dist)$ - [R=404,L]
+
+    # 2. API. `_api.php` is an implementation detail: not reachable directly.
+    RewriteCond %{THE_REQUEST} \s/+_api\.php [NC]
+    RewriteRule ^ - [R=404,L]
+    RewriteCond %{HTTP:Authorization} .
+    RewriteRule ^api(?:/|$) - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
+    RewriteRule ^api(?:/|$) _api.php [L]
+
+    # 3. A missing asset is a 404, not the app shell (a script answered with HTML would break the page silently).
+    RewriteCond %{REQUEST_FILENAME} !-f
+    RewriteRule ^(?:_expo|assets|icons)/ - [R=404,L]
+    RewriteCond %{REQUEST_FILENAME} !-f
+    RewriteRule ^(?:favicon\.ico|push-sw\.js|manifest\.webmanifest)$ - [R=404,L]
+
+    # 4. Single page app: real files and folders are served as they are, any other path loads the app.
+    RewriteCond %{REQUEST_FILENAME} -f [OR]
+    RewriteCond %{REQUEST_FILENAME} -d
+    RewriteRule ^ - [L]
+    RewriteRule ^ /index.html [L]
+</IfModule>
+
+<IfModule mod_headers.c>
+    Header always set X-Content-Type-Options "nosniff"
+    Header always set Referrer-Policy "strict-origin-when-cross-origin"
+    Header always set X-Frame-Options "SAMEORIGIN"
+
+    # Hashed build output (_expo/, assets/) and icons/ get their own cache rules from the .htaccess files that the release
+    # script puts inside those folders (works the same on Apache and LiteSpeed).
+    <FilesMatch "^(?:index\.html|push-sw\.js)$">
+        Header set Cache-Control "public, max-age=0, must-revalidate"
+    </FilesMatch>
+    <FilesMatch "^push-sw\.js$">
+        Header set Service-Worker-Allowed "/"
+    </FilesMatch>
+</IfModule>
+
+<IfModule mod_mime.c>
+    AddType application/manifest+json .webmanifest
+    AddType font/woff2 .woff2
+    AddType text/javascript .js .mjs
+</IfModule>
+
+# Compression: LiteSpeed (Hostinger) already compresses text; this only matters on plain Apache. Needs BOTH modules, otherwise
+# the directive would be an error and take the whole site down, so it is guarded by both.
+<IfModule mod_deflate.c>
+<IfModule mod_filter.c>
+    AddOutputFilterByType DEFLATE text/html text/css text/javascript application/javascript application/json application/manifest+json image/svg+xml font/ttf
+</IfModule>
+</IfModule>
