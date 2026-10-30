@@ -10,7 +10,7 @@ final class Json
 {
     public static function encode(mixed $value): string
     {
-        return json_encode($value, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE | JSON_THROW_ON_ERROR);
+        return json_encode($value, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_LINE_TERMINATORS | JSON_INVALID_UTF8_SUBSTITUTE | JSON_THROW_ON_ERROR);
     }
 
     /** @return mixed stdClass for objects, array for lists. Throws JsonException on invalid input. */
