@@ -3,7 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Services\Clients;
-use App\Services\Db as Tx;
+use App\Services\Sql;
 use App\Services\Media;
 use App\Services\Notifier;
 use App\Services\Outbox;
@@ -84,7 +84,7 @@ class RequestController
             $input->photoUri = $media->externalize((object) ['photoUri' => $input->photoUri], 'report', false, false)['value']->photoUri;
         }
         $request_ = Json::merge($input, (object) ['id' => Clients::uuid(), 'clientHash' => $device, 'clientRequestId' => $id]);
-        $inserted = Tx::insertIfAbsent('requests', ['id' => $request_->id, 'user_id' => $client['id'], 'client_request_id' => $id,
+        $inserted = Sql::insertIfAbsent('requests', ['id' => $request_->id, 'user_id' => $client['id'], 'client_request_id' => $id,
             'created_at' => $request_->createdAt, 'data' => Json::encode($request_)]);
         if ($inserted) {
             $outbox->enqueue('request', $request_->id);
@@ -167,7 +167,7 @@ class RequestController
             $patch->autoSent = true;
         }
         $wasDelivered = false;
-        $result = Tx::tx(function () use ($row, $patch, &$wasDelivered) {
+        $result = Sql::tx(function () use ($row, $patch, &$wasDelivered) {
             $current = Json::decode((string) DB::table('requests')->where('id', $row->id)->lockForUpdate()->value('data'));
             $wasDelivered = ($current->status ?? null) === 'delivered';
             $next = Json::merge($current, $patch);

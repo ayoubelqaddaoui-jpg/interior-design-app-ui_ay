@@ -24,7 +24,7 @@ class Outbox
 
     public function enqueue(string $kind, string $jobId, mixed $payload = null): void
     {
-        Db::insertIfAbsent('outbox', ['request_id' => self::key($jobId), 'attempts' => 0, 'next_at' => now_ms(), 'completed' => '[]', 'kind' => $kind, 'payload' => $payload === null ? null : Json::encode($payload)]);
+        Sql::insertIfAbsent('outbox', ['request_id' => self::key($jobId), 'attempts' => 0, 'next_at' => now_ms(), 'completed' => '[]', 'kind' => $kind, 'payload' => $payload === null ? null : Json::encode($payload)]);
     }
 
     public function hasDue(): bool

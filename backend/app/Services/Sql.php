@@ -7,7 +7,7 @@ use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\DB;
 
 /** Small helpers for the Postgres idioms the Node code used (ON CONFLICT DO NOTHING RETURNING, FOR UPDATE transactions). */
-final class Db
+final class Sql
 {
     /** `INSERT ... ON CONFLICT DO NOTHING` -> true when the row was inserted, false when the key already existed. */
     public static function insertIfAbsent(string $table, array $row): bool

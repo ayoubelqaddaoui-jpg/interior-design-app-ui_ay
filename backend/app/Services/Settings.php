@@ -26,7 +26,7 @@ final class Settings
 
     public function putIfAbsent(string $key, string $value): bool
     {
-        return Db::insertIfAbsent('settings', ['key' => $key, 'value' => $value]);
+        return Sql::insertIfAbsent('settings', ['key' => $key, 'value' => $value]);
     }
 
     public function secret(string $key): mixed
@@ -54,6 +54,6 @@ final class Settings
     /** Race-safe: the first writer wins, everyone then reads the stored winner. */
     public function putSecretIfAbsent(string $key, mixed $value): bool
     {
-        return Db::insertIfAbsent('settings', ['key' => $key, 'value' => 'enc:'.Crypt::encryptString(Json::encode($value))]);
+        return Sql::insertIfAbsent('settings', ['key' => $key, 'value' => 'enc:'.Crypt::encryptString(Json::encode($value))]);
     }
 }

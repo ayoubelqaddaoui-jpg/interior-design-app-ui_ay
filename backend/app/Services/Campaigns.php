@@ -296,7 +296,7 @@ class Campaigns
             $data['lastRunCount'] = count($audience);
             $data['lastRunSkipped'] = $skipped;
             $status = $recurring ? ($next ? 'active' : 'ended') : 'sending';
-            $won = Db::tx(function () use ($status, $next, $data, $now, $row, $audience, $occurrence) {
+            $won = Sql::tx(function () use ($status, $next, $data, $now, $row, $audience, $occurrence) {
                 // Claim: only ONE process wins this exact (next_at, updated_at) state.
                 $n = DB::table('campaigns')->where('id', $row->id)->where('next_at', $row->next_at)->where('updated_at', $row->updated_at)->whereIn('status', ['scheduled', 'active'])
                     ->update(['status' => $status, 'next_at' => $next, 'data' => Json::encode($data), 'updated_at' => $now]);
@@ -352,7 +352,7 @@ class Campaigns
             $quiet = $t['quiet'] ? ['from' => $t['quiet'], 'to' => $t['quietTo']] : null;
             $at = CampaignRules::afterQuiet($now, $quiet);
             $items = array_map(fn ($i) => $i + ['at' => $at], $items);
-            $inserted = Db::tx(fn () => $this->insertDeliveries($row->id, $items, 'once', $now, $now));
+            $inserted = Sql::tx(fn () => $this->insertDeliveries($row->id, $items, 'once', $now, $now));
             $changed = $changed || $inserted > 0;
         }
 
@@ -449,7 +449,7 @@ class Campaigns
     /** Cross-process throttle: at most one run every 10 s (a poll from any open app triggers it). One atomic UPDATE. */
     private function claimTick(int $now): bool
     {
-        Db::insertIfAbsent('settings', ['key' => 'campaign_tick', 'value' => '0']);
+        Sql::insertIfAbsent('settings', ['key' => 'campaign_tick', 'value' => '0']);
 
         return DB::affectingStatement("UPDATE settings SET value=? WHERE `key`='campaign_tick' AND CAST(value AS UNSIGNED) <= ?", [(string) $now, $now - 10000]) > 0;
     }

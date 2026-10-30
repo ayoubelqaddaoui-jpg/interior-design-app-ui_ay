@@ -93,7 +93,7 @@ class Media
         foreach ($out['thumbs'] as $w => $data) {
             $this->write("$dir/{$id}_$w.webp", $data);
         }
-        Db::insertIfAbsent('media', [
+        Sql::insertIfAbsent('media', [
             'id' => $id, 'mime' => $out['mime'], 'ext' => $out['ext'], 'orig_ext' => $origExt, 'size' => strlen($out['body']),
             'width' => $out['width'], 'height' => $out['height'], 'storage' => 'disk', 'created_at' => now_ms(),
         ]);

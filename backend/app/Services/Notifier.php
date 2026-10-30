@@ -185,10 +185,11 @@ class Notifier
         if ($pub && $priv) {
             return $this->vapid = ['publicKey' => $pub, 'privateKey' => $priv, 'subject' => $subject];
         }
-        $keys = $this->settings->secret('vapid');
-        if (! is_array($keys) || empty($keys['publicKey'])) {
+        // Stored secrets decode to objects (like every JSON value here); normalise to an array once.
+        $keys = (array) $this->settings->secret('vapid');
+        if (empty($keys['publicKey'])) {
             $this->settings->putSecretIfAbsent('vapid', VAPID::createVapidKeys());
-            $keys = $this->settings->secret('vapid');
+            $keys = (array) $this->settings->secret('vapid');
         }
 
         return $this->vapid = ['publicKey' => $keys['publicKey'], 'privateKey' => $keys['privateKey'], 'subject' => $subject];

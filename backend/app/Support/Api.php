@@ -18,7 +18,7 @@ final class Api
         return new Response($json, $status, ['Content-Type' => 'application/json', 'Cache-Control' => 'no-store', ...$headers]);
     }
 
-    /** Exactly the cookie string of the Node API (no Expires, no encoding, Path=/api). */
+    /** The cookie of the Node API: HttpOnly, SameSite=Strict, Path=/api, Max-Age, Secure. (Symfony re-serialises it and adds a matching Expires.) */
     public static function cookie(string $name, string $token, int $age): string
     {
         return "$name=$token; HttpOnly; SameSite=Strict; Path=/api; Max-Age=$age".(config('dwira.cookie_secure') === false || config('dwira.cookie_secure') === 'false' ? '' : '; Secure');

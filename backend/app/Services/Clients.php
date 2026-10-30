@@ -83,7 +83,7 @@ final class Clients
         // The admin's "default credits" setting is the balance a new client starts with (free design included).
         $start = self::balance(0, self::isSafeInt($defaultCredits) && $defaultCredits >= 0 ? (int) min($defaultCredits, self::MAX_CREDITS) : 1);
         // Atomic: the UNIQUE phone key means two simultaneous first logins cannot create two profiles.
-        $created = Db::insertIfAbsent('clients', ['id' => self::uuid(), 'phone' => $canonical, 'name' => Str::jsTrim($name), 'created_at' => now_ms(), 'credits' => $start['credits'], 'free_used' => $start['freeUsed']]);
+        $created = Sql::insertIfAbsent('clients', ['id' => self::uuid(), 'phone' => $canonical, 'name' => Str::jsTrim($name), 'created_at' => now_ms(), 'credits' => $start['credits'], 'free_used' => $start['freeUsed']]);
         $row = DB::table('clients')->where('phone', $canonical)->first();
         if ($row->blocked) {
             throw fail(403, 'ACCOUNT_BLOCKED');
@@ -121,7 +121,7 @@ final class Clients
             throw fail(400, 'INVALID_CLAIM');
         }
 
-        return Db::tx(function () use ($client, $id) {
+        return Sql::tx(function () use ($client, $id) {
             $this->byId($client['id'], true); // serialises concurrent claims per client
             $old = DB::table('claims')->where('id', $id)->first();
             if ($old) {
@@ -290,11 +290,11 @@ final class Clients
             return [];
         }
 
-        return Db::tx(function () use ($device, $client) {
+        return Sql::tx(function () use ($device, $client) {
             $rows = DB::table('guest_chats')->select('id', 'value')->where('device_hash', $device)->lockForUpdate()->get();
             foreach ($rows as $row) {
                 $next = Json::merge(Json::decode($row->value), (object) ['userId' => $client['id']]);
-                Db::insertIfAbsent('space', ['id' => $row->id, 'client_id' => $client['id'], 'kind' => 'conversations', 'value' => Json::encode($next)]);
+                Sql::insertIfAbsent('space', ['id' => $row->id, 'client_id' => $client['id'], 'kind' => 'conversations', 'value' => Json::encode($next)]);
                 DB::table('guest_chats')->where('id', $row->id)->delete();
             }
 
@@ -316,7 +316,7 @@ final class Clients
             throw fail(400, 'INVALID_BLOCKED');
         }
 
-        return Db::tx(function () use ($id, $patch, $hasCredits, $hasBlocked) {
+        return Sql::tx(function () use ($id, $patch, $hasCredits, $hasBlocked) {
             $row = $this->byId($id, true);
             if (! $row) {
                 throw fail(404, 'NOT_FOUND');
@@ -356,7 +356,7 @@ final class Clients
         $unique = array_values(array_unique($ids));
         sort($unique, SORT_STRING); // stable lock order avoids deadlocks between concurrent bulk calls
 
-        return Db::tx(function () use ($unique, $action, $mode, $amount) {
+        return Sql::tx(function () use ($unique, $action, $mode, $amount) {
             $rows = [];
             foreach ($unique as $id) {
                 $row = $this->byId($id, true);

@@ -30,7 +30,7 @@ class Content
         if ($this->settings->get('content_seeded') === null) {
             $seed = Json::decode((string) file_get_contents(database_path('seed-content.json')));
             $now = now_ms();
-            Db::tx(function () use ($seed, $now) {
+            Sql::tx(function () use ($seed, $now) {
                 if (! $this->settings->putIfAbsent('content_seeded', (string) $now)) {
                     return;
                 }
@@ -161,7 +161,7 @@ class Content
         $this->ensureSeed();
         $current = DB::table('content_docs')->where('name', $name)->first();
         $clean = $this->media->externalize($patch, 'strict', false, true, self::strings($current ? Json::decode($current->data) : null))['value'];
-        $next = Db::tx(function () use ($name, $clean) {
+        $next = Sql::tx(function () use ($name, $clean) {
             $row = DB::selectOne('SELECT data FROM content_docs WHERE name=? FOR UPDATE', [$name]);
             $merged = Json::merge($row ? Json::decode($row->data) : new \stdClass, $clean);
             DB::statement('INSERT INTO content_docs(name,data,updated_at) VALUES(?,?,?) ON DUPLICATE KEY UPDATE data=VALUES(data), updated_at=VALUES(updated_at)', [$name, Json::encode($merged), now_ms()]);
@@ -242,7 +242,7 @@ class Content
     public function setClientPrefs(string $clientId, mixed $patch): \stdClass
     {
         $clean = self::cleanPrefs($patch);
-        $next = Db::tx(function () use ($clientId, $clean) {
+        $next = Sql::tx(function () use ($clientId, $clean) {
             $row = DB::selectOne('SELECT prefs FROM clients WHERE id=? FOR UPDATE', [$clientId]);
             if (! $row) {
                 throw fail(404, 'NOT_FOUND');
